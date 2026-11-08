@@ -1,0 +1,1674 @@
+/* Stoner Bud-E — night-garden theme (tokens from the Grok night-garden app).
+   Four themes switch via html[data-theme]: night (default), day, ember, moon.
+   Fraunces for headings, Outfit for body, system fonts as offline fallback. */
+
+* {
+  box-sizing: border-box;
+}
+
+/* Night garden (default) — exact Grok tokens. */
+:root,
+html[data-theme='night'] {
+  color-scheme: dark;
+  --bg: #07110c;
+  --glow: #1a3d24;
+  --surface: #0e1913;
+  --card: #163024;
+  --card-2: #1d3b2b;
+  --line: #2f6844;
+  --text: #f3f6ea;
+  --muted: #b7cbb0;
+  --accent: #c6f25c;
+  --accent-ink: #142107;
+  --danger: #ffb0a4;
+  --danger-bg: #3c2420;
+  --warn: #f5c542;
+  /* Aliases so existing components keep working. */
+  --bg-soft: var(--surface);
+  --card-soft: var(--card-2);
+  --accent-soft: var(--accent);
+  --accent-dark: var(--accent);
+  --radius: 1.25rem;
+  --font-sans: "Outfit", ui-sans-serif, system-ui, -apple-system, "Segoe UI", Roboto, sans-serif;
+  --font-display: "Fraunces", Georgia, "Times New Roman", serif;
+}
+
+html[data-theme='day'] {
+  color-scheme: light;
+  --bg: #f4f1e4;
+  --glow: #d5e6c4;
+  --surface: #fbf8ef;
+  --card: #e7f0dc;
+  --card-2: #d5e4c4;
+  --line: #8eae78;
+  --text: #142107;
+  --muted: #3e5340;
+  --accent: #1f5c28;
+  --accent-ink: #f7f3e6;
+  --danger: #8a2a22;
+  --danger-bg: #f6ddd8;
+  --warn: #7a5c00;
+}
+
+html[data-theme='ember'] {
+  color-scheme: dark;
+  --bg: #140c08;
+  --glow: #3d2214;
+  --surface: #1c120c;
+  --card: #2c1a12;
+  --card-2: #3c2418;
+  --line: #8a5430;
+  --text: #f8efe4;
+  --muted: #d4bba6;
+  --accent: #f0a04b;
+  --accent-ink: #1c0e06;
+  --danger: #ffb0a4;
+  --danger-bg: #3c2420;
+  --warn: #f5c542;
+}
+
+html[data-theme='moon'] {
+  color-scheme: dark;
+  --bg: #070d14;
+  --glow: #16304a;
+  --surface: #0d1722;
+  --card: #152433;
+  --card-2: #1c3044;
+  --line: #3d6480;
+  --text: #eef4f8;
+  --muted: #b7c9d6;
+  --accent: #7ddec8;
+  --accent-ink: #04221c;
+  --danger: #ffb0a4;
+  --danger-bg: #3c2428;
+  --warn: #f5c542;
+}
+
+html,
+body {
+  margin: 0;
+  padding: 0;
+  background: var(--bg);
+  color: var(--text);
+  font-family: var(--font-sans);
+  font-size: 17px;
+  line-height: 1.5;
+  -webkit-text-size-adjust: 100%;
+}
+
+#root {
+  min-height: 100vh;
+}
+
+/* Phone frame shell (Grok-style): 448px column, full viewport height,
+   garden glow at the top, content scrolls above the bottom nav. */
+.app-shell {
+  min-height: 100dvh;
+  background: var(--bg);
+}
+
+.app-frame {
+  position: relative;
+  margin: 0 auto;
+  width: 100%;
+  max-width: 448px;
+  height: 100dvh;
+  display: flex;
+  flex-direction: column;
+  background: var(--surface);
+  overflow: hidden;
+}
+
+@media (min-width: 449px) {
+  .app-frame {
+    border-left: 1px solid var(--line);
+    border-right: 1px solid var(--line);
+  }
+}
+
+.app-frame .garden-glow {
+  position: absolute;
+}
+
+.app-content {
+  position: relative;
+  flex: 1;
+  min-height: 0;
+  overflow-y: auto;
+  padding: 12px 16px 32px;
+}
+
+/* Chat tab takes over the scroll: messages scroll, composer stays pinned
+   (Grok Buddy layout). Applied to .app-content when the chat tab is open. */
+.app-content.chat-active {
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+  padding: 0;
+}
+
+/* Soft garden light at the top of the app. */
+.garden-glow {
+  position: fixed;
+  inset: 0 0 auto 0;
+  height: 320px;
+  pointer-events: none;
+  background: radial-gradient(ellipse at top, var(--glow), transparent 68%);
+}
+
+.garden-hero {
+  overflow: hidden;
+  border-radius: var(--radius);
+  border: 1px solid var(--line);
+  margin-bottom: 16px;
+}
+
+.garden-hero img {
+  display: block;
+  width: 100%;
+  height: 180px;
+  object-fit: cover;
+}
+
+h1,
+h2,
+h3 {
+  font-family: var(--font-display);
+  font-weight: 500;
+}
+
+h1 {
+  font-size: 1.9rem;
+  margin: 0;
+  letter-spacing: 0.01em;
+}
+
+h2 {
+  font-size: 1.5rem;
+  margin: 0 0 10px;
+}
+
+h3 {
+  font-size: 1.05rem;
+  margin: 0 0 8px;
+}
+
+p {
+  margin: 0 0 10px;
+}
+
+.muted {
+  color: var(--muted);
+}
+
+.small {
+  font-size: 0.85rem;
+}
+
+/* Grok page head — big display title + small muted subtitle. */
+
+.page-title {
+  font-family: var(--font-display);
+  font-size: 2.25rem;
+  line-height: 1;
+  font-weight: 500;
+  margin: 0;
+}
+
+.page-sub {
+  margin: 8px 0 16px;
+  font-size: 0.9rem;
+  color: var(--muted);
+}
+
+/* Grok chips — pill picks for method, amount, experience, filters. */
+
+.chip-row {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+
+.chip {
+  min-height: 44px;
+  padding: 8px 14px;
+  border-radius: 999px;
+  border: 1px solid var(--line);
+  background: var(--card);
+  color: var(--text);
+  font-size: 0.95rem;
+  font-weight: 500;
+}
+
+.chip.on {
+  border-color: var(--accent);
+  background: var(--accent);
+  color: var(--accent-ink);
+}
+
+.chip:disabled {
+  opacity: 0.45;
+}
+
+/* Strain names — Grok uses display font for item names. */
+
+.strain-name {
+  font-family: var(--font-display);
+  font-size: 1.5rem;
+  font-weight: 500;
+  margin: 0;
+}
+
+.field-label {
+  margin: 20px 0 8px;
+  font-size: 0.95rem;
+  font-weight: 700;
+  color: var(--text);
+}
+
+.app-header {
+  position: relative;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  padding: 16px 16px 8px;
+}
+
+.brand-btn {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  min-height: 44px;
+  min-width: 0;
+  padding: 0;
+  border: none;
+  background: transparent;
+  color: var(--text);
+  text-align: left;
+}
+
+.brand-avatar {
+  width: 36px;
+  height: 36px;
+  flex-shrink: 0;
+  overflow: hidden;
+  border-radius: 50%;
+  border: 1px solid var(--line);
+}
+
+.brand-avatar img {
+  display: block;
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+}
+
+.brand-text {
+  display: flex;
+  flex-direction: column;
+  min-width: 0;
+}
+
+.brand-word {
+  font-family: var(--font-display);
+  font-size: 1.25rem;
+  font-style: italic;
+  font-weight: 500;
+  line-height: 1;
+}
+
+.brand-who {
+  display: block;
+  max-width: 9rem;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  font-size: 0.75rem;
+  color: var(--muted);
+}
+
+.header-actions {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  flex-shrink: 0;
+}
+
+.icon-btn {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 44px;
+  height: 44px;
+  padding: 0;
+  border-radius: 50%;
+  border: 1px solid var(--line);
+  background: transparent;
+  color: var(--muted);
+}
+
+.icon-btn[aria-pressed='true'] {
+  background: var(--accent);
+  border-color: var(--accent);
+  color: var(--accent-ink);
+}
+
+.age-pill {
+  padding: 4px 10px;
+  border-radius: 999px;
+  border: 1px solid var(--line);
+  font-size: 0.75rem;
+  font-weight: 700;
+  letter-spacing: 0.05em;
+  color: var(--muted);
+}
+
+/* Live AI / Offline buddy badge — compact, sits in the header. */
+.badge {
+  display: inline-block;
+  padding: 4px 10px;
+  border-radius: 999px;
+  border: 1px solid var(--line);
+  background: var(--card-soft);
+  color: var(--muted);
+  font-size: 0.75rem;
+  font-weight: 700;
+  white-space: nowrap;
+}
+
+.badge.live {
+  background: var(--card-2);
+  border-color: var(--accent);
+  color: var(--accent);
+}
+
+.badge.offline {
+  background: #3d2f1a;
+  border-color: #6b5518;
+  color: var(--warn);
+}
+
+/* Timer pill — sits under the header while a timer runs; taps to Tools. */
+
+.timer-pill {
+  position: relative;
+  display: block;
+  width: calc(100% - 32px);
+  margin: 0 16px 8px;
+  padding: 8px 16px;
+  border-radius: 999px;
+  border: 1px solid var(--line);
+  background: var(--card);
+  color: var(--text);
+  text-align: left;
+}
+
+.timer-pill-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+}
+
+.timer-pill-label {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  font-size: 0.9rem;
+  color: var(--muted);
+}
+
+.timer-pill-label svg {
+  color: var(--accent);
+  flex-shrink: 0;
+}
+
+.timer-pill-time {
+  font-family: var(--font-display);
+  font-size: 1.15rem;
+  font-variant-numeric: tabular-nums;
+  color: var(--accent);
+}
+
+.timer-pill-track {
+  display: block;
+  height: 4px;
+  margin-top: 6px;
+  overflow: hidden;
+  border-radius: 999px;
+  background: var(--line);
+}
+
+.timer-pill-fill {
+  display: block;
+  height: 100%;
+  background: var(--accent);
+}
+
+/* Bottom nav + More sheet */
+
+.nav-wrap {
+  position: relative;
+  z-index: 30;
+  flex-shrink: 0;
+}
+
+.bottom-nav {
+  display: grid;
+  grid-template-columns: repeat(8, 1fr);
+  padding: 6px 4px 14px;
+  border-top: 1px solid var(--line);
+  background: var(--surface);
+}
+
+.nav-item {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 4px;
+  min-height: 60px;
+  min-width: 0;
+  padding: 0 2px;
+  border: none;
+  border-radius: 16px;
+  background: transparent;
+  color: var(--muted);
+  font-size: 0.8rem;
+  font-weight: 600;
+}
+
+.nav-item span {
+  max-width: 100%;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.nav-item.active {
+  color: var(--accent);
+}
+
+.more-backdrop {
+  position: absolute;
+  inset: 0;
+  z-index: 20;
+  width: 100%;
+  height: 100%;
+  padding: 0;
+  border: none;
+  background: rgba(0, 0, 0, 0.45);
+}
+
+.more-sheet {
+  position: absolute;
+  left: 8px;
+  right: 8px;
+  bottom: calc(100% + 8px);
+  z-index: 30;
+  padding: 6px;
+  border-radius: 16px;
+  border: 1px solid var(--line);
+  background: var(--card);
+  box-shadow: 0 -8px 32px rgba(0, 0, 0, 0.4);
+}
+
+.more-item {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  width: 100%;
+  min-height: 48px;
+  padding: 8px 12px;
+  border: none;
+  border-radius: 12px;
+  background: transparent;
+  color: var(--text);
+  font-size: 1rem;
+  font-weight: 600;
+  text-align: left;
+}
+
+.more-item svg {
+  color: var(--accent);
+  flex-shrink: 0;
+}
+
+.more-item:hover {
+  background: var(--card-2);
+}
+
+/* Shown when the browser reports no connection (PWA offline state). */
+
+.offline-banner {
+  margin: 12px 0 0;
+  padding: 10px 14px;
+  border-radius: 12px;
+  background: #3d2f1a;
+  border: 1px solid #6b5518;
+  color: var(--warn);
+  font-size: 0.95rem;
+}
+
+/* Cards */
+
+.card {
+  background: var(--card);
+  border: 1px solid var(--line);
+  border-radius: var(--radius);
+  padding: 16px;
+  margin-bottom: 12px;
+}
+
+.card h2 {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+/* Forms — big touch targets */
+
+label {
+  display: block;
+  font-weight: 700;
+  margin: 12px 0 4px;
+  font-size: 0.95rem;
+}
+
+label:first-child {
+  margin-top: 0;
+}
+
+input,
+select,
+textarea {
+  width: 100%;
+  min-height: 48px;
+  padding: 10px 12px;
+  border-radius: 16px;
+  border: 1px solid var(--line);
+  background: var(--bg-soft);
+  color: var(--text);
+  font-size: 1.05rem;
+  font-family: inherit;
+}
+
+input:focus,
+select:focus,
+textarea:focus {
+  outline: 3px solid var(--accent);
+  outline-offset: 1px;
+  border-color: var(--accent);
+}
+
+textarea {
+  min-height: 120px;
+  resize: vertical;
+}
+
+.field-row {
+  display: flex;
+  gap: 10px;
+}
+
+.field-row > * {
+  flex: 1;
+}
+
+.field-row .grow-2 {
+  flex: 2;
+}
+
+/* Buttons */
+
+button {
+  font-family: inherit;
+  cursor: pointer;
+}
+
+.btn {
+  min-height: 48px;
+  padding: 12px 20px;
+  border-radius: 999px;
+  border: none;
+  background: var(--accent);
+  color: var(--accent-ink);
+  font-size: 1.05rem;
+  font-weight: 700;
+}
+
+.btn:hover {
+  filter: brightness(1.08);
+}
+
+.btn:disabled {
+  opacity: 0.55;
+  cursor: wait;
+}
+
+.btn.sm {
+  min-height: 44px;
+  padding: 8px 16px;
+  font-size: 0.95rem;
+}
+
+.btn.secondary {
+  background: var(--card-soft);
+  border: 1px solid var(--line);
+  color: var(--text);
+}
+
+.btn.ghost {
+  background: transparent;
+  border: none;
+  color: var(--muted);
+  min-height: 44px;
+  font-size: 0.95rem;
+}
+
+.btn.danger {
+  background: var(--danger-bg);
+  border: 1px solid var(--danger);
+  color: var(--danger);
+}
+
+.btn-block {
+  width: 100%;
+}
+
+/* Legal (Settings → Legal) */
+
+.legal-list {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+
+.legal-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  width: 100%;
+  min-height: 56px;
+  padding: 10px 4px;
+  border: none;
+  border-bottom: 1px solid var(--line);
+  background: transparent;
+  color: var(--text);
+  font-size: 1rem;
+  text-align: left;
+  cursor: pointer;
+}
+
+.legal-row:last-child {
+  border-bottom: none;
+}
+
+.legal-row > span:first-child {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+
+.legal-row > span:last-child {
+  color: var(--muted);
+  font-size: 1.4rem;
+  line-height: 1;
+}
+
+.legal-row.danger-row strong {
+  color: var(--danger);
+}
+
+.legal-doc p {
+  line-height: 1.65;
+}
+
+/* Chat — Grok Buddy layout: messages scroll, composer pinned at the bottom. */
+
+.chat-shell {
+  flex: 1;
+  min-height: 0;
+  display: flex;
+  flex-direction: column;
+}
+
+.chat-scroll {
+  flex: 1;
+  min-height: 0;
+  overflow-y: auto;
+  padding: 8px 16px 12px;
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+
+.chat-session-pill {
+  width: 100%;
+  padding: 10px 12px;
+  border-radius: 16px;
+  border: 1px solid var(--line);
+  background: var(--card);
+  color: var(--text);
+  font-size: 0.95rem;
+  text-align: left;
+}
+
+.chat-session-pill .muted {
+  color: var(--muted);
+}
+
+.chat-empty-card {
+  background: var(--card);
+  border: 1px solid var(--line);
+  border-radius: var(--radius);
+  padding: 16px;
+  font-size: 1.05rem;
+  line-height: 1.5;
+}
+
+.msg {
+  max-width: 90%;
+  padding: 12px 16px;
+  border-radius: 24px;
+  white-space: pre-wrap;
+  word-break: break-word;
+  font-size: 0.95rem;
+  line-height: 1.5;
+}
+
+.msg.user {
+  align-self: flex-end;
+  background: var(--accent);
+  color: var(--accent-ink);
+  border-bottom-right-radius: 6px;
+}
+
+.msg.bud {
+  align-self: flex-start;
+  background: var(--card-2);
+  border-bottom-left-radius: 6px;
+}
+
+.msg .who {
+  display: block;
+  font-size: 0.75rem;
+  font-weight: 800;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  opacity: 0.75;
+  margin-bottom: 4px;
+}
+
+.msg.bud .who {
+  color: var(--muted);
+}
+
+.chat-sources {
+  display: block;
+  margin-top: 8px;
+  font-size: 0.75rem;
+  line-height: 1.5;
+  opacity: 0.85;
+}
+
+.chat-sources a {
+  color: var(--accent);
+  text-decoration: underline;
+}
+
+.chat-composer {
+  border-top: 1px solid var(--line);
+  padding: 8px 16px 12px;
+  background: var(--surface);
+}
+
+.chat-prompts {
+  display: flex;
+  gap: 8px;
+  overflow-x: auto;
+  margin: 0 -16px 8px;
+  padding: 0 16px;
+  scrollbar-width: none;
+}
+
+.chat-prompts::-webkit-scrollbar {
+  display: none;
+}
+
+.chat-prompt {
+  flex-shrink: 0;
+  min-height: 40px;
+  padding: 8px 12px;
+  border-radius: 999px;
+  border: 1px solid var(--line);
+  background: var(--card);
+  color: var(--text);
+  font-size: 0.9rem;
+  white-space: nowrap;
+}
+
+.chat-prompt:disabled {
+  opacity: 0.5;
+}
+
+.chat-input-row {
+  display: flex;
+  gap: 8px;
+}
+
+.chat-input-row input {
+  flex: 1;
+  min-height: 48px;
+  border-radius: 999px;
+  padding: 10px 16px;
+}
+
+.chat-send {
+  flex-shrink: 0;
+  width: 48px;
+  height: 48px;
+  padding: 0;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  border-radius: 50%;
+}
+
+/* Tap-to-talk mic — same 48px circle as the send button. */
+.chat-mic {
+  flex-shrink: 0;
+  width: 48px;
+  height: 48px;
+  padding: 0;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  border-radius: 50%;
+}
+
+.chat-mic.recording {
+  background: var(--danger-bg);
+  border: 1px solid var(--danger);
+  color: var(--danger);
+  animation: mic-pulse 1.2s ease-in-out infinite;
+}
+
+@keyframes mic-pulse {
+  0%, 100% { opacity: 1; }
+  50% { opacity: 0.55; }
+}
+
+/* Small "Hear it" button on Bud-E messages. */
+.msg-speak {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  margin-top: 8px;
+  padding: 4px 0;
+  border: none;
+  background: transparent;
+  color: var(--muted);
+  font-size: 0.8rem;
+  font-weight: 700;
+}
+
+.chat-foot {
+  margin-top: 8px;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  font-size: 0.75rem;
+  color: var(--muted);
+}
+
+.chat-foot button {
+  border: none;
+  background: transparent;
+  color: var(--muted);
+  font-size: 0.75rem;
+  padding: 4px 0;
+}
+
+.chat-foot button.danger-text {
+  color: var(--danger);
+  font-weight: 700;
+}
+
+/* Tools — Grok tool home grid + drill-in view. */
+
+.tool-home {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 12px;
+}
+
+.tool-tile {
+  min-height: 128px;
+  padding: 12px;
+  border-radius: var(--radius);
+  border: 1px solid var(--line);
+  background: var(--card);
+  color: var(--text);
+  text-align: left;
+}
+
+.tool-tile svg {
+  color: var(--accent);
+}
+
+.tool-tile .tool-tile-title {
+  display: block;
+  margin-top: 12px;
+  font-weight: 700;
+}
+
+.tool-tile .tool-tile-detail {
+  display: block;
+  margin-top: 4px;
+  font-size: 0.9rem;
+  color: var(--muted);
+}
+
+.tool-back {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  min-height: 44px;
+  padding: 0;
+  border: none;
+  background: transparent;
+  color: var(--muted);
+  font-size: 0.95rem;
+}
+
+.countdown-ring-wrap {
+  position: relative;
+  width: 224px;
+  height: 224px;
+  margin: 20px auto 0;
+}
+
+.countdown-ring-wrap svg {
+  width: 100%;
+  height: 100%;
+}
+
+.countdown-ring-label {
+  position: absolute;
+  inset: 0;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-family: var(--font-display);
+  font-size: 3rem;
+  font-variant-numeric: tabular-nums;
+  color: var(--accent);
+}
+
+.countdown-ring-wrap.done .countdown-ring-label {
+  animation: countdown-pulse 1.4s ease-in-out 3;
+}
+
+@keyframes countdown-pulse {
+  0%, 100% { opacity: 1; }
+  50% { opacity: 0.35; }
+}
+
+/* Unit toggle — Grok's mg/g pill inside forms. */
+
+.unit-toggle {
+  display: flex;
+  padding: 4px;
+  border-radius: 999px;
+  border: 1px solid var(--line);
+}
+
+.unit-toggle button {
+  min-height: 40px;
+  padding: 8px 12px;
+  border-radius: 999px;
+  border: none;
+  background: transparent;
+  color: var(--muted);
+  font-size: 0.95rem;
+  font-weight: 700;
+}
+
+.unit-toggle button.on {
+  background: var(--accent);
+  color: var(--accent-ink);
+}
+
+.timer-big {
+  font-family: var(--font-display);
+  font-size: 3rem;
+  font-weight: 500;
+  text-align: center;
+  margin: 8px 0;
+  font-variant-numeric: tabular-nums;
+  letter-spacing: 0.02em;
+  color: var(--accent);
+}
+
+.timer-done {
+  color: var(--warn);
+  text-align: center;
+  font-weight: 700;
+}
+
+.breath-wrap {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 12px;
+  padding: 8px 0 4px;
+}
+
+.breath-circle {
+  width: 170px;
+  height: 170px;
+  border-radius: 50%;
+  background: radial-gradient(circle at 35% 35%, var(--accent), var(--card-2) 70%);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  text-align: center;
+  font-weight: 800;
+  font-size: 1.1rem;
+  color: var(--text);
+  transition: transform 4s ease-in-out;
+  box-shadow: 0 0 0 12px color-mix(in srgb, var(--accent) 18%, transparent);
+}
+
+.breath-phase {
+  font-weight: 700;
+  color: var(--muted);
+  min-height: 1.5em;
+}
+
+.result-box {
+  background: var(--bg-soft);
+  border: 1px solid var(--line);
+  border-radius: 12px;
+  padding: 14px;
+  font-size: 1.05rem;
+}
+
+.plan-sentence {
+  background: var(--bg-soft);
+  border: 1px solid var(--line);
+  border-left: 5px solid var(--accent);
+  border-radius: 12px;
+  padding: 14px;
+  font-size: 1.1rem;
+}
+
+.trivia-option {
+  display: block;
+  width: 100%;
+  text-align: left;
+  min-height: 52px;
+  padding: 12px 14px;
+  margin-bottom: 8px;
+  border-radius: 12px;
+  border: 2px solid var(--line);
+  background: var(--bg-soft);
+  color: var(--text);
+  font-size: 1rem;
+}
+
+.trivia-option.correct {
+  border-color: var(--accent);
+  background: var(--card-2);
+}
+
+.trivia-option.wrong {
+  border-color: var(--danger);
+  background: var(--danger-bg);
+}
+
+.trivia-option:disabled {
+  cursor: default;
+}
+
+.score-big {
+  font-size: 2.2rem;
+  font-weight: 800;
+  text-align: center;
+  margin: 6px 0;
+}
+
+.button-row {
+  display: flex;
+  gap: 8px;
+  flex-wrap: wrap;
+}
+
+.button-row .btn {
+  flex: 1;
+  min-width: 120px;
+}
+
+/* Plan tab */
+
+.plan-text {
+  white-space: pre-wrap;
+  background: var(--bg-soft);
+  border: 1px solid var(--line);
+  border-radius: 12px;
+  padding: 16px;
+  font-size: 1.02rem;
+  line-height: 1.6;
+}
+
+/* Tonight tab */
+
+.tonight-hero {
+  font-family: var(--font-display);
+  font-size: 2.25rem;
+  line-height: 1.1;
+}
+
+.tonight-big {
+  font-family: var(--font-display);
+  font-size: 1.9rem;
+  line-height: 1.2;
+  text-transform: capitalize;
+}
+
+.eyebrow {
+  font-size: 0.75rem;
+  font-weight: 700;
+  letter-spacing: 0.16em;
+  text-transform: uppercase;
+  color: var(--accent);
+}
+
+.timeline {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+}
+
+.timeline li {
+  display: flex;
+  gap: 12px;
+  padding: 8px 0;
+}
+
+.timeline .dot {
+  margin-top: 8px;
+  width: 10px;
+  height: 10px;
+  flex-shrink: 0;
+  border-radius: 50%;
+  background: var(--line);
+}
+
+.timeline li.active .dot {
+  background: var(--accent);
+}
+
+.timeline li.active .phase-label {
+  color: var(--accent);
+}
+
+/* Age gate */
+
+.age-gate {
+  position: relative;
+  max-width: 448px;
+  margin: 0 auto;
+  min-height: 100vh;
+  min-height: 100dvh;
+  padding: 40px 24px;
+  display: flex;
+  flex-direction: column;
+  justify-content: space-between;
+  gap: 24px;
+}
+
+.age-gate .garden-hero img {
+  height: 224px;
+}
+
+.age-gate .eyebrow {
+  letter-spacing: 0.22em;
+}
+
+.age-gate h1 {
+  font-size: 3rem;
+  font-style: italic;
+  line-height: 1;
+}
+
+/* Theme picker (Settings tab) */
+
+.theme-grid {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 8px;
+}
+
+.theme-swatch {
+  min-height: 96px;
+  padding: 12px;
+  text-align: left;
+  border-radius: 16px;
+  border: 2px solid transparent;
+  background: var(--swatch-bg);
+  color: var(--swatch-ink);
+  font-family: inherit;
+}
+
+.theme-swatch[aria-pressed='true'] {
+  border-color: var(--swatch-accent);
+}
+
+.theme-swatch[data-swatch='night'] {
+  --swatch-bg: #07110c;
+  --swatch-card: #163024;
+  --swatch-ink: #f3f6ea;
+  --swatch-accent: #c6f25c;
+}
+
+.theme-swatch[data-swatch='day'] {
+  --swatch-bg: #f4f1e4;
+  --swatch-card: #e7f0dc;
+  --swatch-ink: #142107;
+  --swatch-accent: #1f5c28;
+}
+
+.theme-swatch[data-swatch='ember'] {
+  --swatch-bg: #140c08;
+  --swatch-card: #2c1a12;
+  --swatch-ink: #f8efe4;
+  --swatch-accent: #f0a04b;
+}
+
+.theme-swatch[data-swatch='moon'] {
+  --swatch-bg: #070d14;
+  --swatch-card: #152433;
+  --swatch-ink: #eef4f8;
+  --swatch-accent: #7ddec8;
+}
+
+.theme-swatch .swatch-dot {
+  display: inline-block;
+  width: 16px;
+  height: 16px;
+  border-radius: 50%;
+  background: var(--swatch-accent);
+  vertical-align: middle;
+  margin-right: 8px;
+}
+
+.theme-swatch .swatch-bar {
+  display: block;
+  height: 8px;
+  border-radius: 999px;
+  background: var(--swatch-card);
+  margin: 10px 0 8px;
+}
+
+/* Tool card titles (Grok: display font, text-3xl). */
+
+.tool-title {
+  font-family: var(--font-display);
+  font-size: 1.9rem;
+  font-weight: 500;
+  margin: 0 0 10px;
+}
+
+.score-display {
+  font-family: var(--font-display);
+  font-size: 3rem;
+  font-weight: 500;
+  text-align: center;
+  margin: 8px 0;
+  color: var(--accent);
+  font-variant-numeric: tabular-nums;
+}
+
+/* Stash — Grok jar cards: name + big amount, then a round stepper row. */
+
+.jar-card {
+  background: var(--card);
+  border: 1px solid var(--line);
+  border-radius: var(--radius);
+  padding: 12px;
+  margin-bottom: 12px;
+}
+
+.jar-card-head {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 12px;
+}
+
+.jar-card-name {
+  font-family: var(--font-display);
+  font-size: 1.5rem;
+  font-weight: 500;
+  line-height: 1.2;
+}
+
+.jar-card-amount {
+  font-family: var(--font-display);
+  font-size: 1.9rem;
+  font-weight: 500;
+  font-variant-numeric: tabular-nums;
+  white-space: nowrap;
+}
+
+.jar-card-sub {
+  font-size: 0.85rem;
+  color: var(--muted);
+}
+
+.jar-stepper {
+  margin-top: 12px;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.jar-stepper input {
+  flex: 1;
+  min-height: 48px;
+  text-align: center;
+  font-size: 1rem;
+}
+
+.jar-step-btn {
+  flex-shrink: 0;
+  width: 48px;
+  height: 48px;
+  padding: 0;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  border-radius: 50%;
+  border: 1px solid var(--line);
+  background: var(--card-2);
+  color: var(--text);
+}
+
+.jar-step-btn:disabled {
+  opacity: 0.4;
+}
+
+.jar-step-btn.accent {
+  border: none;
+  background: var(--accent);
+  color: var(--accent-ink);
+}
+
+/* Log page hero image (Grok Journal). */
+
+.log-hero {
+  overflow: hidden;
+  border-radius: var(--radius);
+  margin-bottom: 16px;
+}
+
+.log-hero img {
+  display: block;
+  width: 100%;
+  height: 112px;
+  object-fit: cover;
+}
+
+/* Profile (You tab) — Grok avatar + name card. */
+
+.profile-avatar {
+  width: 64px;
+  height: 64px;
+  flex-shrink: 0;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  border-radius: 50%;
+  background: var(--accent);
+  color: var(--accent-ink);
+  font-family: var(--font-display);
+  font-size: 1.9rem;
+}
+
+.profile-row {
+  display: flex;
+  align-items: center;
+  gap: 16px;
+}
+
+.profile-name {
+  font-family: var(--font-display);
+  font-size: 1.5rem;
+  line-height: 1.1;
+  font-weight: 500;
+  overflow-wrap: anywhere;
+}
+
+.profile-email {
+  margin-top: 4px;
+  font-size: 0.9rem;
+  color: var(--muted);
+  overflow-wrap: anywhere;
+}
+
+/* Account sign-in / sign-up — Grok account screen layout. */
+
+.account-screen {
+  padding: 32px 8px 8px;
+}
+
+.account-screen .eyebrow {
+  letter-spacing: 0.22em;
+}
+
+.account-screen h1 {
+  margin-top: 12px;
+  font-size: 3rem;
+  font-style: italic;
+  line-height: 1;
+}
+
+.account-screen form {
+  margin-top: 24px;
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+
+.account-screen form label {
+  margin: 0;
+}
+
+.account-screen form label span {
+  display: block;
+  margin-bottom: 8px;
+}
+
+.password-wrap {
+  position: relative;
+}
+
+.password-wrap input {
+  padding-right: 80px;
+}
+
+.password-toggle {
+  position: absolute;
+  top: 50%;
+  right: 6px;
+  transform: translateY(-50%);
+  min-height: 36px;
+  padding: 8px 12px;
+  border: none;
+  border-radius: 12px;
+  background: transparent;
+  color: var(--accent);
+  font-size: 0.75rem;
+  font-weight: 700;
+  letter-spacing: 0.05em;
+  text-transform: uppercase;
+}
+
+/* Inline text link (account screen mode toggle). */
+
+.link {
+  background: transparent;
+  border: none;
+  padding: 0;
+  color: var(--accent);
+  font-size: 1rem;
+  font-weight: 700;
+}
+
+/* Stash jars on a shelf (legacy jar drawing — kept for reference). */
+
+.jar-shelf {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(140px, 1fr));
+  gap: 20px 12px;
+  align-items: end;
+}
+
+.jar-wrap {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+}
+
+.jar {
+  width: 110px;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+}
+
+.jar-lid {
+  width: 76px;
+  height: 16px;
+  border-radius: 6px 6px 3px 3px;
+  background: var(--accent);
+  border: 1px solid var(--line);
+}
+
+.jar-body {
+  position: relative;
+  width: 110px;
+  height: 130px;
+  overflow: hidden;
+  border: 2px solid var(--line);
+  border-top: none;
+  border-radius: 10px 10px 22px 22px;
+  background: color-mix(in srgb, var(--surface) 55%, transparent);
+}
+
+.jar-fill {
+  position: absolute;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  background: linear-gradient(180deg, var(--accent), color-mix(in srgb, var(--accent) 55%, var(--card-2)));
+  opacity: 0.75;
+}
+
+.jar-label {
+  position: absolute;
+  inset: 0;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 2px;
+  padding: 8px;
+  text-align: center;
+}
+
+.jar-label strong {
+  font-family: var(--font-display);
+  font-size: 1.05rem;
+  line-height: 1.15;
+  overflow-wrap: anywhere;
+}
+
+.jar-amount {
+  font-weight: 800;
+  font-variant-numeric: tabular-nums;
+}
+
+.jar-shelf-board {
+  width: 100%;
+  height: 10px;
+  border-radius: 5px;
+  background: var(--card-2);
+  border: 1px solid var(--line);
+  margin-top: -4px;
+}
+
+.jar-controls {
+  width: 100%;
+  margin-top: 10px;
+}
+
+.jar-controls .field-row {
+  align-items: center;
+}
+
+.jar-controls input {
+  min-height: 44px;
+  text-align: center;
+  padding: 6px 8px;
+  font-size: 1rem;
+}
+
+.jar-step {
+  min-width: 44px;
+  min-height: 44px;
+  padding: 6px 10px;
+  border-radius: 12px;
+  border: 2px solid var(--line);
+  background: var(--card-soft);
+  color: var(--text);
+  font-size: 1.1rem;
+  font-weight: 800;
+}
+
+/* Footer */
+
+.footer {
+  margin-top: 8px;
+  padding-top: 20px;
+  text-align: center;
+  color: var(--muted);
+  font-size: 0.9rem;
+  line-height: 1.6;
+}
+
+@media (max-width: 480px) {
+  body {
+    font-size: 16px;
+  }
+
+  .timer-big {
+    font-size: 2.5rem;
+  }
+
+  .breath-circle {
+    width: 150px;
+    height: 150px;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .breath-circle {
+    transition: none !important;
+  }
+}
