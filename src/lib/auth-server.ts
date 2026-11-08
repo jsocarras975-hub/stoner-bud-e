@@ -40,6 +40,11 @@ export const AUTH_BASE_URL = env('BETTER_AUTH_URL') ?? LIVE_ORIGIN;
 const TRUSTED_ORIGINS: string[] = [
   AUTH_BASE_URL,
   LIVE_ORIGIN,
+  // The project's other production aliases. The short domain is the one the
+  // PWA/bookmark opens, so sign-in from it 403'd "Invalid origin" until these
+  // were added (found by probing, 2026-11-08).
+  'https://stoner-bud-e.vercel.app',
+  'https://stoner-bud-e-git-main-toonzkorner-9149s-projects.vercel.app',
   'capacitor://localhost',
   'ionic://localhost',
   'https://localhost',

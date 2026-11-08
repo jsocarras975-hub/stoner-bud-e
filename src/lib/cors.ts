@@ -31,6 +31,10 @@ export const LIVE_ORIGIN = 'https://stoner-bud-e-toonzkorner-9149s-projects.verc
 // trustedOrigins in src/lib/auth-server.ts.
 export const ALLOWED_ORIGINS = new Set([
   LIVE_ORIGIN,
+  // The project's other production aliases (see trustedOrigins in
+  // ./auth-server.ts — the short domain is the one the PWA/bookmark opens).
+  'https://stoner-bud-e.vercel.app',
+  'https://stoner-bud-e-git-main-toonzkorner-9149s-projects.vercel.app',
   'capacitor://localhost',
   'ionic://localhost',
   'https://localhost',
