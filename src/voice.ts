@@ -13,11 +13,17 @@ export interface Persona {
   tagline: string;
   /** Orpheus voice id for Groq TTS. */
   voice: string;
-  /** Direction spoken to the TTS model, e.g. "[relaxed]". */
+  /** Gender of the voice — used to pick a matching device voice for the
+   *  speechSynthesis fallback. */
+  gender: 'male' | 'female';
+  /** Direction for the persona's vibe, e.g. "[relaxed]". Kept for
+   *  documentation; it is NOT prepended to TTS input — Groq's guidance is
+   *  that fewer/no directions sound more natural and conversational. */
   direction: string;
   /** Extra line appended to the live-AI system prompt for this persona. */
   tone: string;
-  /** Device speechSynthesis fallback. */
+  /** Device speechSynthesis fallback. Kept close to 1.0 on purpose: the
+   *  further pitch/rate stray from natural, the more robotic it sounds. */
   pitch: number;
   rate: number;
 }
@@ -28,40 +34,44 @@ export const PERSONAS: Persona[] = [
     name: 'Chill',
     tagline: 'Your easygoing default buddy.',
     voice: 'troy',
+    gender: 'male',
     direction: '[relaxed]',
     tone: 'Keep your tone extra relaxed and easygoing, like a friend on the porch.',
-    pitch: 0.9,
-    rate: 0.95,
+    pitch: 0.95,
+    rate: 1.0,
   },
   {
     id: 'cosmic',
     name: 'Cosmic',
     tagline: 'Dreamy, a little spacey, full of wonder.',
     voice: 'autumn',
+    gender: 'female',
     direction: '[dreamy]',
     tone: 'Lean dreamy and wonder-filled — a little cosmic, a lot of warmth, still plain words.',
-    pitch: 1.2,
-    rate: 0.9,
+    pitch: 1.1,
+    rate: 0.95,
   },
   {
     id: 'giggly',
     name: 'Giggly',
     tagline: 'Light, playful, always smiling.',
     voice: 'hannah',
+    gender: 'female',
     direction: '[cheerful]',
     tone: 'Be light and playful, quick with a smile, never mean.',
-    pitch: 1.3,
-    rate: 1.05,
+    pitch: 1.15,
+    rate: 1.0,
   },
   {
     id: 'wise',
     name: 'Wise',
     tagline: 'Calm, grounded, the old soul.',
     voice: 'austin',
+    gender: 'male',
     direction: '[calm]',
     tone: 'Be calm and grounded, like a wise old friend — steady, patient, plain words.',
-    pitch: 0.8,
-    rate: 0.9,
+    pitch: 0.9,
+    rate: 0.95,
   },
 ];
 

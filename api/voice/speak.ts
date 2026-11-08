@@ -47,9 +47,14 @@ function splitChunks(text: string): string[] {
 }
 
 export default async function handler(req: ReqLike, res: ResLike): Promise<void> {
-  const unavailable = () => {
+  // The diagnostic fields (groqStatus / groqError) exist so a failed Groq
+  // call can be told apart from a missing key: a tier block, a bad model
+  // id, and a rate limit all look the same ("unavailable") without them.
+  // They carry only Groq's HTTP status and its short error message — never
+  // the key. The client ignores extra fields.
+  const unavailable = (detail?: { groqStatus?: number; groqError?: string }) => {
     try {
-      res.status(200).json({ ok: false, source: 'unavailable' });
+      res.status(200).json({ ok: false, source: 'unavailable', ...(detail ?? {}) });
     } catch {
       // Response already sent — nothing left to do.
     }
@@ -96,7 +101,11 @@ export default async function handler(req: ReqLike, res: ResLike): Promise<void>
           body: JSON.stringify({
             model: GROQ_MODEL,
             voice: persona.voice,
-            input: `${persona.direction} ${chunk}`,
+            // No [direction] prefix: Groq's own guidance is that fewer/no
+            // directions give a natural, casual conversational cadence, and
+            // the user asked for more realistic voices. The persona's tone
+            // still comes through in the reply text and the voice id.
+            input: chunk,
             response_format: 'wav',
           }),
         });
@@ -105,9 +114,24 @@ export default async function handler(req: ReqLike, res: ResLike): Promise<void>
         return;
       }
       if (!groqRes.ok) {
-        // Log status only (never the key or body).
+        // Log status only (never the key or body). Pass the short Groq error
+        // message through so the caller can tell a tier block from a bad
+        // model id or a rate limit.
         console.error(`[bud-e speak] Groq HTTP ${groqRes.status}`);
-        unavailable();
+        let groqError = '';
+        try {
+          const bodyText = await groqRes.text();
+          try {
+            const parsed: unknown = JSON.parse(bodyText);
+            const msg = (parsed as { error?: { message?: unknown } })?.error?.message;
+            if (typeof msg === 'string') groqError = msg.slice(0, 200);
+          } catch {
+            groqError = bodyText.slice(0, 200);
+          }
+        } catch {
+          groqError = '';
+        }
+        unavailable({ groqStatus: groqRes.status, groqError });
         return;
       }
       const wav = Buffer.from(await groqRes.arrayBuffer());

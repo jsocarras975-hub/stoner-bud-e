@@ -189,16 +189,40 @@ export async function speakVoice(
   deviceSpeak(trimmed, personaId);
 }
 
-/** Read text with the device's own voice, in this persona's pitch and rate. */
+/** Read text with the device's own voice, in this persona's pitch and rate.
+ *  Picks the best device voice it can: US English first, Google's voices
+ *  (the most natural ones on Android) next, and a voice whose name matches
+ *  the persona's gender — instead of just taking whatever voice the device
+ *  lists first. */
 export function deviceSpeak(text: string, personaId: PersonaId): void {
   try {
     if (typeof window === 'undefined' || !('speechSynthesis' in window)) return;
     const persona = personaById(personaId);
     window.speechSynthesis.cancel();
     const utter = new SpeechSynthesisUtterance(text);
-    const voices = window.speechSynthesis.getVoices();
-    const en = voices.find((v) => v.lang.toLowerCase().startsWith('en'));
-    if (en) utter.voice = en;
+    const en = window.speechSynthesis
+      .getVoices()
+      .filter((v) => v.lang.toLowerCase().startsWith('en'));
+    if (en.length > 0) {
+      const score = (v: SpeechSynthesisVoice): number => {
+        let s = 0;
+        const name = v.name.toLowerCase();
+        const lang = v.lang.toLowerCase();
+        if (lang === 'en-us' || lang.startsWith('en-us')) s += 2;
+        if (name.includes('google')) s += 2;
+        // 'female' contains 'male', so check female first and exclude it
+        // from the male match.
+        const readsFemale = name.includes('female');
+        if (persona.gender === 'female' && readsFemale) s += 2;
+        if (persona.gender === 'male' && name.includes('male') && !readsFemale) s += 2;
+        return s;
+      };
+      let best = en[0];
+      for (const v of en) {
+        if (score(v) > score(best)) best = v;
+      }
+      utter.voice = best;
+    }
     utter.pitch = persona.pitch;
     utter.rate = persona.rate;
     window.speechSynthesis.speak(utter);
