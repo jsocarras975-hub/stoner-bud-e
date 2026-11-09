@@ -1,26 +1,25 @@
 // Stoner Bud-E — /api/sync (Vercel Node serverless function).
 //
 // GET returns the signed-in user's server state; POST upserts the journal,
-// stash, and settings the client sends and returns the merged server state.
-// Authenticated only: a valid Better Auth session cookie is required, else
-// 401 `sign_in_required`. Returns 503 `auth_not_configured` until
+// stash, chats, and settings the client sends and returns the merged server
+// state. Authenticated only: a valid Better Auth session cookie is required,
+// else 401 `sign_in_required`. Returns 503 `auth_not_configured` until
 // DATABASE_URL is set. Same CORS pattern as api/chat.ts, plus credentials.
 //
 // Conflict rule (server-wins): a row is only overwritten when the incoming
 // updated_at is NEWER than the stored one; otherwise the stored server copy
 // is kept and returned. An item with no updated_at counts as new (stored
-// with the server's current time). Chat is never synced — the transcript
-// stays on the device only.
+// with the server's current time).
 //
-// Deletions sync as tombstones (table `deleted_items`, migration 0003): the
-// client sends `deleted: [{kind, id, deletedAt}]`; the server stores the
-// tombstone, deletes the matching row when the tombstone wins, and returns
-// all tombstones so every device drops the item locally. Tombstone rule: a
-// tombstone wins when its deleted_at is >= the item's updated_at; otherwise
-// the newer update wins and the tombstone is dropped. An upload is never
-// allowed to resurrect a tombstoned item whose deleted_at is >= the
-// incoming updated_at — that is what stops a stale offline device from
-// bringing a deleted item back. Deletions are NEVER inferred from rows
+// Deletions sync as tombstones (table `deleted_items`, migration 0003 +
+// chat kind): the client sends `deleted: [{kind, id, deletedAt}]`; the
+// server stores the tombstone, deletes the matching row when the tombstone
+// wins, and returns all tombstones so every device drops the item locally.
+// Tombstone rule: a tombstone wins when its deleted_at is >= the item's
+// updated_at; otherwise the newer update wins and the tombstone is dropped.
+// An upload is never allowed to resurrect a tombstoned item whose deleted_at
+// is >= the incoming updated_at — that is what stops a stale offline device
+// from bringing a deleted item back. Deletions are NEVER inferred from rows
 // missing in an upload: a new device's empty first upload must not wipe
 // the account (see INTEGRATION.md).
 
@@ -39,7 +38,7 @@ import type { Pool, PoolClient } from 'pg';
 type SyncedRecord = Record<string, unknown> & { updatedAt: string };
 
 interface Tombstone {
-  kind: 'journal' | 'stash';
+  kind: 'journal' | 'stash' | 'chat';
   id: string;
   deletedAt: string;
 }
@@ -47,12 +46,15 @@ interface Tombstone {
 interface ApiServerState {
   journal: SyncedRecord[];
   stash: SyncedRecord[];
+  chats: SyncedRecord[];
   settings: (Record<string, unknown> & { updatedAt: string }) | null;
   deleted: Tombstone[];
 }
 
 const MAX_JOURNAL = 500;
 const MAX_STASH = 200;
+const MAX_CHATS = 100;
+const MAX_MESSAGES_PER_CHAT = 200;
 const MAX_DELETED = 500;
 
 // The deleted_items DDL, kept identical to migrations/0003_deleted_items.sql
@@ -61,17 +63,29 @@ const MAX_DELETED = 500;
 // via the Neon SQL Editor / scripts/setup-db.mjs, but sync must not 500
 // when the table is not there yet — and once the migration is applied this
 // is a no-op. Never logs or returns anything sensitive.
+// Kind check is expanded in ensure to allow 'chat' (migration 0004).
 const DELETED_ITEMS_DDL = `create table if not exists deleted_items (
   id uuid not null primary key default gen_random_uuid(),
   user_id text not null references "user" ("id") on delete cascade,
-  kind text not null check (kind in ('journal', 'stash')),
+  kind text not null check (kind in ('journal', 'stash', 'chat')),
   item_id text not null,
   deleted_at timestamptz not null default CURRENT_TIMESTAMP,
   unique (user_id, kind, item_id)
 );
 create index if not exists deleted_items_user_id_idx on deleted_items (user_id)`;
 
+// Chat conversations table, kept identical to migrations/0004_chat_conversations.sql.
+const CHAT_CONVERSATIONS_DDL = `create table if not exists chat_conversations (
+  user_id text not null references "user" ("id") on delete cascade,
+  id text not null,
+  data jsonb not null,
+  updated_at timestamptz not null default CURRENT_TIMESTAMP,
+  primary key (user_id, id)
+);
+create index if not exists chat_conversations_user_id_idx on chat_conversations (user_id)`;
+
 let deletedItemsEnsured = false;
+let chatTableEnsured = false;
 
 /** Idempotent: create the tombstone table if the migration has not landed
  *  yet. Best-effort — a failure here leaves the flag unset, and the
@@ -80,10 +94,36 @@ async function ensureDeletedItemsTable(pool: Pool): Promise<void> {
   if (deletedItemsEnsured) return;
   try {
     await pool.query(DELETED_ITEMS_DDL);
+    // Best-effort: expand the kind check for existing tables that still
+    // have the old 'journal','stash' constraint (from 0003).
+    await pool.query(`
+      DO $$
+      BEGIN
+        IF EXISTS (
+          SELECT 1 FROM pg_constraint
+          WHERE conname = 'deleted_items_kind_check'
+            AND conrelid = 'deleted_items'::regclass
+        ) THEN
+          ALTER TABLE deleted_items DROP CONSTRAINT deleted_items_kind_check;
+          ALTER TABLE deleted_items ADD CONSTRAINT deleted_items_kind_check
+            CHECK (kind in ('journal', 'stash', 'chat'));
+        END IF;
+      END $$;
+    `).catch(() => {});
     deletedItemsEnsured = true;
   } catch {
     // Table may already exist (concurrent create) or the DB is down; the
     // caller's queries decide what happens next — do not fail the sync here.
+  }
+}
+
+async function ensureChatConversationsTable(pool: Pool): Promise<void> {
+  if (chatTableEnsured) return;
+  try {
+    await pool.query(CHAT_CONVERSATIONS_DDL);
+    chatTableEnsured = true;
+  } catch {
+    // Same as above — best-effort.
   }
 }
 
@@ -99,12 +139,13 @@ interface IncomingItem {
 interface SyncBody {
   journal?: unknown;
   stash?: unknown;
+  chats?: unknown;
   settings?: unknown;
   deleted?: unknown;
 }
 
 interface IncomingTombstone {
-  kind: 'journal' | 'stash';
+  kind: 'journal' | 'stash' | 'chat';
   id: string;
   deletedAt: Date | null;
 }
@@ -117,6 +158,28 @@ function parseUpdatedAt(value: unknown): Date | null {
   if (typeof value !== 'string' || value === '') return null;
   const date = new Date(value);
   return Number.isNaN(date.getTime()) ? null : date;
+}
+
+/** Validate one uploaded chat list. Returns null when malformed.
+ *  Caps messages at MAX_MESSAGES_PER_CHAT (truncates, does not reject). */
+function cleanChats(raw: unknown): IncomingItem[] | null {
+  if (raw === undefined) return [];
+  if (!Array.isArray(raw) || raw.length > MAX_CHATS) return null;
+  const items: IncomingItem[] = [];
+  for (const entry of raw) {
+    if (!isRecord(entry)) return null;
+    const { updatedAt: _dropped, ...data } = entry;
+    void _dropped;
+    if (typeof data.id !== 'string' || data.id === '' || data.id.length > 128) return null;
+    if (typeof data.title !== 'string') data.title = 'Chat';
+    if (!Array.isArray(data.messages)) data.messages = [];
+    const msgs = data.messages as unknown[];
+    if (msgs.length > MAX_MESSAGES_PER_CHAT) {
+      data.messages = msgs.slice(-MAX_MESSAGES_PER_CHAT);
+    }
+    items.push({ id: data.id, updatedAt: parseUpdatedAt(entry.updatedAt), data });
+  }
+  return items;
 }
 
 /** Validate one uploaded list. Returns null when the list is malformed. */
@@ -134,7 +197,7 @@ function cleanItems(raw: unknown, limit: number): IncomingItem[] | null {
   return items;
 }
 
-const THEMES = new Set(['night', 'day', 'ember', 'moon']);
+const THEMES = new Set(['night', 'day', 'ember', 'moon', 'forest', 'sunset']);
 const EXPERIENCES = new Set(['new', 'some', 'experienced']);
 
 /** Validate an uploaded tombstone list. Returns null when malformed. */
@@ -145,7 +208,7 @@ function cleanDeleted(raw: unknown): IncomingTombstone[] | null {
   for (const entry of raw) {
     if (!isRecord(entry)) return null;
     const kind = entry.kind;
-    if (kind !== 'journal' && kind !== 'stash') return null;
+    if (kind !== 'journal' && kind !== 'stash' && kind !== 'chat') return null;
     if (typeof entry.id !== 'string' || entry.id === '' || entry.id.length > 128) return null;
     tombstones.push({ kind, id: entry.id, deletedAt: parseUpdatedAt(entry.deletedAt) });
   }
@@ -180,6 +243,12 @@ function cleanSettings(
       data.voice = { persona: v.persona, voiceReplies: v.voiceReplies, autoPlay: v.autoPlay };
     }
   }
+  if (rest.premiumTier === 'lit' || rest.premiumTier === 'cloudnine' || rest.premiumTier === null) {
+    data.premiumTier = rest.premiumTier;
+  }
+  if (rest.customPersona === null || isRecord(rest.customPersona)) data.customPersona = rest.customPersona;
+  if (rest.customTheme === null || isRecord(rest.customTheme)) data.customTheme = rest.customTheme;
+  if (Array.isArray(rest.savedPlans)) data.savedPlans = rest.savedPlans;
   return { data, updatedAt: parseUpdatedAt(raw.updatedAt) };
 }
 
@@ -204,6 +273,10 @@ async function readState(client: Pool | PoolClient, userId: string): Promise<Api
     'select id, data, updated_at from stash_items where user_id = $1 order by updated_at desc',
     [userId],
   );
+  const chatsRes = await client.query<Row>(
+    'select id, data, updated_at from chat_conversations where user_id = $1 order by updated_at desc',
+    [userId],
+  );
   const settingsRes = await client.query<Row>(
     'select data, updated_at from user_settings where user_id = $1',
     [userId],
@@ -218,6 +291,9 @@ async function readState(client: Pool | PoolClient, userId: string): Promise<Api
   const stash: SyncedRecord[] = stashRes.rows.map(
     (r) => ({ ...(r.data as object), updatedAt: toIso(r.updated_at) }) as SyncedRecord,
   );
+  const chats: SyncedRecord[] = chatsRes.rows.map(
+    (r) => ({ ...(r.data as object), updatedAt: toIso(r.updated_at) }) as SyncedRecord,
+  );
   const settingsRow = settingsRes.rows[0];
   const settings: ApiServerState['settings'] = settingsRow
     ? ({
@@ -226,11 +302,11 @@ async function readState(client: Pool | PoolClient, userId: string): Promise<Api
       } as ApiServerState['settings'])
     : null;
   const deleted: Tombstone[] = deletedRes.rows.map((r) => ({
-    kind: r.kind as 'journal' | 'stash',
+    kind: r.kind as 'journal' | 'stash' | 'chat',
     id: String(r.item_id),
     deletedAt: toIso(r.deleted_at as Date | string),
   }));
-  return { journal, stash, settings, deleted };
+  return { journal, stash, chats, settings, deleted };
 }
 
 export default async function handler(req: Req, res: Res): Promise<void> {
@@ -261,8 +337,9 @@ export default async function handler(req: Req, res: Res): Promise<void> {
     const pool = getPool();
     if (req.method === 'GET') {
       await ensureDeletedItemsTable(pool);
+      await ensureChatConversationsTable(pool);
       const state = await readState(pool, user.id);
-  res.status(200).json({ ok: true, ...state });
+      res.status(200).json({ ok: true, ...state });
       return;
     }
 
@@ -270,14 +347,16 @@ export default async function handler(req: Req, res: Res): Promise<void> {
     const body = await readJsonBody<SyncBody>(req);
     const journal = cleanItems(body.journal, MAX_JOURNAL);
     const stash = cleanItems(body.stash, MAX_STASH);
+    const chats = cleanChats(body.chats);
     const settings = cleanSettings(body.settings);
     const deleted = cleanDeleted(body.deleted);
-    if (journal === null || stash === null || settings === null || deleted === null) {
+    if (journal === null || stash === null || chats === null || settings === null || deleted === null) {
       res.status(400).json({ ok: false, error: 'bad_sync_body' });
       return;
     }
 
     await ensureDeletedItemsTable(pool);
+    await ensureChatConversationsTable(pool);
     const client = await pool.connect();
     try {
       await client.query('BEGIN');
@@ -286,7 +365,12 @@ export default async function handler(req: Req, res: Res): Promise<void> {
       // otherwise the newer update wins and the tombstone is dropped.
       for (const tomb of deleted) {
         const deletedAt = tomb.deletedAt ?? new Date();
-        const table = tomb.kind === 'journal' ? 'journal_entries' : 'stash_items';
+        const table =
+          tomb.kind === 'journal'
+            ? 'journal_entries'
+            : tomb.kind === 'stash'
+              ? 'stash_items'
+              : 'chat_conversations';
         // Keep the FIRST delete time when the tombstone already exists.
         await client.query(
           `insert into deleted_items (user_id, kind, item_id, deleted_at)
@@ -342,6 +426,22 @@ export default async function handler(req: Req, res: Res): Promise<void> {
            on conflict (user_id, id) do update
              set data = excluded.data, updated_at = excluded.updated_at
              where stash_items.updated_at < excluded.updated_at`,
+          [user.id, item.id, item.data, updatedAt],
+        );
+      }
+      for (const item of chats) {
+        const updatedAt = item.updatedAt ?? new Date();
+        await client.query(
+          `insert into chat_conversations (user_id, id, data, updated_at)
+           select $1, $2, $3, $4
+           where not exists (
+             select 1 from deleted_items
+             where user_id = $1 and kind = 'chat' and item_id = $2
+               and deleted_at >= $4
+           )
+           on conflict (user_id, id) do update
+             set data = excluded.data, updated_at = excluded.updated_at
+             where chat_conversations.updated_at < excluded.updated_at`,
           [user.id, item.id, item.data, updatedAt],
         );
       }

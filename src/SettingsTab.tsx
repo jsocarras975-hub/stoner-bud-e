@@ -10,7 +10,7 @@ import type { ThemeId } from './theme';
 import { APP_VERSION, COPYRIGHT, getLegalDoc } from './legal';
 import type { LegalDoc } from './legal';
 import type { AuthUser } from './lib/auth-client';
-import { PERSONAS, personaById } from './voice';
+import { PERSONAS, personaById, isPremiumPersona } from './voice';
 import type { VoiceSettings } from './voice';
 import { speakVoice, stopVoice } from './lib/voice-client';
 import { Chip, ChipRow, Label, PageHead } from './bits';
@@ -25,8 +25,9 @@ export default function SettingsTab(props: {
   voice: VoiceSettings;
   onVoice: (voice: VoiceSettings) => void;
   apiBase: string;
+  premiumTier?: 'lit' | 'cloudnine' | null;
 }) {
-  const { theme, onTheme, user, onDeleteAccount, voice, onVoice, apiBase } = props;
+  const { theme, onTheme, user, onDeleteAccount, voice, onVoice, apiBase, premiumTier = null } = props;
   const [view, setView] = useState<LegalView>('main');
   const [deleting, setDeleting] = useState(false);
   const [deleteError, setDeleteError] = useState('');
@@ -161,23 +162,28 @@ export default function SettingsTab(props: {
         <p className="eyebrow">Appearance</p>
         <p className="muted">Swap the whole garden. It stays on this phone.</p>
         <div className="theme-grid">
-          {THEMES.map((item) => (
-            <button
-              key={item.id}
-              type="button"
-              className="theme-swatch"
-              data-swatch={item.id}
-              aria-pressed={theme === item.id}
-              onClick={() => onTheme(item.id)}
-            >
-              <span>
-                <span className="swatch-dot" aria-hidden />
-                <strong>{item.name}</strong>
-              </span>
-              <span className="swatch-bar" aria-hidden />
-              <span style={{ fontSize: '0.85rem', opacity: 0.8 }}>{item.detail}</span>
-            </button>
-          ))}
+          {THEMES.map((item) => {
+            const locked = item.premium && !premiumTier;
+            return (
+              <button
+                key={item.id}
+                type="button"
+                className="theme-swatch"
+                data-swatch={item.id}
+                aria-pressed={theme === item.id}
+                disabled={locked}
+                onClick={() => !locked && onTheme(item.id)}
+                title={locked ? 'Premium theme — unlock with Lit' : undefined}
+              >
+                <span>
+                  <span className="swatch-dot" aria-hidden />
+                  <strong>{item.name}{locked ? ' 🔒' : ''}</strong>
+                </span>
+                <span className="swatch-bar" aria-hidden />
+                <span style={{ fontSize: '0.85rem', opacity: 0.8 }}>{item.detail}</span>
+              </button>
+            );
+          })}
         </div>
       </section>
 
@@ -186,15 +192,19 @@ export default function SettingsTab(props: {
         <p className="muted">Pick how Bud-E sounds, and whether it talks back out loud.</p>
         <Label>Buddy voice</Label>
         <ChipRow>
-          {PERSONAS.map((p) => (
-            <Chip
-              key={p.id}
-              on={voice.persona === p.id}
-              onClick={() => onVoice({ ...voice, persona: p.id })}
-            >
-              {p.name}
-            </Chip>
-          ))}
+          {PERSONAS.map((p) => {
+            const locked = isPremiumPersona(p.id) && !premiumTier;
+            return (
+              <Chip
+                key={p.id}
+                on={voice.persona === p.id}
+                onClick={() => !locked && onVoice({ ...voice, persona: p.id })}
+                disabled={locked}
+              >
+                {p.name}{locked ? ' 🔒' : ''}
+              </Chip>
+            );
+          })}
         </ChipRow>
         <p className="muted" style={{ marginTop: 8, marginBottom: 0 }}>
           {personaById(voice.persona).tagline}
@@ -249,6 +259,41 @@ export default function SettingsTab(props: {
         >
           {trying ? 'Stop the preview' : 'Try this voice'}
         </button>
+      </section>
+
+      <section className="card" aria-label="Premium">
+        <p className="eyebrow">Premium</p>
+        {premiumTier ? (
+          <p>
+            You're on <strong>{premiumTier === 'lit' ? 'Lit' : 'Cloud Nine'}</strong>. Extra
+            voices, themes, and insights are unlocked.
+          </p>
+        ) : (
+          <>
+            <p>Unlock more with a one-time purchase. Nothing existing gets paywalled.</p>
+            <ul style={{ margin: '8px 0', paddingLeft: 18 }}>
+              <li>
+                <strong>Lit — $19</strong>: extra voice personas, extra themes + custom colors,
+                session insights, unlimited saved plans, early access.
+              </li>
+              <li>
+                <strong>Cloud Nine — $49</strong>: everything in Lit, plus in-app music when it
+                lands, all future premium free, plus a custom persona and custom theme made for
+                you.
+              </li>
+            </ul>
+            <p className="muted">
+              Checkout is switched off for now. Payments are not set up yet — cannabis-related
+              businesses may need special approval from the processor before this can go live.
+            </p>
+            <button type="button" className="btn" disabled>
+              Get Lit — $19 (coming soon)
+            </button>
+            <button type="button" className="btn secondary" style={{ marginLeft: 8 }} disabled>
+              Get Cloud Nine — $49 (coming soon)
+            </button>
+          </>
+        )}
       </section>
 
       <section className="card" aria-label="About Bud-E">

@@ -52,7 +52,7 @@ import { STASH_KEY } from './stash';
 import type { StashItem } from './stash';
 import AuthTab from './AuthTab';
 import { clearLocalSyncState, queueDeletion, uploadLocal } from './lib/sync';
-import type { SyncSettings } from './lib/sync';
+import type { SyncSettings, SyncedChatConversation } from './lib/sync';
 import { deleteAccount, getSession, signOut } from './lib/auth-client';
 import type { AuthUser } from './lib/auth-client';
 import { DEFAULT_VOICE_SETTINGS, cleanVoiceSettings } from './voice';
@@ -71,7 +71,8 @@ import {
 } from './lib/timer-notifications';
 import { Chip, ChipRow, Label, PageHead } from './bits';
 
-const TRANSCRIPT_KEY = 'bude-transcript-v1';
+const TRANSCRIPT_KEY = 'bude-transcript-v1'; // legacy single transcript
+const CHATS_KEY = 'bude-chats-v1';
 const SESSION_KEY = 'bude-session-v1';
 const VIBE_KEY = 'bude-vibe-v1';
 const VOICE_KEY = 'bude-voice-v1';
@@ -172,6 +173,42 @@ function load<T>(key: string, fallback: T): T {
   }
 }
 
+function newChatId(): string {
+  return `${Date.now().toString(36)}-${Math.random().toString(36).slice(2, 10)}`;
+}
+
+function autoTitle(messages: ChatMessage[]): string {
+  const first = messages.find((m) => m.role === 'user');
+  if (!first) return 'New chat';
+  const text = first.text.trim();
+  if (text.length <= 40) return text;
+  return text.slice(0, 37) + '…';
+}
+
+function loadChats(): SyncedChatConversation[] {
+  try {
+    const raw = localStorage.getItem(CHATS_KEY);
+    if (raw) {
+      const parsed: unknown = JSON.parse(raw);
+      if (Array.isArray(parsed)) return parsed as SyncedChatConversation[];
+    }
+    // Migrate legacy single transcript into the first conversation.
+    const legacy = loadList<ChatMessage>(TRANSCRIPT_KEY);
+    if (legacy.length > 0) {
+      const migrated: SyncedChatConversation = {
+        id: newChatId(),
+        title: autoTitle(legacy),
+        messages: legacy,
+        updatedAt: new Date().toISOString(),
+      };
+      return [migrated];
+    }
+  } catch {
+    // Fall through to empty.
+  }
+  return [];
+}
+
 function loadList<T>(key: string): T[] {
   try {
     const raw = localStorage.getItem(key);
@@ -209,7 +246,12 @@ export default function App() {
   });
   const [ageDeclined, setAgeDeclined] = useState(false);
   const [session, setSession] = useState<Session>(() => load(SESSION_KEY, DEFAULT_SESSION));
-  const [transcript, setTranscript] = useState<ChatMessage[]>(() => loadList(TRANSCRIPT_KEY));
+  const [chats, setChats] = useState<SyncedChatConversation[]>(() => loadChats());
+  const [currentChatId, setCurrentChatId] = useState<string | null>(() => {
+    const loaded = loadChats();
+    return loaded.length > 0 ? loaded[0].id : null;
+  });
+  const [showChatList, setShowChatList] = useState(false);
   const [vibe, setVibe] = useState<Vibe>(() => load(VIBE_KEY, DEFAULT_VIBE));
   const [voice, setVoice] = useState<VoiceSettings>(() => loadVoiceSettings());
   const [journal, setJournal] = useState<JournalEntry[]>(() => loadList(JOURNAL_KEY));
@@ -282,7 +324,8 @@ export default function App() {
   }, [theme]);
 
   useEffect(() => save(SESSION_KEY, session), [session]);
-  useEffect(() => save(TRANSCRIPT_KEY, transcript), [transcript]);
+  useEffect(() => save(CHATS_KEY, chats), [chats]);
+  // After successful migration, the old key can be cleared on next save, but we leave it for safety.
   useEffect(() => save(VIBE_KEY, vibe), [vibe]);
   useEffect(() => save(VOICE_KEY, voice), [voice]);
   useEffect(() => save(JOURNAL_KEY, journal), [journal]);
@@ -299,7 +342,7 @@ export default function App() {
     }, 2000);
     return () => window.clearTimeout(id);
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [journal, stash, session, vibe, voice, theme, user, isOnline]);
+  }, [journal, stash, chats, session, vibe, voice, theme, user, isOnline]);
 
   function deductFromStash(stashId: string, amount: number, unit: 'mg' | 'g'): void {
     setStash((items) =>
@@ -338,11 +381,16 @@ export default function App() {
   function applyServerState(state: {
     journal: JournalEntry[];
     stash: StashItem[];
+    chats: SyncedChatConversation[];
     settings: SyncSettings | null;
   }): void {
     applyingServerState.current = true;
     setJournal(state.journal);
     setStash(state.stash);
+    setChats(state.chats);
+    if (state.chats.length > 0 && !currentChatId) {
+      setCurrentChatId(state.chats[0].id);
+    }
     if (state.settings) {
       if (state.settings.theme && isThemeId(state.settings.theme)) {
         setTheme(state.settings.theme);
@@ -373,7 +421,7 @@ export default function App() {
     if (!currentUser) return;
     setSyncMessage('Syncing…');
     try {
-      const state = await uploadLocal({ journal, stash }, currentSettings());
+      const state = await uploadLocal({ journal, stash, chats }, currentSettings());
       applyServerState(state);
       setSyncMessage(`Synced just now${reason === 'signin' ? ' — your stuff from this device is now on your account.' : '.'}`);
     } catch (err) {
@@ -418,6 +466,7 @@ export default function App() {
       localStorage.removeItem(JOURNAL_KEY);
       localStorage.removeItem(STASH_KEY);
       localStorage.removeItem(TRANSCRIPT_KEY);
+      localStorage.removeItem(CHATS_KEY);
       localStorage.removeItem(SESSION_KEY);
       localStorage.removeItem(VIBE_KEY);
       localStorage.removeItem(BREAK_KEY);
@@ -426,7 +475,8 @@ export default function App() {
     }
     setJournal([]);
     setStash([]);
-    setTranscript([]);
+    setChats([]);
+    setCurrentChatId(null);
     setSession(DEFAULT_SESSION);
     setVibe(DEFAULT_VIBE);
     setTab('tonight');
@@ -571,14 +621,19 @@ export default function App() {
       {tab === 'chat' && (
         <ChatTab
           session={session}
-          transcript={transcript}
-          setTranscript={setTranscript}
+          chats={chats}
+          currentChatId={currentChatId}
+          setChats={setChats}
+          setCurrentChatId={setCurrentChatId}
+          showChatList={showChatList}
+          setShowChatList={setShowChatList}
           setSource={setSource}
           journalNote={journalSummary(journal)}
           prefill={pendingQuestion}
           onPrefillUsed={() => setPendingQuestion(null)}
           onGoTonight={() => setTab('tonight')}
           voice={voice}
+          onDeleteChat={(id) => queueDeletion('chat', id)}
         />
       )}
       {tab === 'tools' && (
@@ -638,6 +693,7 @@ export default function App() {
           voice={voice}
           onVoice={setVoice}
           apiBase={apiBase()}
+          premiumTier={null}
         />
       )}
       {tab === 'account' && (
@@ -793,28 +849,43 @@ const CHAT_PROMPTS = [
 
 function ChatTab({
   session,
-  transcript,
-  setTranscript,
+  chats,
+  currentChatId,
+  setChats,
+  setCurrentChatId,
+  showChatList,
+  setShowChatList,
   setSource,
   journalNote,
   prefill,
   onPrefillUsed,
   onGoTonight,
   voice,
+  onDeleteChat,
 }: {
   session: Session;
-  transcript: ChatMessage[];
-  setTranscript: (t: ChatMessage[]) => void;
+  chats: SyncedChatConversation[];
+  currentChatId: string | null;
+  setChats: (chats: SyncedChatConversation[]) => void;
+  setCurrentChatId: (id: string | null) => void;
+  showChatList: boolean;
+  setShowChatList: (show: boolean) => void;
   setSource: (s: Source) => void;
   journalNote: string;
   prefill: string | null;
   onPrefillUsed: () => void;
   onGoTonight: () => void;
   voice: VoiceSettings;
+  onDeleteChat: (id: string) => void;
 }) {
+  const current = chats.find((c) => c.id === currentChatId) ?? null;
+  const transcript = current?.messages ?? [];
+
   const [input, setInput] = useState('');
   const [sending, setSending] = useState(false);
   const [confirmClear, setConfirmClear] = useState(false);
+  const [renamingId, setRenamingId] = useState<string | null>(null);
+  const [renameValue, setRenameValue] = useState('');
   const bottomRef = useRef<HTMLDivElement>(null);
   // Which Bud-E message is being read out loud right now (null = none).
   const [speakingIdx, setSpeakingIdx] = useState<number | null>(null);
@@ -925,14 +996,35 @@ function ChatTab({
   async function sendText(text: string): Promise<void> {
     const trimmed = text.trim();
     if (!trimmed || sending) return;
-    // User gesture (send button / prompt chip) — unlock audio now, so the
-    // reply that arrives after the fetch is allowed to play out loud.
     unlockAudio();
-    // A new message stops whatever Bud-E was reading out loud.
     stopVoice();
     setSpeakingIdx(null);
-    const next: ChatMessage[] = [...transcript, { role: 'user', text: trimmed }];
-    setTranscript(next);
+
+    let chatId = currentChatId;
+    let baseMessages = transcript;
+    if (!chatId) {
+      chatId = newChatId();
+      baseMessages = [];
+      setCurrentChatId(chatId);
+    }
+
+    const next: ChatMessage[] = [...baseMessages, { role: 'user', text: trimmed }];
+    const title = chats.find((c) => c.id === chatId)?.title || autoTitle(next);
+
+    function updateChat(messages: ChatMessage[]) {
+      setChats(
+        chats
+          .filter((c) => c.id !== chatId)
+          .concat({
+            id: chatId!,
+            title: messages.some((m) => m.role === 'user') ? autoTitle(messages) : title,
+            messages,
+            updatedAt: new Date().toISOString(),
+          }),
+      );
+    }
+
+    updateChat(next);
     setInput('');
     setSending(true);
     try {
@@ -974,16 +1066,15 @@ function ChatTab({
             }));
           if (clean.length > 0) budMsg.sources = clean;
         }
-        setTranscript([...next, budMsg]);
+        updateChat([...next, budMsg]);
         setSource(src === 'live' ? 'live' : 'fallback');
         speakReply(reply, next.length);
       } else {
         throw new Error('no live reply');
       }
     } catch {
-      // No key, no network, server hiccup — the offline buddy always answers.
       const fallbackText = localReply(trimmed, session, next);
-      setTranscript([...next, { role: 'bud', text: fallbackText }]);
+      updateChat([...next, { role: 'bud', text: fallbackText }]);
       setSource('fallback');
       speakReply(fallbackText, next.length);
     } finally {
@@ -1000,13 +1091,117 @@ function ChatTab({
 
   return (
     <div className="chat-shell">
-      <div className="chat-scroll" role="log" aria-live="polite">
-        <div>
-          <h1 className="page-title">Buddy</h1>
-          <p className="page-sub" style={{ marginBottom: 0 }}>
-            Ask anything — Bud-E answers with your session in mind.
-          </p>
+      {showChatList ? (
+        <div className="chat-list-view">
+          <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+            <h1 className="page-title" style={{ margin: 0 }}>Chats</h1>
+            <button type="button" className="btn" onClick={() => setShowChatList(false)}>
+              Back
+            </button>
+          </div>
+          <button
+            type="button"
+            className="btn btn-block"
+            style={{ marginTop: 12 }}
+            onClick={() => {
+              const id = newChatId();
+              setCurrentChatId(id);
+              setChats([
+                ...chats,
+                { id, title: 'New chat', messages: [], updatedAt: new Date().toISOString() },
+              ]);
+              setShowChatList(false);
+            }}
+          >
+            + New chat
+          </button>
+          <div style={{ marginTop: 16 }}>
+            {chats.length === 0 && <p className="muted">No chats yet.</p>}
+            {chats
+              .slice()
+              .sort((a, b) => (b.updatedAt || '').localeCompare(a.updatedAt || ''))
+              .map((c) => (
+                <div
+                  key={c.id}
+                  style={{
+                    display: 'flex',
+                    gap: 8,
+                    alignItems: 'center',
+                    padding: '10px 0',
+                    borderBottom: '1px solid var(--border, #333)',
+                  }}
+                >
+                  {renamingId === c.id ? (
+                    <input
+                      value={renameValue}
+                      onChange={(e) => setRenameValue(e.target.value)}
+                      onBlur={() => {
+                        if (renameValue.trim()) {
+                          setChats(
+                            chats.map((x) =>
+                              x.id === c.id
+                                ? { ...x, title: renameValue.trim(), updatedAt: new Date().toISOString() }
+                                : x,
+                            ),
+                          );
+                        }
+                        setRenamingId(null);
+                      }}
+                      autoFocus
+                    />
+                  ) : (
+                    <button
+                      type="button"
+                      style={{ flex: 1, textAlign: 'left', background: 'none', border: 'none', color: 'inherit' }}
+                      onClick={() => {
+                        setCurrentChatId(c.id);
+                        setShowChatList(false);
+                      }}
+                    >
+                      <strong>{c.title || 'Untitled'}</strong>
+                      <div className="muted" style={{ fontSize: 13 }}>
+                        {c.messages.length} messages
+                      </div>
+                    </button>
+                  )}
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setRenamingId(c.id);
+                      setRenameValue(c.title);
+                    }}
+                  >
+                    Rename
+                  </button>
+                  <button
+                    type="button"
+                    className="danger-text"
+                    onClick={() => {
+                      onDeleteChat(c.id);
+                      setChats(chats.filter((x) => x.id !== c.id));
+                      if (currentChatId === c.id) setCurrentChatId(null);
+                    }}
+                  >
+                    Delete
+                  </button>
+                </div>
+              ))}
+          </div>
         </div>
+      ) : (
+        <>
+        <div className="chat-scroll" role="log" aria-live="polite">
+          <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+            <div>
+              <h1 className="page-title">Buddy</h1>
+              <p className="page-sub" style={{ marginBottom: 0 }}>
+                Ask anything — Bud-E answers with your session in mind.
+              </p>
+            </div>
+            <button type="button" className="btn" onClick={() => setShowChatList(true)}>
+              Chats
+            </button>
+          </div>
 
         <button type="button" className="chat-session-pill" onClick={onGoTonight}>
           {amount !== '' ? (
@@ -1128,12 +1323,17 @@ function ChatTab({
                 type="button"
                 className="danger-text"
                 onClick={() => {
-                  setTranscript([]);
+                  if (currentChatId) {
+                    onDeleteChat(currentChatId);
+                    setChats(chats.filter((c) => c.id !== currentChatId));
+                    setCurrentChatId(null);
+                  }
                   setSource(null);
                   setConfirmClear(false);
+                  setShowChatList(false);
                 }}
               >
-                Clear it
+                Delete chat
               </button>
               <button type="button" onClick={() => setConfirmClear(false)}>
                 Keep
@@ -1150,6 +1350,8 @@ function ChatTab({
           )}
         </div>
       </div>
+        </>
+      )}
     </div>
   );
 }

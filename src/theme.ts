@@ -4,14 +4,21 @@
 export const THEME_KEY = 'bude-theme-v1';
 export const AGE_GATE_KEY = 'bude-age-gate-v1';
 
-export type ThemeId = 'night' | 'day' | 'ember' | 'moon';
-
-export const THEMES: { id: ThemeId; name: string; detail: string }[] = [
+export const THEMES: { id: ThemeId; name: string; detail: string; premium?: boolean }[] = [
   { id: 'night', name: 'Night garden', detail: 'Deep green. The original.' },
   { id: 'day', name: 'Day garden', detail: 'Paper and daylight.' },
   { id: 'ember', name: 'Amber lounge', detail: 'Warm lamp light.' },
   { id: 'moon', name: 'Moon', detail: 'Cool blue night.' },
+  // Premium (Lit+)
+  { id: 'forest', name: 'Deep forest', detail: 'Darker greens, quieter.', premium: true },
+  { id: 'sunset', name: 'Sunset', detail: 'Warm oranges and pinks.', premium: true },
 ];
+
+export type ThemeId = 'night' | 'day' | 'ember' | 'moon' | 'forest' | 'sunset';
+
+export function isPremiumTheme(id: string): boolean {
+  return THEMES.some((t) => t.id === id && t.premium);
+}
 
 export function isThemeId(value: unknown): value is ThemeId {
   return THEMES.some((t) => t.id === value);

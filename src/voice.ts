@@ -4,7 +4,7 @@
 // functions (Groq voice id + direction for /api/voice/speak, tone line for
 // /api/chat) — same pattern as src/bude.ts.
 
-export type PersonaId = 'chill' | 'cosmic' | 'giggly' | 'wise';
+export type PersonaId = 'chill' | 'cosmic' | 'giggly' | 'wise' | 'coach' | 'poet';
 
 export interface Persona {
   id: PersonaId;
@@ -73,7 +73,36 @@ export const PERSONAS: Persona[] = [
     pitch: 0.9,
     rate: 0.95,
   },
+  // Premium (Lit+)
+  {
+    id: 'coach',
+    name: 'Coach',
+    tagline: 'Straight-talking session coach.',
+    voice: 'troy',
+    gender: 'male',
+    direction: '[direct]',
+    tone: 'Be direct and encouraging, like a good coach — clear steps, no fluff.',
+    pitch: 1.0,
+    rate: 1.0,
+  },
+  {
+    id: 'poet',
+    name: 'Poet',
+    tagline: 'Soft, lyrical, a little poetic.',
+    voice: 'autumn',
+    gender: 'female',
+    direction: '[soft]',
+    tone: 'Speak softly and a little lyrical, still plain enough to follow.',
+    pitch: 1.05,
+    rate: 0.9,
+  },
 ];
+
+export const FREE_PERSONA_IDS = ['chill', 'cosmic', 'giggly', 'wise'] as const;
+
+export function isPremiumPersona(id: string): boolean {
+  return !FREE_PERSONA_IDS.includes(id as (typeof FREE_PERSONA_IDS)[number]);
+}
 
 export function isPersonaId(value: unknown): value is PersonaId {
   return PERSONAS.some((p) => p.id === value);

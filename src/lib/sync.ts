@@ -1,7 +1,8 @@
 // Stoner Bud-E — sync helpers (browser side).
 //
-// Pure merge logic + the upload/download calls for /api/sync. The chat
-// transcript is NEVER synced — it stays on the device only.
+// Pure merge logic + the upload/download calls for /api/sync. Journal,
+// stash, settings, and chat conversations all sync. Signed-out chats
+// stay local-only, exactly like journal/stash.
 //
 // How conflict resolution works (both sides agree on this):
 // - Every synced item carries `updatedAt` (ISO string). The server only
@@ -19,9 +20,10 @@
 // - After a successful upload or download, the server state is the source of
 //   truth: App.tsx replaces its local lists with what the server returned.
 //
-// Deletions sync as tombstones (table `deleted_items`, migration 0003):
-// - When the user deletes a journal entry or stash item, App.tsx calls
-//   queueDeletion() — the deletion is stored in localStorage
+// Deletions sync as tombstones (table `deleted_items`, migration 0003 +
+// chat kind in 0004):
+// - When the user deletes a journal entry, stash item, or chat, App.tsx
+//   calls queueDeletion() — the deletion is stored in localStorage
 //   (`bude-deleted-queue-v1`) so it survives restarts and signed-out use,
 //   and uploadLocal() sends the whole queue on the next sync. The server
 //   stores the tombstones, deletes the matching rows, and returns every
@@ -37,7 +39,7 @@
 import { authedFetch } from './auth-client.ts';
 import type { JournalEntry } from '../journal.ts';
 import type { StashItem } from '../stash.ts';
-import type { Experience, Session } from '../bude.ts';
+import type { ChatMessage, Experience, Session } from '../bude.ts';
 import type { ThemeId } from '../theme.ts';
 import type { VoiceSettings } from '../voice.ts';
 
@@ -45,6 +47,16 @@ export type Synced<T> = T & { updatedAt?: string };
 
 export type SyncedJournalEntry = Synced<JournalEntry>;
 export type SyncedStashItem = Synced<StashItem>;
+
+/** One saved chat. Messages match ChatMessage from bude.ts. */
+export interface ChatConversation {
+  id: string;
+  title: string;
+  messages: ChatMessage[];
+  updatedAt?: string;
+}
+
+export type SyncedChatConversation = Synced<ChatConversation>;
 
 export interface VibeState {
   setting: string;
@@ -67,6 +79,8 @@ export interface BreakState {
   status: 'active' | 'done' | 'ended';
 }
 
+export type PremiumTier = 'lit' | 'cloudnine' | null;
+
 export interface SyncSettings {
   theme?: ThemeId;
   experience?: Experience;
@@ -74,11 +88,15 @@ export interface SyncSettings {
   vibe?: VibeState;
   break?: BreakState | null;
   voice?: VoiceSettings;
+  premiumTier?: PremiumTier;
+  customPersona?: { id: string; name: string; direction: string; tone: string } | null;
+  customTheme?: { id: string; name: string; colors: Record<string, string> } | null;
+  savedPlans?: { id: string; text: string; updatedAt?: string }[];
   updatedAt?: string;
 }
 
 export interface Tombstone {
-  kind: 'journal' | 'stash';
+  kind: 'journal' | 'stash' | 'chat';
   id: string;
   deletedAt: string;
 }
@@ -86,6 +104,7 @@ export interface Tombstone {
 export interface ServerState {
   journal: SyncedJournalEntry[];
   stash: SyncedStashItem[];
+  chats: SyncedChatConversation[];
   settings: SyncSettings | null;
   deleted: Tombstone[];
 }
@@ -93,6 +112,7 @@ export interface ServerState {
 export interface LocalState {
   journal: SyncedJournalEntry[];
   stash: SyncedStashItem[];
+  chats: SyncedChatConversation[];
 }
 
 const SNAPSHOT_KEY = 'bude-sync-snapshot-v1';
@@ -111,21 +131,23 @@ function contentKey(value: unknown): string {
 interface Snapshot {
   journal: Record<string, string>;
   stash: Record<string, string>;
+  chats: Record<string, string>;
   settings: string | null;
 }
 
 function loadSnapshot(): Snapshot {
   try {
     const raw = localStorage.getItem(SNAPSHOT_KEY);
-    if (!raw) return { journal: {}, stash: {}, settings: null };
+    if (!raw) return { journal: {}, stash: {}, chats: {}, settings: null };
     const parsed = JSON.parse(raw) as Partial<Snapshot>;
     return {
       journal: parsed.journal ?? {},
       stash: parsed.stash ?? {},
+      chats: parsed.chats ?? {},
       settings: parsed.settings ?? null,
     };
   } catch {
-    return { journal: {}, stash: {}, settings: null };
+    return { journal: {}, stash: {}, chats: {}, settings: null };
   }
 }
 
@@ -134,6 +156,7 @@ function saveSnapshot(state: ServerState): void {
     const snapshot: Snapshot = {
       journal: Object.fromEntries(state.journal.map((e) => [e.id, contentKey(e)])),
       stash: Object.fromEntries(state.stash.map((i) => [i.id, contentKey(i)])),
+      chats: Object.fromEntries(state.chats.map((c) => [c.id, contentKey(c)])),
       settings: state.settings ? contentKey(state.settings) : null,
     };
     localStorage.setItem(SNAPSHOT_KEY, JSON.stringify(snapshot));
@@ -175,7 +198,9 @@ function loadDeleteQueue(): Tombstone[] {
       (t): t is Tombstone =>
         !!t &&
         typeof t === 'object' &&
-        ((t as Tombstone).kind === 'journal' || (t as Tombstone).kind === 'stash') &&
+        ((t as Tombstone).kind === 'journal' ||
+          (t as Tombstone).kind === 'stash' ||
+          (t as Tombstone).kind === 'chat') &&
         typeof (t as Tombstone).id === 'string' &&
         typeof (t as Tombstone).deletedAt === 'string',
     );
@@ -198,7 +223,7 @@ function saveDeleteQueue(queue: Tombstone[]): void {
  * sent on the first sync after sign-in, so a delete made while signed out
  * cannot resurrect from the server. A repeat delete keeps the FIRST time.
  */
-export function queueDeletion(kind: 'journal' | 'stash', id: string): void {
+export function queueDeletion(kind: 'journal' | 'stash' | 'chat', id: string): void {
   const queue = loadDeleteQueue();
   if (queue.some((t) => t.kind === kind && t.id === id)) return;
   queue.push({ kind, id, deletedAt: new Date().toISOString() });
@@ -224,7 +249,9 @@ function loadTombstoneCache(): Tombstone[] {
       (t): t is Tombstone =>
         !!t &&
         typeof t === 'object' &&
-        ((t as Tombstone).kind === 'journal' || (t as Tombstone).kind === 'stash') &&
+        ((t as Tombstone).kind === 'journal' ||
+          (t as Tombstone).kind === 'stash' ||
+          (t as Tombstone).kind === 'chat') &&
         typeof (t as Tombstone).id === 'string' &&
         typeof (t as Tombstone).deletedAt === 'string',
     );
@@ -257,7 +284,7 @@ function saveTombstoneCache(tombstones: Tombstone[]): void {
  */
 export function filterTombstoned<T extends { id: string; updatedAt?: string }>(
   items: T[],
-  kind: 'journal' | 'stash',
+  kind: 'journal' | 'stash' | 'chat',
   tombstones: Tombstone[],
 ): T[] {
   const byId = new Map(
@@ -333,6 +360,7 @@ async function readState(res: Response): Promise<ServerState> {
   const state = body as Partial<ServerState>;
   const journal = Array.isArray(state.journal) ? state.journal : [];
   const stash = Array.isArray(state.stash) ? state.stash : [];
+  const chats = Array.isArray(state.chats) ? state.chats : [];
   const settings =
     state.settings && typeof state.settings === 'object' ? state.settings : null;
   const deleted = Array.isArray(state.deleted)
@@ -340,12 +368,14 @@ async function readState(res: Response): Promise<ServerState> {
         (t): t is Tombstone =>
           !!t &&
           typeof t === 'object' &&
-          ((t as Tombstone).kind === 'journal' || (t as Tombstone).kind === 'stash') &&
+          ((t as Tombstone).kind === 'journal' ||
+            (t as Tombstone).kind === 'stash' ||
+            (t as Tombstone).kind === 'chat') &&
           typeof (t as Tombstone).id === 'string' &&
           typeof (t as Tombstone).deletedAt === 'string',
       )
     : [];
-  const merged: ServerState = { journal, stash, settings, deleted };
+  const merged: ServerState = { journal, stash, chats, settings, deleted };
   saveSnapshot(merged);
   saveTombstoneCache(deleted);
   clearConfirmedDeletions(deleted);
@@ -377,6 +407,11 @@ export async function uploadLocal(
     snapshot.stash,
     now,
   );
+  const chats = stampIfChanged(
+    filterTombstoned(local.chats, 'chat', tombstones),
+    snapshot.chats,
+    now,
+  );
   const stampedSettings =
     settings === null
       ? null
@@ -390,6 +425,7 @@ export async function uploadLocal(
     body: JSON.stringify({
       journal,
       stash,
+      chats,
       settings: stampedSettings,
       deleted: loadDeleteQueue(),
     }),
