@@ -1,6 +1,6 @@
 // Stoner Bud-E — device actions: read the JSON action block out of a chat
 // reply and run it on the phone. The server only ever emits one of the
-// five v1 actions (see api/chat.ts ACTIONS_GUIDE). On the plain web there
+// seven actions (see api/chat.ts ACTIONS_GUIDE). On the plain web there
 // is no phone to act on, so the block is stripped and the user gets a
 // plain note instead. Everything is guarded — a bad action, a missing
 // plugin, or a refused phone call never breaks the chat.
@@ -13,7 +13,9 @@ export type DeviceAction =
   | { action: 'set_timer'; seconds: number; label?: string }
   | { action: 'set_reminder'; minutes: number; text: string }
   | { action: 'add_event'; title: string; startMillis: number; endMillis: number; description?: string }
-  | { action: 'flashlight'; on: boolean };
+  | { action: 'flashlight'; on: boolean }
+  | { action: 'call_contact'; name?: string; number?: string }
+  | { action: 'text_contact'; name?: string; number?: string; message: string };
 
 const ACTION_BLOCK_RE = /```action\s*\n?([\s\S]*?)\n?```/;
 
@@ -21,10 +23,23 @@ function isInt(value: unknown): value is number {
   return typeof value === 'number' && Number.isFinite(value) && Math.floor(value) === value;
 }
 
-/** Validate the parsed JSON into one of the five known actions, or null. */
+/** Validate the parsed JSON into one of the seven known actions, or null. */
 function cleanAction(value: unknown): DeviceAction | null {
   if (!value || typeof value !== 'object') return null;
   const rec = value as Record<string, unknown>;
+  // Call/text target: a contact name, a number, or both (name wins).
+  const target = (
+    rec: Record<string, unknown>,
+  ): { name?: string; number?: string } | null => {
+    const out: { name?: string; number?: string } = {};
+    if (typeof rec.name === 'string' && rec.name.trim() !== '') {
+      out.name = rec.name.trim().slice(0, 100);
+    }
+    if (typeof rec.number === 'string' && rec.number.trim() !== '') {
+      out.number = rec.number.trim().slice(0, 40);
+    }
+    return out.name !== undefined || out.number !== undefined ? out : null;
+  };
   switch (rec.action) {
     case 'set_alarm': {
       if (!isInt(rec.hour) || rec.hour < 0 || rec.hour > 23) return null;
@@ -70,6 +85,17 @@ function cleanAction(value: unknown): DeviceAction | null {
     case 'flashlight': {
       if (typeof rec.on !== 'boolean') return null;
       return { action: 'flashlight', on: rec.on };
+    }
+    case 'call_contact': {
+      const who = target(rec);
+      if (!who) return null;
+      return { action: 'call_contact', ...who };
+    }
+    case 'text_contact': {
+      const who = target(rec);
+      if (!who) return null;
+      if (typeof rec.message !== 'string' || rec.message.trim() === '') return null;
+      return { action: 'text_contact', ...who, message: rec.message.trim().slice(0, 1000) };
     }
     default:
       return null;

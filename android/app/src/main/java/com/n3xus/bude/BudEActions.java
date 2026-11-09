@@ -9,6 +9,7 @@ import android.content.Context;
 import android.content.Intent;
 import android.content.SharedPreferences;
 import android.content.pm.PackageManager;
+import android.database.Cursor;
 import android.hardware.camera2.CameraAccessException;
 import android.hardware.camera2.CameraCharacteristics;
 import android.hardware.camera2.CameraManager;
@@ -16,11 +17,14 @@ import android.net.Uri;
 import android.os.Build;
 import android.provider.AlarmClock;
 import android.provider.CalendarContract;
+import android.provider.ContactsContract;
 
 import androidx.core.app.NotificationCompat;
 
 import org.json.JSONObject;
 
+import java.util.ArrayList;
+import java.util.List;
 import java.util.regex.Matcher;
 import java.util.regex.Pattern;
 
@@ -28,7 +32,7 @@ import java.util.regex.Pattern;
  * Bud-E's device actions — the one shared place that turns a JSON action
  * (decided by the chat brain, see api/chat.ts ACTIONS_GUIDE) into something
  * the phone actually does. Used by both entry points: the Capacitor plugin
- * (web chat) and the voice session (BudESession). Only the five v1 actions
+ * (web chat) and the voice session (BudESession). Only the seven actions
  * exist here; anything else is refused.
  *
  * - Alarms / timers / calendar: system intents that open the clock or
@@ -39,6 +43,9 @@ import java.util.regex.Pattern;
  *   Local only, no server involved.
  * - Flashlight: CameraManager torch. Needs the CAMERA permission; the
  *   caller is told plainly when it is missing instead of failing silently.
+ * - Calls / texts: look a name up in contacts (READ_CONTACTS, asked once)
+ *   and open the dialer / messaging app with the number and text filled
+ *   in. Bud-E never calls or sends silently — the user taps the button.
  */
 public final class BudEActions {
     /** Channel for reminder notifications. */
@@ -131,7 +138,8 @@ public final class BudEActions {
     public static boolean isIntentAction(JSONObject action) {
         if (action == null) return false;
         String kind = action.optString("action", "");
-        return "set_alarm".equals(kind) || "set_timer".equals(kind) || "add_event".equals(kind);
+        return "set_alarm".equals(kind) || "set_timer".equals(kind) || "add_event".equals(kind)
+                || "call_contact".equals(kind) || "text_contact".equals(kind);
     }
 
     /** The short spoken line for an intent action, matching the launch() messages. */
@@ -141,6 +149,18 @@ public final class BudEActions {
             case "set_alarm": return "Opening your clock to set the alarm.";
             case "set_timer": return "Starting the timer.";
             case "add_event": return "Adding it to your calendar.";
+            case "call_contact": {
+                String name = action.optString("name", "").trim();
+                return name.isEmpty()
+                        ? "Opening the dialer."
+                        : "Opening the dialer for " + name + ".";
+            }
+            case "text_contact": {
+                String name = action.optString("name", "").trim();
+                return name.isEmpty()
+                        ? "Opening your messages."
+                        : "Opening your messages to text " + name + ".";
+            }
             default: return "";
         }
     }
@@ -195,6 +215,10 @@ public final class BudEActions {
                 return addEvent(context, action, launcher);
             case "flashlight":
                 return setFlashlight(context, action);
+            case "call_contact":
+                return callContact(context, action, launcher);
+            case "text_contact":
+                return textContact(context, action, launcher);
             default:
                 return fail("failed", "that is not something I can do on this phone");
         }
@@ -284,6 +308,151 @@ public final class BudEActions {
             intent.putExtra(AlarmClock.EXTRA_MESSAGE, label);
         }
         return launch(context, intent, launcher, "Opening your clock to set the alarm.");
+    }
+
+    // ------------------------------------------------------------ Contacts
+
+    /** One contact match: the name as saved, and the number to dial/text. */
+    private static final class ContactMatch {
+        final String name;
+        final String number;
+
+        ContactMatch(String name, String number) {
+            this.name = name;
+            this.number = number;
+        }
+    }
+
+    /** Digits only — what a tel:/smsto: URI needs. */
+    private static String digitsOnly(String raw) {
+        if (raw == null) return "";
+        StringBuilder out = new StringBuilder();
+        for (int i = 0; i < raw.length(); i++) {
+            char c = raw.charAt(i);
+            if ((c >= '0' && c <= '9') || (c == '+' && out.length() == 0)) {
+                out.append(c);
+            }
+        }
+        return out.toString();
+    }
+
+    /** Find contacts whose name contains the given name (case-insensitive),
+     *  de-duplicated by number. Returns null when the contacts permission
+     *  is missing — the caller asks for it instead. */
+    private static List<ContactMatch> findContacts(Context context, String name) {
+        if (context.checkSelfPermission(Manifest.permission.READ_CONTACTS)
+                != PackageManager.PERMISSION_GRANTED) {
+            return null;
+        }
+        List<ContactMatch> matches = new ArrayList<>();
+        Cursor cursor = null;
+        try {
+            cursor = context.getContentResolver().query(
+                    ContactsContract.CommonDataKinds.Phone.CONTENT_URI,
+                    new String[]{
+                            ContactsContract.CommonDataKinds.Phone.DISPLAY_NAME,
+                            ContactsContract.CommonDataKinds.Phone.NUMBER},
+                    ContactsContract.CommonDataKinds.Phone.DISPLAY_NAME + " LIKE ?",
+                    new String[]{"%" + name + "%"},
+                    ContactsContract.CommonDataKinds.Phone.DISPLAY_NAME + " ASC");
+            if (cursor == null) return matches;
+            int nameCol = cursor.getColumnIndex(
+                    ContactsContract.CommonDataKinds.Phone.DISPLAY_NAME);
+            int numberCol = cursor.getColumnIndex(
+                    ContactsContract.CommonDataKinds.Phone.NUMBER);
+            while (cursor.moveToNext()) {
+                String displayName = nameCol >= 0 ? cursor.getString(nameCol) : "";
+                String number = numberCol >= 0 ? cursor.getString(numberCol) : "";
+                if (displayName == null) displayName = "";
+                String digits = digitsOnly(number);
+                if (digits.length() < 7) continue;
+                boolean seen = false;
+                for (ContactMatch m : matches) {
+                    if (digitsOnly(m.number).equals(digits)) {
+                        seen = true;
+                        break;
+                    }
+                }
+                if (!seen) matches.add(new ContactMatch(displayName.trim(), number.trim()));
+            }
+        } catch (Exception e) {
+            android.util.Log.e("BudEActions", "contact lookup failed", e);
+        } finally {
+            if (cursor != null) cursor.close();
+        }
+        return matches;
+    }
+
+    /** Resolve who to reach: a number given directly, or a contact name
+     *  looked up on the phone. On success returns the number; otherwise a
+     *  failure result explaining what went wrong. */
+    private static String resolveNumber(Context context, JSONObject action, Result[] failure) {
+        String number = action.optString("number", "").trim();
+        if (!number.isEmpty()) {
+            String digits = digitsOnly(number);
+            if (digits.length() < 7) {
+                failure[0] = fail("failed", "that number does not look right");
+                return null;
+            }
+            return number;
+        }
+        String name = action.optString("name", "").trim();
+        if (name.isEmpty()) {
+            failure[0] = fail("failed", "I need a name or a number to reach them");
+            return null;
+        }
+        List<ContactMatch> matches = findContacts(context, name);
+        if (matches == null) {
+            failure[0] = fail("contacts-permission",
+                    "I need your contacts to find them — allow contacts for Bud-E and ask again.");
+            return null;
+        }
+        if (matches.isEmpty()) {
+            failure[0] = fail("failed", "I don't have a contact called " + name + ".");
+            return null;
+        }
+        if (matches.size() > 1) {
+            StringBuilder names = new StringBuilder();
+            int shown = Math.min(matches.size(), 3);
+            for (int i = 0; i < shown; i++) {
+                if (i > 0) names.append(", ");
+                names.append(matches.get(i).name);
+            }
+            if (matches.size() > shown) names.append(", and more");
+            failure[0] = fail("failed",
+                    "I found more than one " + name + " (" + names + ") — which one did you mean?");
+            return null;
+        }
+        return matches.get(0).number;
+    }
+
+    private static Result callContact(Context context, JSONObject action, ActivityLauncher launcher) {
+        Result[] failure = new Result[1];
+        String number = resolveNumber(context, action, failure);
+        if (number == null) return failure[0];
+        Intent intent = new Intent(Intent.ACTION_DIAL);
+        intent.setData(Uri.parse("tel:" + digitsOnly(number)));
+        String name = action.optString("name", "").trim();
+        return launch(context, intent, launcher,
+                name.isEmpty() ? "Opening the dialer." : "Opening the dialer for " + name + ".");
+    }
+
+    private static Result textContact(Context context, JSONObject action, ActivityLauncher launcher) {
+        String message = action.optString("message", "").trim();
+        if (message.isEmpty()) {
+            return fail("failed", "I need the text to send them");
+        }
+        Result[] failure = new Result[1];
+        String number = resolveNumber(context, action, failure);
+        if (number == null) return failure[0];
+        Intent intent = new Intent(Intent.ACTION_SENDTO);
+        intent.setData(Uri.parse("smsto:" + digitsOnly(number)));
+        intent.putExtra("sms_body", message);
+        String name = action.optString("name", "").trim();
+        return launch(context, intent, launcher,
+                name.isEmpty()
+                        ? "Opening your messages."
+                        : "Opening your messages to text " + name + ".");
     }
 
     private static Result setTimer(Context context, JSONObject action, ActivityLauncher launcher) {

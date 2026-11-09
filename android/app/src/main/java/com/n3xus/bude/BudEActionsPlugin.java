@@ -16,15 +16,19 @@ import org.json.JSONObject;
 /**
  * Capacitor bridge for Bud-E's device actions (see BudEActions): the web
  * chat calls execute({action}) and the native helper does the work.
- * Flashlight needs the camera permission — when it is missing, the plugin
- * asks the phone once and retries after the answer instead of failing.
+ * Some actions need a runtime permission — flashlight needs the camera,
+ * calls/texts need contacts. When one is missing, the plugin asks the
+ * phone once and retries after the answer instead of failing.
  */
 @CapacitorPlugin(
         name = "BudEActions",
-        permissions = @Permission(strings = { Manifest.permission.CAMERA }, alias = "camera")
+        permissions = {
+                @Permission(strings = { Manifest.permission.CAMERA }, alias = "camera"),
+                @Permission(strings = { Manifest.permission.READ_CONTACTS }, alias = "contacts")
+        }
 )
 public class BudEActionsPlugin extends Plugin {
-    private JSONObject pendingFlashlightAction;
+    private JSONObject pendingAction;
 
     @PluginMethod
     public void execute(PluginCall call) {
@@ -42,8 +46,14 @@ public class BudEActionsPlugin extends Plugin {
         BudEActions.Result result = BudEActions.execute(getContext(), action);
         if (!result.ok && "camera-permission".equals(result.code)) {
             // Ask once, then retry in the permission callback below.
-            pendingFlashlightAction = action;
+            pendingAction = action;
             requestPermissionForAlias("camera", call, "onCameraPermission");
+            return;
+        }
+        if (!result.ok && "contacts-permission".equals(result.code)) {
+            // Ask once, then retry in the permission callback below.
+            pendingAction = action;
+            requestPermissionForAlias("contacts", call, "onContactsPermission");
             return;
         }
         JSObject res = new JSObject();
@@ -52,20 +62,21 @@ public class BudEActionsPlugin extends Plugin {
         call.resolve(res);
     }
 
-    @PermissionCallback
-    private void onCameraPermission(PluginCall call) {
-        JSONObject action = pendingFlashlightAction;
-        pendingFlashlightAction = null;
+    /** Retry the pending action after the user answers a permission prompt. */
+    private void retryPending(PluginCall call, String alias, String emptyMessage,
+                              String deniedMessage) {
+        JSONObject action = pendingAction;
+        pendingAction = null;
         if (action == null) {
             call.resolve(new JSObject()
                     .put("ok", false)
-                    .put("message", "the flashlight is not available right now"));
+                    .put("message", emptyMessage));
             return;
         }
-        if (getPermissionState("camera") != PermissionState.GRANTED) {
+        if (getPermissionState(alias) != PermissionState.GRANTED) {
             call.resolve(new JSObject()
                     .put("ok", false)
-                    .put("message", "Camera access is off — allow it in the Bud-E app settings to use the flashlight."));
+                    .put("message", deniedMessage));
             return;
         }
         BudEActions.Result result = BudEActions.execute(getContext(), action);
@@ -73,5 +84,19 @@ public class BudEActionsPlugin extends Plugin {
         res.put("ok", result.ok);
         res.put("message", result.message);
         call.resolve(res);
+    }
+
+    @PermissionCallback
+    private void onCameraPermission(PluginCall call) {
+        retryPending(call, "camera",
+                "the flashlight is not available right now",
+                "Camera access is off — allow it in the Bud-E app settings to use the flashlight.");
+    }
+
+    @PermissionCallback
+    private void onContactsPermission(PluginCall call) {
+        retryPending(call, "contacts",
+                "I could not look them up right now",
+                "Contacts access is off — allow it in the Bud-E app settings so I can find who to call or text.");
     }
 }

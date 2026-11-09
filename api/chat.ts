@@ -243,15 +243,17 @@ const ACTIONS_GUIDE = (localTime: string, midnightMillis: number | null): string
   (midnightMillis !== null
     ? `Today at local midnight is epoch ${midnightMillis}. Work out calendar event times from that anchor: tomorrow at noon is midnight + 36 hours, today at 3 PM is midnight + 15 hours. Double-check the date before you answer.\n`
     : '') +
-  `When the user asks for one of these five things, end your reply with one short spoken sentence saying what will happen, then a JSON action block on its own lines, exactly like this:\n` +
+  `When the user asks for one of these seven things, end your reply with one short spoken sentence saying what will happen, then a JSON action block on its own lines, exactly like this:\n` +
   '```action\n{"action":"set_alarm","hour":7,"minute":0,"label":"Wake up"}\n```\n' +
-  'The five actions:\n' +
+  'The seven actions:\n' +
   '- set_alarm {"action":"set_alarm","hour":0-23,"minute":0-59,"label":"optional"} — the phone opens the clock app with the alarm filled in; the user taps save there. Say something like "Opening your clock to set the alarm for 7 AM."\n' +
   '- set_timer {"action":"set_timer","seconds":600,"label":"optional"} — seconds is the total length. Say something like "Starting a 10 minute timer."\n' +
   '- set_reminder {"action":"set_reminder","minutes":30,"text":"water the plants"} — Bud-E buzzes them later with a notification. Say something like "I\'ll remind you in 30 minutes."\n' +
   '- add_event {"action":"add_event","title":"Lunch with Ryan","startMillis":1794348000000,"endMillis":1794351600000,"description":"optional"} — startMillis and endMillis are epoch milliseconds in the user\'s local time. The phone opens the calendar with it filled in. Say something like "Adding it to your calendar."\n' +
   '- flashlight {"action":"flashlight","on":true} — turn the flashlight on (true) or off (false). Say something like "Turning the flashlight on."\n' +
-  'Rules: only emit an action block when the user asked for one of these five AND every required field is clear from what they said. If anything is missing or unclear — no time for the alarm, no length for the timer, no reminder text, no title or time for the event — ask one short follow-up question instead and emit no action block. Never emit an action block for anything else: no calls, no texts, no messages, no other phone features. Never explain the JSON or mention it. The spoken sentence comes first, the action block last.';
+  '- call_contact {"action":"call_contact","name":"Ryan"} — the phone looks up the name in contacts and opens the dialer with their number filled in; it never calls silently. Use "number":"..." instead of "name" when the user says a number out loud. Never invent a number — if they only say a name, send the name. Say something like "Opening the dialer for Ryan."\n' +
+  '- text_contact {"action":"text_contact","name":"Baby","message":"I\'ll be late"} — the phone looks up the name and opens the messaging app with the text filled in; it never sends silently. Use "number":"..." instead of "name" when the user says a number. Say something like "Opening your messages to text Baby."\n' +
+  'Rules: only emit an action block when the user asked for one of these seven AND every required field is clear from what they said. If anything is missing or unclear — no time for the alarm, no length for the timer, no reminder text, no title or time for the event, no name or number for a call or text, no message for a text — ask one short follow-up question instead and emit no action block. If several people share a name, the phone asks which one — just send the name. Never emit an action block for anything else: no other phone features. Never explain the JSON or mention it. The spoken sentence comes first, the action block last.';
 
 async function callGroq(
   apiKey: string,

@@ -111,4 +111,7 @@
          install). Without it every alarm start fails with a
          SecurityException — from the app and from the voice session. -->
     <uses-permission android:name="com.android.alarm.permission.SET_ALARM" />
+    <!-- Calls / texts: looking a name up in contacts needs this (dangerous
+         permission, asked once at runtime when first needed). -->
+    <uses-permission android:name="android.permission.READ_CONTACTS" />
 </manifest>
