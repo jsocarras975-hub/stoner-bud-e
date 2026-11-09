@@ -2,9 +2,11 @@
 // Keep track of what you have on hand and get a heads-up when you're
 // running low. Plain words, no selling, no sourcing talk.
 
-import { useEffect, useState } from 'react';
-import { newStashId } from './stash';
+import { useEffect, useMemo, useState } from 'react';
+import { isRunningLow, lowNote, newStashId, withAmount } from './stash';
 import type { StashForm, StashItem } from './stash';
+import { usualStrains } from './recap';
+import type { JournalEntry } from './journal';
 import { Chip, ChipRow, Label, PageHead } from './bits';
 
 const FORM_LABELS: Record<StashForm, string> = {
@@ -50,7 +52,7 @@ function StashRow(props: {
     onUpdate({ ...item, amount: round2(n) });
   }
 
-  const runningLow = item.amount <= item.lowAt;
+  const runningLow = isRunningLow(item);
 
   return (
     <article className="jar-card" aria-label={item.name}>
@@ -60,7 +62,9 @@ function StashRow(props: {
           <p className="jar-card-sub">
             {FORM_LABELS[item.form]}
             {item.thcPct.trim() !== '' && ` · ${item.thcPct.trim()}% THC`}
-            {item.lowAt > 0 && ` · warns under ${item.lowAt}${item.unit}`}
+            {item.lowAt > 0
+              ? ` · warns under ${item.lowAt}${item.unit}`
+              : ' · warns when low'}
           </p>
         </div>
         <p className="jar-card-amount">
@@ -68,7 +72,11 @@ function StashRow(props: {
           {item.unit}
         </p>
       </div>
-      {runningLow && <p style={{ margin: '8px 0 0' }}>⚠️ Running low!</p>}
+      {runningLow && (
+        <p style={{ margin: '8px 0 0' }}>
+          {item.amount <= 0 ? '⚠️ Out — grab more when you can.' : '⚠️ Running low!'}
+        </p>
+      )}
       <div className="jar-stepper">
         <button
           type="button"
@@ -127,8 +135,16 @@ export default function StashTab(props: {
   onChange: (items: StashItem[]) => void;
   /** Called when an item is deleted, so the delete can sync (tombstone). */
   onDelete?: (id: string) => void;
+  /** Past recaps (journal entries) — the "Your usuals" strains come from these. */
+  journal?: JournalEntry[];
 }) {
-  const { items, onChange, onDelete } = props;
+  const { items, onChange, onDelete, journal } = props;
+
+  // Strains that show up most in past recaps, most-used first — offered
+  // as one-tap chips when naming a jar, so the usuals come first.
+  const strains = useMemo(() => usualStrains(journal ?? []), [journal]);
+  // Every jar that counts as running low, for the heads-up above the list.
+  const lowItems = useMemo(() => items.filter(isRunningLow), [items]);
 
   const [name, setName] = useState('');
   const [form, setForm] = useState<StashForm>('flower');
@@ -157,6 +173,8 @@ export default function StashTab(props: {
       unit,
       thcPct: thcPct.trim(),
       lowAt: lowAtStr.trim() === '' || Number.isNaN(low) || low < 0 ? 0 : round2(low),
+      // What the jar started with — the 10% low rule measures against this.
+      startedAt: round2(amt),
     };
     onChange([...items, item]);
     setName('');
@@ -167,7 +185,9 @@ export default function StashTab(props: {
   }
 
   function updateItem(updated: StashItem): void {
-    onChange(items.map((i) => (i.id === updated.id ? updated : i)));
+    // withAmount keeps the "started with" baseline honest: a refill moves
+    // it up, so the 10% low rule measures against the new full jar.
+    onChange(items.map((i) => (i.id === updated.id ? withAmount(updated, updated.amount) : i)));
   }
 
   function deleteItem(id: string): void {
@@ -180,6 +200,19 @@ export default function StashTab(props: {
       <PageHead title="Stash" sub="What's on hand. Just for you — it stays on this device." />
       <section className="card" aria-label="Add to stash">
         <h2>Add to stash</h2>
+
+        {strains.length > 0 && (
+          <div style={{ marginBottom: 16 }}>
+            <Label>Your usuals</Label>
+            <ChipRow>
+              {strains.map((s) => (
+                <Chip key={s} on={name.trim().toLowerCase() === s.toLowerCase()} onClick={() => setName(s)}>
+                  {s}
+                </Chip>
+              ))}
+            </ChipRow>
+          </div>
+        )}
 
         <label htmlFor="stash-name">Name / strain</label>
         <input
@@ -264,6 +297,12 @@ export default function StashTab(props: {
 
       <section aria-label="Your stash">
         <h2 style={{ marginBottom: 12 }}>Your stash</h2>
+        {lowItems.length > 0 && (
+          <p role="status" style={{ margin: '0 0 12px' }}>
+            ⚠️ Heads up — {lowItems.map((i) => lowNote(i)).join(' ')} Grab more before
+            you&apos;re out.
+          </p>
+        )}
         {items.length === 0 ? (
           <p className="muted">Nothing in the stash yet. Add your first item above.</p>
         ) : (

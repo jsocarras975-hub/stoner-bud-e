@@ -564,6 +564,8 @@ export default function App() {
           onTools={() => setTab('tools')}
           journal={journal}
           onAddJournal={(e) => setJournal((j) => [e, ...j])}
+          stash={stash}
+          onStash={() => setTab('stash')}
         />
       )}
       {tab === 'chat' && (
@@ -622,6 +624,7 @@ export default function App() {
           items={stash}
           onChange={setStash}
           onDelete={(id) => queueDeletion('stash', id)}
+          journal={journal}
         />
       )}
       {tab === 'break' && <BreakTab />}

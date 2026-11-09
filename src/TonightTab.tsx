@@ -8,6 +8,8 @@ import type { Method, Session } from './bude';
 import { Chip, ChipRow, Label, PageHead } from './bits';
 import { usualDose, usualLine, usualStrains } from './recap';
 import RecapForm from './RecapForm';
+import { isRunningLow, lowNote } from './stash';
+import type { StashItem } from './stash';
 import type { JournalEntry } from './journal';
 
 const EXPERIENCE_LABELS: Record<Session['experience'], string> = {
@@ -62,8 +64,12 @@ export default function TonightTab(props: {
   journal: JournalEntry[];
   /** Save a recap: same path as adding a Log entry, so it syncs too. */
   onAddJournal: (e: JournalEntry) => void;
+  /** What's in the stash — jars running low get a nudge here. */
+  stash: StashItem[];
+  /** Jump to the Stash tab. */
+  onStash: () => void;
 }) {
-  const { session, setSession, vibe, timerStatus, onChat, onTools, journal, onAddJournal } = props;
+  const { session, setSession, vibe, timerStatus, onChat, onTools, journal, onAddJournal, stash, onStash } = props;
   const [, setNow] = useState(Date.now());
   // Open on the logger when no dose is logged yet (Grok: editing when no session).
   const [editing, setEditing] = useState(session.amount.trim() === '');
@@ -74,6 +80,8 @@ export default function TonightTab(props: {
   // strains that show up most. Recomputed when the journal changes.
   const usual = useMemo(() => usualDose(journal), [journal]);
   const strains = useMemo(() => usualStrains(journal), [journal]);
+  // Jars running low, so tonight's page can nudge before he's out.
+  const lowJars = useMemo(() => stash.filter(isRunningLow), [stash]);
 
   // When nothing is logged yet, the logger starts from the usual dose
   // instead of a blank guess — Bud-E remembers, the user just confirms.
@@ -127,6 +135,20 @@ export default function TonightTab(props: {
   return (
     <main>
       <PageHead title="Tonight" sub="Log the real dose. Bud-E will time it and stop guessing." />
+
+      {lowJars.length > 0 && (
+        <section className="card" aria-label="Stash running low" role="status">
+          <p style={{ margin: 0 }}>
+            ⚠️ Heads up — {lowJars.map((j) => lowNote(j)).join(' ')} Grab more before
+            you&apos;re out.
+          </p>
+          <div className="button-row" style={{ marginTop: 8 }}>
+            <button className="btn sm secondary" onClick={onStash}>
+              Open stash
+            </button>
+          </div>
+        </section>
+      )}
 
       {editing ? (
         <Logger
