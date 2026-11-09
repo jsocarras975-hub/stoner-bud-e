@@ -1,6 +1,11 @@
 package com.n3xus.bude;
 
 import android.Manifest;
+import android.app.Activity;
+import android.app.role.RoleManager;
+import android.content.Context;
+import android.content.Intent;
+import android.os.Build;
 
 import com.getcapacitor.JSObject;
 import com.getcapacitor.PermissionState;
@@ -29,6 +34,8 @@ import org.json.JSONObject;
 )
 public class BudEActionsPlugin extends Plugin {
     private JSONObject pendingAction;
+    private static final int REQUEST_ASSISTANT_ROLE = 2001;
+    private PluginCall pendingRoleCall;
 
     @PluginMethod
     public void execute(PluginCall call) {
@@ -86,6 +93,63 @@ public class BudEActionsPlugin extends Plugin {
         res.put("tab", info.optString("tab", ""));
         res.put("sharedText", info.optString("sharedText", ""));
         call.resolve(res);
+    }
+
+    /** Whether Bud-E is the phone's default digital assistant right now. */
+    @PluginMethod
+    public void getAssistantStatus(PluginCall call) {
+        call.resolve(new JSObject().put("isAssistant", isAssistantHeld()));
+    }
+
+    /**
+     * Ask the phone to make Bud-E the default digital assistant, in one
+     * tap: the system shows its own dialog and the user confirms. Needed
+     * after a fresh install, which can drop the role — without it, the
+     * widget's Talk button lands on the system's assistant picker instead
+     * of opening Bud-E.
+     */
+    @PluginMethod
+    public void requestAssistantRole(PluginCall call) {
+        if (Build.VERSION.SDK_INT < Build.VERSION_CODES.Q) {
+            call.reject("needs Android 10 or newer");
+            return;
+        }
+        RoleManager roleManager = roleManager();
+        if (roleManager == null || !roleManager.isRoleAvailable(RoleManager.ROLE_ASSISTANT)) {
+            call.reject("assistant role not available on this phone");
+            return;
+        }
+        if (isAssistantHeld()) {
+            call.resolve(new JSObject().put("isAssistant", true));
+            return;
+        }
+        pendingRoleCall = call;
+        Intent intent = roleManager.createRequestRoleIntent(RoleManager.ROLE_ASSISTANT);
+        startActivityForResult(call, intent, REQUEST_ASSISTANT_ROLE);
+    }
+
+    @Override
+    protected void handleOnActivityResult(int requestCode, int resultCode, Intent data) {
+        super.handleOnActivityResult(requestCode, resultCode, data);
+        if (requestCode != REQUEST_ASSISTANT_ROLE) return;
+        PluginCall call = pendingRoleCall;
+        pendingRoleCall = null;
+        if (call == null) return;
+        // The dialog answers RESULT_OK when the user accepts; some versions
+        // answer CANCELED even when it worked, so re-check the role itself.
+        boolean granted = resultCode == Activity.RESULT_OK || isAssistantHeld();
+        call.resolve(new JSObject().put("isAssistant", granted));
+    }
+
+    private RoleManager roleManager() {
+        Context context = getContext();
+        if (context == null || Build.VERSION.SDK_INT < Build.VERSION_CODES.Q) return null;
+        return (RoleManager) context.getSystemService(Context.ROLE_SERVICE);
+    }
+
+    private boolean isAssistantHeld() {
+        RoleManager roleManager = roleManager();
+        return roleManager != null && roleManager.isRoleHeld(RoleManager.ROLE_ASSISTANT);
     }
 
     /** Retry the pending action after the user answers a permission prompt.

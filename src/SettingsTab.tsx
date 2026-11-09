@@ -17,7 +17,7 @@ import { Chip, ChipRow, Label, PageHead } from './bits';
 import type { Personalization } from './lib/sync';
 import type { JournalEntry } from './journal';
 import type { SyncedChatConversation } from './lib/sync';
-import { getTalkNotification, isNative, setTalkNotification } from './lib/device-actions';
+import { getAssistantStatus, getTalkNotification, isNative, requestAssistantRole, setTalkNotification } from './lib/device-actions';
 
 type LegalView = 'main' | LegalDoc['id'] | 'delete';
 
@@ -48,16 +48,22 @@ export default function SettingsTab(props: {
   const [trying, setTrying] = useState(false);
   // Persistent Talk notification (phone app only; on by default).
   const [talkNotif, setTalkNotif] = useState<boolean | null>(null);
+  // Default-assistant status (phone app only).
+  const [isAssistant, setIsAssistant] = useState<boolean | null>(null);
+  const [askingAssistant, setAskingAssistant] = useState(false);
 
   // Stop a voice preview when leaving Settings.
   useEffect(() => () => stopVoice(), []);
 
-  // Load the Talk notification switch (phone app only).
+  // Load the Talk notification switch + assistant status (phone app only).
   useEffect(() => {
     let cancelled = false;
     if (isNative()) {
       void getTalkNotification().then((on) => {
         if (!cancelled) setTalkNotif(on);
+      });
+      void getAssistantStatus().then((on) => {
+        if (!cancelled) setIsAssistant(on);
       });
     }
     return () => {
@@ -251,6 +257,37 @@ export default function SettingsTab(props: {
             notifications for the app. Long-press the app icon for shortcuts, and add the
             Bud-E widget from your home screen.
           </p>
+          <div style={{ marginTop: 12 }}>
+            <Label>Default assistant</Label>
+            <p className="muted" style={{ marginTop: 6 }}>
+              {isAssistant === null
+                ? 'Checking…'
+                : isAssistant
+                  ? 'Bud-E is your assistant — Talk opens Bud-E straight away.'
+                  : "Bud-E is not your assistant yet — Talk shows the phone's list instead."}
+            </p>
+            {isAssistant === false && (
+              <button
+                type="button"
+                className="btn"
+                disabled={askingAssistant}
+                onClick={() => {
+                  setAskingAssistant(true);
+                  void requestAssistantRole().then((on) => {
+                    setIsAssistant(on);
+                    setAskingAssistant(false);
+                  });
+                }}
+              >
+                {askingAssistant ? 'Asking…' : 'Make Bud-E your assistant'}
+              </button>
+            )}
+            <p className="muted" style={{ marginTop: 6 }}>
+              A fresh install can drop Bud-E from the phone's assistant list. If Bud-E
+              doesn't show when the phone asks, restart the phone once and tap the button
+              again.
+            </p>
+          </div>
         </section>
       )}
 

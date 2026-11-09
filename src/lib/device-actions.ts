@@ -142,6 +142,8 @@ interface BudEActionsPlugin {
   getLaunchInfo(): Promise<{ tab?: string; sharedText?: string }>;
   getTalkNotification(): Promise<{ enabled?: boolean }>;
   setTalkNotification(options: { enabled: boolean }): Promise<{ enabled?: boolean }>;
+  getAssistantStatus(): Promise<{ isAssistant?: boolean }>;
+  requestAssistantRole(): Promise<{ isAssistant?: boolean }>;
 }
 
 const BudEActions = registerPlugin<BudEActionsPlugin>('BudEActions');
@@ -181,6 +183,32 @@ export async function setTalkNotification(enabled: boolean): Promise<boolean> {
   try {
     const res = await BudEActions.setTalkNotification({ enabled });
     return res?.enabled === true;
+  } catch {
+    return false;
+  }
+}
+
+/** Whether Bud-E is the phone's default digital assistant right now. */
+export async function getAssistantStatus(): Promise<boolean> {
+  if (!isNativeApp()) return false;
+  try {
+    const res = await BudEActions.getAssistantStatus();
+    return res?.isAssistant === true;
+  } catch {
+    return false;
+  }
+}
+
+/**
+ * Ask the phone (its own system dialog) to make Bud-E the default
+ * digital assistant. Needed after a fresh install, which can drop the
+ * role — without it, Talk lands on the phone's assistant list.
+ */
+export async function requestAssistantRole(): Promise<boolean> {
+  if (!isNativeApp()) return false;
+  try {
+    const res = await BudEActions.requestAssistantRole();
+    return res?.isAssistant === true;
   } catch {
     return false;
   }
