@@ -1027,6 +1027,7 @@ function ChatTab({
     updateChat(next);
     setInput('');
     setSending(true);
+    let serverSource: string | undefined;
     try {
       const res = await fetch(apiUrl(), {
         method: 'POST',
@@ -1047,6 +1048,7 @@ function ChatTab({
         data && typeof data === 'object' && 'source' in data
           ? (data as { source?: unknown }).source
           : undefined;
+      serverSource = typeof src === 'string' ? src : undefined;
       const sources =
         data && typeof data === 'object' && 'sources' in data
           ? (data as { sources?: unknown }).sources
@@ -1070,11 +1072,20 @@ function ChatTab({
         setSource(src === 'live' ? 'live' : 'fallback');
         speakReply(reply, next.length);
       } else {
-        throw new Error('no live reply');
+        throw new Error(
+          serverSource
+            ? `server answered source=${serverSource} (no usable reply)`
+            : 'no live reply',
+        );
       }
-    } catch {
+    } catch (err) {
+      const reason =
+        err instanceof Error && err.message
+          ? err.message
+          : 'request failed';
       const fallbackText = localReply(trimmed, session, next);
-      updateChat([...next, { role: 'bud', text: fallbackText }]);
+      const withReason = `${fallbackText}\n\n[offline: ${reason}]`;
+      updateChat([...next, { role: 'bud', text: withReason }]);
       setSource('fallback');
       speakReply(fallbackText, next.length);
     } finally {
