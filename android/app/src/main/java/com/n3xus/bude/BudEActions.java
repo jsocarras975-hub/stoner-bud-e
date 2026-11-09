@@ -172,14 +172,31 @@ public final class BudEActions {
             if (intent.resolveActivity(context.getPackageManager()) == null) {
                 return fail("no-app", "there is no app on this phone that can do that");
             }
-            if (launcher != null) {
+        } catch (Exception e) {
+            android.util.Log.e("BudEActions", "resolveActivity failed", e);
+            return fail("failed",
+                    "the phone could not open that (" + e.getClass().getSimpleName() + ")");
+        }
+        // The assistant launcher (startAssistantActivity) can refuse in some
+        // states even when an app can handle the intent, so fall back to a
+        // plain start before giving up — same pattern as opening the app
+        // from the voice session.
+        if (launcher != null) {
+            try {
                 launcher.launch(intent);
-            } else {
-                context.startActivity(intent);
+                return ok(okMessage);
+            } catch (Exception e) {
+                android.util.Log.e("BudEActions",
+                        "assistant launch failed, trying plain start", e);
             }
+        }
+        try {
+            context.startActivity(intent);
             return ok(okMessage);
         } catch (Exception e) {
-            return fail("failed", "the phone could not open that");
+            android.util.Log.e("BudEActions", "startActivity failed", e);
+            return fail("failed",
+                    "the phone could not open that (" + e.getClass().getSimpleName() + ")");
         }
     }
 
