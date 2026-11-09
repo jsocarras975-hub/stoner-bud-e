@@ -17,6 +17,7 @@ public class MainActivity extends BridgeActivity {
         // Shortcuts, the widget, and shares from other apps arrive as the
         // launch intent — stash what they asked for so the web app can
         // pick it up, and keep the Talk notification showing.
+        handleTalkRequest(getIntent());
         BudELaunchInfo.capture(this, getIntent());
         BudENotification.showIfEnabled(this);
     }
@@ -25,7 +26,26 @@ public class MainActivity extends BridgeActivity {
     protected void onNewIntent(Intent intent) {
         super.onNewIntent(intent);
         setIntent(intent);
+        handleTalkRequest(intent);
         BudELaunchInfo.capture(this, intent);
+    }
+
+    /**
+     * "Talk" from the widget, notification, or shortcut: open the voice
+     * session if Bud-E is the default assistant (the same overlay the
+     * power-button long-press opens). A plain ACTION_ASSIST intent cannot
+     * do that — it just resolves to an app — so Talk comes here instead.
+     * When there is no live assistant service, fall back to the chat tab
+     * so Talk still lands somewhere useful.
+     */
+    private void handleTalkRequest(Intent intent) {
+        if (intent == null) return;
+        boolean talk = intent.getBooleanExtra("bude_talk", false)
+                || "true".equals(intent.getStringExtra("bude_talk"));
+        if (!talk) return;
+        intent.removeExtra("bude_talk");
+        if (BudEInteractionService.showVoiceSession()) return;
+        intent.putExtra(BudELaunchInfo.EXTRA_TAB, "chat");
     }
 
     @Override

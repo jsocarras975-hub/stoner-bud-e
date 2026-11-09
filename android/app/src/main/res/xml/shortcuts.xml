@@ -9,7 +9,12 @@
         android:icon="@mipmap/ic_launcher"
         android:shortcutShortLabel="@string/shortcut_talk"
         android:shortcutLongLabel="@string/shortcut_talk">
-        <intent android:action="android.intent.action.ASSIST" />
+        <intent
+            android:action="android.intent.action.VIEW"
+            android:targetPackage="com.n3xus.bude"
+            android:targetClass="com.n3xus.bude.MainActivity">
+            <extra android:name="bude_talk" android:value="true" />
+        </intent>
     </shortcut>
     <shortcut
         android:shortcutId="tonight"

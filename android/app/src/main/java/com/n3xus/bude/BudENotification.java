@@ -11,9 +11,9 @@ import android.os.Build;
 import androidx.core.app.NotificationCompat;
 
 /**
- * Bud-E's persistent "Talk" notification: one tap to talk to Bud-E (opens
- * the default digital assistant — Bud-E when it is set as the assistant),
- * tap the notification itself to open the app. Ongoing and low importance
+ * Bud-E's persistent "Talk" notification: one tap to talk to Bud-E (the
+ * app opens the voice session when Bud-E is the default assistant, and
+ * the chat tab otherwise), tap the notification itself to open the app. Ongoing and low importance
  * so it sits quietly and never buzzes. The user can switch it off in
  * Settings; the choice lives here (device-only, never synced). Needs the
  * notification permission to show — if it is off, posting silently does
@@ -54,10 +54,14 @@ public final class BudENotification {
             channel.setDescription("One tap to talk to Bud-E.");
             manager.createNotificationChannel(channel);
         }
-        // Talk: opens the default digital assistant (Bud-E when set).
+        // Talk goes to the app, which opens the voice session when Bud-E
+        // is the default assistant (a plain ACTION_ASSIST intent cannot
+        // open the session — it just resolves to an app).
         PendingIntent talk = PendingIntent.getActivity(
                 context, 0,
-                new Intent(Intent.ACTION_ASSIST),
+                new Intent(context, MainActivity.class)
+                        .putExtra("bude_talk", true)
+                        .addFlags(Intent.FLAG_ACTIVITY_NEW_TASK | Intent.FLAG_ACTIVITY_CLEAR_TOP),
                 PendingIntent.FLAG_UPDATE_CURRENT | PendingIntent.FLAG_IMMUTABLE);
         // Tap the notification itself: open the app.
         PendingIntent open = PendingIntent.getActivity(

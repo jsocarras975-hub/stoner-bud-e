@@ -286,39 +286,40 @@ export default function SettingsTab(props: {
                     : "Bud-E is not your assistant yet — Talk shows the phone's list instead."}
             </p>
             {isAssistant === false && !waitingAnswer && (
-              <button
-                type="button"
-                className="btn"
-                disabled={askingAssistant}
-                onClick={() => {
-                  setAssistantError(null);
-                  setAskingAssistant(true);
-                  void requestAssistantRole().then((launched) => {
-                    setAskingAssistant(false);
-                    if (launched) {
-                      setWaitingAnswer(true);
-                    } else {
-                      setAssistantError("The phone wouldn't open the request — try the settings page instead.");
-                    }
-                  });
-                }}
-              >
-                {askingAssistant ? 'Asking…' : 'Make Bud-E your assistant'}
-              </button>
-            )}
-            {assistantError !== null && (
-              <div style={{ marginTop: 12 }}>
-                <p className="muted">{assistantError}</p>
+              <>
+                <button
+                  type="button"
+                  className="btn"
+                  disabled={askingAssistant}
+                  onClick={() => {
+                    setAssistantError(null);
+                    setAskingAssistant(true);
+                    void requestAssistantRole().then((launched) => {
+                      setAskingAssistant(false);
+                      if (launched) {
+                        setWaitingAnswer(true);
+                      } else {
+                        setAssistantError("The phone wouldn't open the request — try the settings page instead.");
+                      }
+                    });
+                  }}
+                >
+                  {askingAssistant ? 'Asking…' : 'Make Bud-E your assistant'}
+                </button>
                 <button
                   type="button"
                   className="btn secondary"
+                  style={{ marginTop: 8 }}
                   onClick={() => {
                     void openDefaultAppsSettings();
                   }}
                 >
                   Open default apps settings
                 </button>
-              </div>
+              </>
+            )}
+            {assistantError !== null && (
+              <p className="muted" style={{ marginTop: 12 }}>{assistantError}</p>
             )}
             <p className="muted" style={{ marginTop: 6 }}>
               A fresh install can drop Bud-E from the phone's assistant list. If Bud-E
