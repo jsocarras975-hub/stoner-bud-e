@@ -52,7 +52,7 @@ import { STASH_KEY } from './stash';
 import type { StashItem } from './stash';
 import AuthTab from './AuthTab';
 import { clearLocalSyncState, queueDeletion, uploadLocal } from './lib/sync';
-import type { SyncSettings, SyncedChatConversation } from './lib/sync';
+import type { SyncSettings, SyncedChatConversation, PremiumTier } from './lib/sync';
 import { deleteAccount, getSession, signOut } from './lib/auth-client';
 import type { AuthUser } from './lib/auth-client';
 import { DEFAULT_VOICE_SETTINGS, cleanVoiceSettings } from './voice';
@@ -258,6 +258,7 @@ export default function App() {
   const [showChatList, setShowChatList] = useState(false);
   const [vibe, setVibe] = useState<Vibe>(() => load(VIBE_KEY, DEFAULT_VIBE));
   const [voice, setVoice] = useState<VoiceSettings>(() => loadVoiceSettings());
+  const [premiumTier, setPremiumTier] = useState<PremiumTier>(null);
   const [journal, setJournal] = useState<JournalEntry[]>(() => loadList(JOURNAL_KEY));
   const [stash, setStash] = useState<StashItem[]>(() => loadList(STASH_KEY));
   const [user, setUser] = useState<AuthUser | null>(null);
@@ -379,6 +380,7 @@ export default function App() {
       vibe,
       voice,
       break: readBreak(),
+      premiumTier,
     };
   }
 
@@ -404,6 +406,9 @@ export default function App() {
       }
       if (state.settings.vibe) setVibe(state.settings.vibe);
       if (state.settings.voice) setVoice(cleanVoiceSettings(state.settings.voice));
+      if (state.settings.premiumTier !== undefined) {
+        setPremiumTier(state.settings.premiumTier);
+      }
       try {
         if (state.settings.break) {
           localStorage.setItem(BREAK_KEY, JSON.stringify(state.settings.break));
@@ -697,7 +702,7 @@ export default function App() {
           voice={voice}
           onVoice={setVoice}
           apiBase={apiBase()}
-          premiumTier={null}
+          premiumTier={premiumTier}
         />
       )}
       {tab === 'account' && (
