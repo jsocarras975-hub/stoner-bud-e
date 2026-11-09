@@ -57,7 +57,7 @@ import { deleteAccount, getSession, signOut } from './lib/auth-client';
 import type { AuthUser } from './lib/auth-client';
 import { DEFAULT_VOICE_SETTINGS, cleanVoiceSettings } from './voice';
 import type { VoiceSettings } from './voice';
-import { speakVoice, startRecording, stopVoice, transcribeVoice } from './lib/voice-client';
+import { speakVoice, startRecording, stopVoice, transcribeVoice, unlockAudio } from './lib/voice-client';
 import type { ActiveRecording } from './lib/voice-client';
 import { TIMER_ALERTS, buzz, planAlerts, type PlannedAlert, type TimerAlert, type TimerAlertId } from './lib/timer-alerts';
 import {
@@ -853,6 +853,8 @@ function ChatTab({
 
   /** Tap the speaker on a Bud-E message: play it, or stop it if playing. */
   async function toggleSpeak(index: number, text: string): Promise<void> {
+    // User gesture — unlock audio so the clip is allowed to play.
+    unlockAudio();
     if (speakingIdx === index) {
       stopVoice();
       setSpeakingIdx(null);
@@ -896,6 +898,8 @@ function ChatTab({
 
   /** Tap the mic: start recording; tap again (or 60s) to stop and send. */
   async function toggleMic(): Promise<void> {
+    // User gesture — unlock audio so the reply can play out loud after.
+    unlockAudio();
     if (recording) {
       await stopAndSendRecording();
       return;
@@ -916,6 +920,9 @@ function ChatTab({
   async function sendText(text: string): Promise<void> {
     const trimmed = text.trim();
     if (!trimmed || sending) return;
+    // User gesture (send button / prompt chip) — unlock audio now, so the
+    // reply that arrives after the fetch is allowed to play out loud.
+    unlockAudio();
     // A new message stops whatever Bud-E was reading out loud.
     stopVoice();
     setSpeakingIdx(null);
