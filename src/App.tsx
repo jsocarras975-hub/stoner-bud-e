@@ -48,7 +48,7 @@ import BreakTab from './BreakTab';
 import DoseTab from './DoseTab';
 import { JOURNAL_KEY, journalSummary } from './journal';
 import type { JournalEntry } from './journal';
-import { STASH_KEY } from './stash';
+import { STASH_KEY, isRunningLow, lowNote } from './stash';
 import type { StashItem } from './stash';
 import AuthTab from './AuthTab';
 import { clearLocalSyncState, queueDeletion, uploadLocal, DEFAULT_PERSONALIZATION, cleanPersonalization } from './lib/sync';
@@ -58,7 +58,7 @@ import type { AuthUser } from './lib/auth-client';
 import { DEFAULT_VOICE_SETTINGS, cleanVoiceSettings } from './voice';
 import type { VoiceSettings } from './voice';
 import { speakVoice, startRecording, stopVoice, transcribeVoice, unlockAudio } from './lib/voice-client';
-import { executeDeviceAction, extractDeviceAction, getLaunchInfo, isNative, localIsoNow } from './lib/device-actions';
+import { executeDeviceAction, extractDeviceAction, getBubbleStatus, getLaunchInfo, isNative, localIsoNow, publishWidgetStash, setBubbleEnabled } from './lib/device-actions';
 import type { ActiveRecording } from './lib/voice-client';
 import { TIMER_ALERTS, buzz, planAlerts, type PlannedAlert, type TimerAlert, type TimerAlertId } from './lib/timer-alerts';
 import {
@@ -389,6 +389,36 @@ export default function App() {
   }, [personalization]);
   useEffect(() => save(JOURNAL_KEY, journal), [journal]);
   useEffect(() => save(STASH_KEY, stash), [stash]);
+
+  // Home-screen widget stash line (phone app only): the totals, plus
+  // the first jar running low — the warning is the line that matters,
+  // so the widget shows it without opening the app. Only publishes
+  // when the line actually changes.
+  const lastWidgetStash = useRef('');
+  useEffect(() => {
+    if (!isNative()) return;
+    const grams = stash
+      .filter((i) => i.unit !== 'pieces')
+      .reduce((sum, i) => sum + (i.unit === 'g' ? i.amount : i.amount / 1000), 0);
+    const stashLine =
+      stash.length === 0
+        ? 'Stash: empty'
+        : `Stash: ${Math.round(grams * 10) / 10}g · ${stash.length} jar${stash.length === 1 ? '' : 's'}`;
+    const lowLine = stash.filter(isRunningLow).map(lowNote)[0] ?? '';
+    const key = `${stashLine}|${lowLine}`;
+    if (key === lastWidgetStash.current) return;
+    lastWidgetStash.current = key;
+    void publishWidgetStash(stashLine, lowLine);
+  }, [stash]);
+
+  // Floating chat bubble: if it was left on, make sure its service is
+  // running (a reboot or a killed app can drop it). Runs once on load.
+  useEffect(() => {
+    if (!isNative()) return;
+    void getBubbleStatus().then((s) => {
+      if (s.enabled && s.canDrawOverlays) void setBubbleEnabled(true);
+    });
+  }, []);
 
   // While signed in, push local changes up a couple of seconds after the user
   // stops editing. Skipped when offline, when signed out, and while a server

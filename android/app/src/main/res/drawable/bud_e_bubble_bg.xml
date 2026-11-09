@@ -1,0 +1,9 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- Floating chat bubble: a lime circle. -->
+<shape xmlns:android="http://schemas.android.com/apk/res/android"
+    android:shape="oval">
+    <solid android:color="#c6f25c" />
+    <stroke
+        android:width="2dp"
+        android:color="#07110c" />
+</shape>

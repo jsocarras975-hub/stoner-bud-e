@@ -17,7 +17,7 @@ import { Chip, ChipRow, Label, PageHead } from './bits';
 import type { Personalization } from './lib/sync';
 import type { JournalEntry } from './journal';
 import type { SyncedChatConversation } from './lib/sync';
-import { getAssistantStatus, getTalkNotification, isNative, openDefaultAppsSettings, setTalkNotification } from './lib/device-actions';
+import { getAssistantStatus, getBubbleStatus, getTalkNotification, isNative, openDefaultAppsSettings, openOverlaySettings, setBubbleEnabled, setTalkNotification } from './lib/device-actions';
 
 type LegalView = 'main' | LegalDoc['id'] | 'delete';
 
@@ -50,18 +50,25 @@ export default function SettingsTab(props: {
   const [talkNotif, setTalkNotif] = useState<boolean | null>(null);
   // Default-assistant status (phone app only).
   const [isAssistant, setIsAssistant] = useState<boolean | null>(null);
+  // Floating chat bubble (phone app only).
+  const [bubble, setBubble] = useState<boolean | null>(null);
+  const [bubbleNote, setBubbleNote] = useState<string | null>(null);
 
   // Stop a voice preview when leaving Settings.
   useEffect(() => () => stopVoice(), []);
 
-  // Load the Talk notification switch + assistant status (phone app only).
-  // The status is re-read whenever the app comes back to the front, so
-  // answering the phone's assistant popup updates it with no extra tap.
+  // Load the Talk notification switch + assistant status + bubble switch
+  // (phone app only). The status is re-read whenever the app comes back
+  // to the front, so answering the phone's assistant popup updates it
+  // with no extra tap.
   useEffect(() => {
     let cancelled = false;
     if (isNative()) {
       void getTalkNotification().then((on) => {
         if (!cancelled) setTalkNotif(on);
+      });
+      void getBubbleStatus().then((s) => {
+        if (!cancelled) setBubble(s.enabled);
       });
       const refreshAssistant = () => {
         void getAssistantStatus().then((on) => {
@@ -268,6 +275,50 @@ export default function SettingsTab(props: {
             notifications for the app. Long-press the app icon for shortcuts, and add the
             Bud-E widget from your home screen.
           </p>
+          <div style={{ marginTop: 12 }}>
+            <Label>Floating chat bubble</Label>
+            <div className="unit-toggle">
+              <button
+                type="button"
+                aria-pressed={bubble === true}
+                className={bubble === true ? 'on' : ''}
+                disabled={bubble === null}
+                onClick={() => {
+                  setBubbleNote(null);
+                  void getBubbleStatus().then((s) => {
+                    if (!s.canDrawOverlays) {
+                      setBubbleNote("The phone has to allow Bud-E to draw over other apps first — opening that page now. Allow it, come back here, and turn the bubble on.");
+                      void openOverlaySettings();
+                      return;
+                    }
+                    void setBubbleEnabled(true).then((on) => setBubble(on));
+                  });
+                }}
+              >
+                On
+              </button>
+              <button
+                type="button"
+                aria-pressed={bubble === false}
+                className={bubble === false ? 'on' : ''}
+                disabled={bubble === null}
+                onClick={() => {
+                  setBubbleNote(null);
+                  void setBubbleEnabled(false).then(() => setBubble(false));
+                }}
+              >
+                Off
+              </button>
+            </div>
+            <p className="muted" style={{ marginTop: 6 }}>
+              A little Bud-E bubble that floats over your other apps. Drag it anywhere,
+              tap it to open the chat, long-press it to hide it. It comes back after a
+              restart if you left it on.
+            </p>
+            {bubbleNote !== null && (
+              <p className="muted" style={{ marginTop: 6 }}>{bubbleNote}</p>
+            )}
+          </div>
           <div style={{ marginTop: 12 }}>
             <Label>Default assistant</Label>
             <p className="muted" style={{ marginTop: 6 }}>

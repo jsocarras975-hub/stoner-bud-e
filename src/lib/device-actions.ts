@@ -144,6 +144,10 @@ interface BudEActionsPlugin {
   setTalkNotification(options: { enabled: boolean }): Promise<{ enabled?: boolean }>;
   getAssistantStatus(): Promise<{ isAssistant?: boolean }>;
   openDefaultAppsSettings(): Promise<{ ok?: boolean }>;
+  publishWidgetStash(options: { stashLine: string; lowLine: string }): Promise<{ ok?: boolean }>;
+  getBubbleStatus(): Promise<{ enabled?: boolean; canDrawOverlays?: boolean }>;
+  setBubbleEnabled(options: { enabled: boolean }): Promise<{ enabled?: boolean }>;
+  openOverlaySettings(): Promise<{ ok?: boolean }>;
 }
 
 const BudEActions = registerPlugin<BudEActionsPlugin>('BudEActions');
@@ -204,6 +208,54 @@ export async function openDefaultAppsSettings(): Promise<void> {
   if (!isNativeApp()) return;
   try {
     await BudEActions.openDefaultAppsSettings();
+  } catch {
+    // Best effort — the button just stays put.
+  }
+}
+
+/**
+ * Write the home-screen widget's stash line (totals + the first low
+ * jar, if any). Best effort — the widget just keeps its old line.
+ */
+export async function publishWidgetStash(stashLine: string, lowLine: string): Promise<void> {
+  if (!isNativeApp()) return;
+  try {
+    await BudEActions.publishWidgetStash({ stashLine, lowLine });
+  } catch {
+    // Best effort — the widget just keeps its old line.
+  }
+}
+
+/** Floating bubble: is it switched on, and may Bud-E draw over other apps? */
+export async function getBubbleStatus(): Promise<{ enabled: boolean; canDrawOverlays: boolean }> {
+  if (!isNativeApp()) return { enabled: false, canDrawOverlays: false };
+  try {
+    const res = await BudEActions.getBubbleStatus();
+    return {
+      enabled: res?.enabled === true,
+      canDrawOverlays: res?.canDrawOverlays === true,
+    };
+  } catch {
+    return { enabled: false, canDrawOverlays: false };
+  }
+}
+
+/** Switch the floating chat bubble on or off. */
+export async function setBubbleEnabled(enabled: boolean): Promise<boolean> {
+  if (!isNativeApp()) return false;
+  try {
+    const res = await BudEActions.setBubbleEnabled({ enabled });
+    return res?.enabled === true;
+  } catch {
+    return false;
+  }
+}
+
+/** Open the page where the phone allows Bud-E to draw over other apps. */
+export async function openOverlaySettings(): Promise<void> {
+  if (!isNativeApp()) return;
+  try {
+    await BudEActions.openOverlaySettings();
   } catch {
     // Best effort — the button just stays put.
   }

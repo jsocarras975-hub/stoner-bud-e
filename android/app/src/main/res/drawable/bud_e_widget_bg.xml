@@ -1,0 +1,10 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- Home widget background: night-garden card, rounded, thin green edge. -->
+<shape xmlns:android="http://schemas.android.com/apk/res/android"
+    android:shape="rectangle">
+    <solid android:color="#163024" />
+    <stroke
+        android:width="1dp"
+        android:color="#2a4a38" />
+    <corners android:radius="16dp" />
+</shape>

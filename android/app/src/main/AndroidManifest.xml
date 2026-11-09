@@ -115,7 +115,7 @@
             android:name=".BudEReminderReceiver"
             android:exported="false" />
 
-        <!-- Home-screen widget: Talk / Open Bud-E. -->
+        <!-- Home-screen widget: Talk / Open Bud-E / Log / Stash / Tonight. -->
         <receiver
             android:name=".BudEWidgetProvider"
             android:exported="true"
@@ -126,6 +126,23 @@
             <meta-data
                 android:name="android.appwidget.provider"
                 android:resource="@xml/bud_e_widget_info" />
+        </receiver>
+
+        <!-- Floating chat bubble: a foreground service hosts the overlay,
+             so the bubble stays up when the app is closed. specialUse is
+             the fitting type for an overlay bubble on Android 14+. -->
+        <service
+            android:name=".BudEBubbleService"
+            android:exported="false"
+            android:foregroundServiceType="specialUse" />
+
+        <!-- After a reboot, bring the bubble back if it was left on. -->
+        <receiver
+            android:name=".BudEBootReceiver"
+            android:exported="false">
+            <intent-filter>
+                <action android:name="android.intent.action.BOOT_COMPLETED" />
+            </intent-filter>
         </receiver>
     </application>
 
@@ -150,4 +167,11 @@
     <!-- Calls / texts: looking a name up in contacts needs this (dangerous
          permission, asked once at runtime when first needed). -->
     <uses-permission android:name="android.permission.READ_CONTACTS" />
+
+    <!-- Floating chat bubble: drawing over other apps, plus the
+         foreground service that keeps the bubble up when the app is
+         closed (specialUse is the fitting type for an overlay bubble). -->
+    <uses-permission android:name="android.permission.SYSTEM_ALERT_WINDOW" />
+    <uses-permission android:name="android.permission.FOREGROUND_SERVICE" />
+    <uses-permission android:name="android.permission.FOREGROUND_SERVICE_SPECIAL_USE" />
 </manifest>

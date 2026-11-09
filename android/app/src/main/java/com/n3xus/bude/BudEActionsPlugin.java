@@ -111,6 +111,68 @@ public class BudEActionsPlugin extends Plugin {
         }
     }
 
+    /** Write the widget's stash line (totals + the first low jar, if any). */
+    @PluginMethod
+    public void publishWidgetStash(PluginCall call) {
+        String stashLine = call.getString("stashLine", "");
+        String lowLine = call.getString("lowLine", "");
+        Context context = getContext();
+        context.getSharedPreferences(BudEWidgetProvider.PREFS, Context.MODE_PRIVATE)
+                .edit()
+                .putString(BudEWidgetProvider.KEY_STASH_LINE, stashLine)
+                .putString(BudEWidgetProvider.KEY_LOW_LINE, lowLine)
+                .apply();
+        BudEWidgetProvider.updateAllWidgets(context);
+        call.resolve(new JSObject().put("ok", true));
+    }
+
+    /** Floating bubble: is it switched on, and may Bud-E draw over other apps? */
+    @PluginMethod
+    public void getBubbleStatus(PluginCall call) {
+        Context context = getContext();
+        JSObject res = new JSObject();
+        res.put("enabled", BudEBubbleService.isEnabled(context));
+        res.put("canDrawOverlays", android.provider.Settings.canDrawOverlays(context));
+        call.resolve(res);
+    }
+
+    /** Switch the floating chat bubble on or off. */
+    @PluginMethod
+    public void setBubbleEnabled(PluginCall call) {
+        Boolean on = call.getBoolean("enabled");
+        if (on == null) {
+            call.reject("missing enabled");
+            return;
+        }
+        Context context = getContext();
+        if (on && !android.provider.Settings.canDrawOverlays(context)) {
+            call.reject("needs the draw-over-other-apps permission first");
+            return;
+        }
+        BudEBubbleService.setEnabled(context, on);
+        if (on) {
+            BudEBubbleService.start(context);
+        } else {
+            BudEBubbleService.stop(context);
+        }
+        call.resolve(new JSObject().put("enabled", on));
+    }
+
+    /** Open the page where the phone allows Bud-E to draw over other apps. */
+    @PluginMethod
+    public void openOverlaySettings(PluginCall call) {
+        try {
+            Intent intent = new Intent(
+                    android.provider.Settings.ACTION_MANAGE_OVERLAY_PERMISSION,
+                    android.net.Uri.parse("package:" + getContext().getPackageName()));
+            intent.addFlags(Intent.FLAG_ACTIVITY_NEW_TASK);
+            getContext().startActivity(intent);
+            call.resolve(new JSObject().put("ok", true));
+        } catch (Exception e) {
+            call.reject("could not open settings: " + e.getMessage());
+        }
+    }
+
     private RoleManager roleManager() {
         Context context = getContext();
         if (context == null || Build.VERSION.SDK_INT < Build.VERSION_CODES.Q) return null;
