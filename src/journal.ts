@@ -14,7 +14,23 @@ export interface JournalEntry {
   rating: number; // 1–5
   note: string;
   change: string; // "what I'd do different next time", may be empty
+  /**
+   * Recap only: how the dose landed — the simple scale from the recap
+   * form. Older entries (and plain Log entries) have no feel; the rating
+   * is what they carry instead. Rides inside the same synced JSON, so no
+   * server change was needed.
+   */
+  feel?: RecapFeel;
 }
+
+/** How a recap's dose landed. */
+export type RecapFeel = 'too-little' | 'just-right' | 'too-much';
+
+export const FEEL_LABELS: Record<RecapFeel, string> = {
+  'too-little': 'Too little',
+  'just-right': 'Just right',
+  'too-much': 'Too much',
+};
 
 export const JOURNAL_KEY = 'bude-journal-v1';
 
@@ -39,7 +55,8 @@ export function journalSummary(entries: JournalEntry[]): string {
     const label = METHOD_LABELS[e.method].toLowerCase();
     const strainBit = e.strain.trim() ? ` ${e.strain.trim()}` : '';
     const noteBit = e.note.trim() ? `, "${e.note.trim()}"` : '';
-    return `${shortDate(e.date)} — ${e.amount}${e.unit}${strainBit} ${label}, felt ${e.rating}/5${noteBit}`;
+    const feltBit = e.feel ? `, felt ${FEEL_LABELS[e.feel].toLowerCase()}` : `, felt ${e.rating}/5`;
+    return `${shortDate(e.date)} — ${e.amount}${e.unit}${strainBit} ${label}${feltBit}${noteBit}`;
   });
   const text = `Last sessions: ${bits.join('; ')}.`;
   return text.length > 300 ? `${text.slice(0, 297)}…` : text;

@@ -562,6 +562,8 @@ export default function App() {
           timerStatus={timerStatus}
           onChat={() => setTab('chat')}
           onTools={() => setTab('tools')}
+          journal={journal}
+          onAddJournal={(e) => setJournal((j) => [e, ...j])}
         />
       )}
       {tab === 'chat' && (

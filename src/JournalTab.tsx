@@ -5,7 +5,7 @@
 import { useState } from 'react';
 import { METHOD_LABELS } from './bude';
 import type { Method, Session } from './bude';
-import { newEntryId } from './journal';
+import { FEEL_LABELS, newEntryId } from './journal';
 import type { JournalEntry } from './journal';
 import type { StashItem } from './stash';
 import { Chip, ChipRow, Label } from './bits';
@@ -285,6 +285,11 @@ export default function JournalTab(props: JournalTabProps) {
                   {e.amount}
                   {e.unit} · {METHOD_LABELS[e.method]}
                 </p>
+                {e.feel && (
+                  <p className="muted small" style={{ margin: '4px 0 0' }}>
+                    Felt: {FEEL_LABELS[e.feel]}
+                  </p>
+                )}
                 <p style={{ margin: '8px 0 0' }}>
                   {stars(e.rating)} <span className="muted small">{e.rating}/5</span>
                 </p>

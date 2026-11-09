@@ -2,10 +2,13 @@
 // Session editing lives here now (Grok's Logger): method / amount / when /
 // experience chips in a card. The Chat tab shows a compact pill instead.
 
-import { useEffect, useState } from 'react';
+import { useEffect, useMemo, useState } from 'react';
 import { METHOD_LABELS, formatClock, minutesSinceTaken, parseClock } from './bude';
 import type { Method, Session } from './bude';
 import { Chip, ChipRow, Label, PageHead } from './bits';
+import { usualDose, usualLine, usualStrains } from './recap';
+import RecapForm from './RecapForm';
+import type { JournalEntry } from './journal';
 
 const EXPERIENCE_LABELS: Record<Session['experience'], string> = {
   new: 'New — just starting out',
@@ -55,11 +58,35 @@ export default function TonightTab(props: {
   timerStatus: string;
   onChat: () => void;
   onTools: () => void;
+  /** Past recaps (journal entries) — what Bud-E learns the usuals from. */
+  journal: JournalEntry[];
+  /** Save a recap: same path as adding a Log entry, so it syncs too. */
+  onAddJournal: (e: JournalEntry) => void;
 }) {
-  const { session, setSession, vibe, timerStatus, onChat, onTools } = props;
+  const { session, setSession, vibe, timerStatus, onChat, onTools, journal, onAddJournal } = props;
   const [, setNow] = useState(Date.now());
   // Open on the logger when no dose is logged yet (Grok: editing when no session).
   const [editing, setEditing] = useState(session.amount.trim() === '');
+  const [recapOpen, setRecapOpen] = useState(false);
+  const [recapSaved, setRecapSaved] = useState(false);
+
+  // What Bud-E learned from past recaps: the most common dose, and the
+  // strains that show up most. Recomputed when the journal changes.
+  const usual = useMemo(() => usualDose(journal), [journal]);
+  const strains = useMemo(() => usualStrains(journal), [journal]);
+
+  // When nothing is logged yet, the logger starts from the usual dose
+  // instead of a blank guess — Bud-E remembers, the user just confirms.
+  const loggerInitial: Session =
+    session.amount.trim() === '' && usual !== null
+      ? { ...session, method: usual.method, amount: usual.amount, unit: usual.unit }
+      : session;
+
+  const sessionIsUsual =
+    usual !== null &&
+    session.method === usual.method &&
+    session.amount.trim() === usual.amount &&
+    session.unit === usual.unit;
 
   // Refresh the "how long ago" line every minute.
   useEffect(() => {
@@ -103,7 +130,7 @@ export default function TonightTab(props: {
 
       {editing ? (
         <Logger
-          initial={session}
+          initial={loggerInitial}
           onDone={() => setEditing(false)}
           onCancel={amount !== '' ? () => setEditing(false) : undefined}
           onSave={setSession}
@@ -128,6 +155,65 @@ export default function TonightTab(props: {
               ⏱️ Open the timer
             </button>
           </div>
+          {amount !== '' && (
+            <div className="button-row" style={{ marginTop: 8 }}>
+              <button
+                className="btn sm secondary"
+                onClick={() => {
+                  setRecapSaved(false);
+                  setRecapOpen((v) => !v);
+                }}
+              >
+                📝 Save a recap
+              </button>
+            </div>
+          )}
+          {recapSaved && (
+            <p className="muted small" style={{ marginTop: 8 }}>
+              ✓ Saved — Bud-E will remember this one.
+            </p>
+          )}
+        </section>
+      )}
+
+      {recapOpen && !editing && (
+        <RecapForm
+          session={session}
+          usualStrains={strains}
+          onSave={(entry) => {
+            onAddJournal(entry);
+            setRecapOpen(false);
+            setRecapSaved(true);
+          }}
+          onCancel={() => setRecapOpen(false)}
+        />
+      )}
+
+      {usual !== null && (
+        <section className="card" aria-label="Your usual dose">
+          <p style={{ margin: 0 }}>{usualLine(usual)}</p>
+          <p className="muted small" style={{ marginTop: 4 }}>
+            Learned from your last {usual.count === 1 ? 'recap' : `${usual.count} recaps`} — same
+            dose, most nights.
+          </p>
+          {!sessionIsUsual && (
+            <div className="button-row" style={{ marginTop: 8 }}>
+              <button
+                className="btn sm"
+                onClick={() => {
+                  setSession({
+                    ...session,
+                    method: usual.method,
+                    amount: usual.amount,
+                    unit: usual.unit,
+                  });
+                  setEditing(false);
+                }}
+              >
+                Use my usual
+              </button>
+            </div>
+          )}
         </section>
       )}
 
