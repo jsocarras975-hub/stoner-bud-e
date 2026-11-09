@@ -265,7 +265,7 @@ export default function SettingsTab(props: {
         <p className="eyebrow">Premium</p>
         {premiumTier ? (
           <p>
-            You're on <strong>{premiumTier === 'lit' ? 'Lit' : 'Cloud Nine'}</strong>. Extra
+            I'm on <strong>{premiumTier === 'lit' ? 'Lit' : 'Cloud Nine'}</strong>. Extra
             voices, themes, and insights are unlocked.
           </p>
         ) : (
