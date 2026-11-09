@@ -98,41 +98,6 @@ public class BudEActionsPlugin extends Plugin {
         call.resolve(new JSObject().put("isAssistant", isAssistantHeld()));
     }
 
-    /**
-     * Ask the phone to make Bud-E the default digital assistant, in one
-     * tap: the system shows its own dialog and the user confirms. Needed
-     * after a fresh install, which can drop the role — without it, the
-     * widget's Talk button lands on the system's assistant picker instead
-     * of opening Bud-E.
-     */
-    @PluginMethod
-    public void requestAssistantRole(PluginCall call) {
-        if (Build.VERSION.SDK_INT < Build.VERSION_CODES.Q) {
-            call.reject("needs Android 10 or newer");
-            return;
-        }
-        RoleManager roleManager = roleManager();
-        if (roleManager == null || !roleManager.isRoleAvailable(RoleManager.ROLE_ASSISTANT)) {
-            call.reject("assistant role not available on this phone");
-            return;
-        }
-        if (isAssistantHeld()) {
-            call.resolve(new JSObject().put("isAssistant", true));
-            return;
-        }
-        // Fire-and-forget on purpose: the role dialog takes the user away
-        // from the app, and waiting on its result is what left the button
-        // stuck on "Asking..." — the web side re-checks the status when
-        // the app comes back to the front instead.
-        try {
-            Intent intent = roleManager.createRequestRoleIntent(RoleManager.ROLE_ASSISTANT);
-            getActivity().startActivity(intent);
-            call.resolve(new JSObject().put("launched", true));
-        } catch (Exception e) {
-            call.reject("could not open the assistant request: " + e.getMessage());
-        }
-    }
-
     /** Open the phone's Default apps settings page (the manual fallback). */
     @PluginMethod
     public void openDefaultAppsSettings(PluginCall call) {

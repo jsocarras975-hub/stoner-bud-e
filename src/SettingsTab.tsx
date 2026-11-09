@@ -17,7 +17,7 @@ import { Chip, ChipRow, Label, PageHead } from './bits';
 import type { Personalization } from './lib/sync';
 import type { JournalEntry } from './journal';
 import type { SyncedChatConversation } from './lib/sync';
-import { getAssistantStatus, getTalkNotification, isNative, openDefaultAppsSettings, requestAssistantRole, setTalkNotification } from './lib/device-actions';
+import { getAssistantStatus, getTalkNotification, isNative, openDefaultAppsSettings, setTalkNotification } from './lib/device-actions';
 
 type LegalView = 'main' | LegalDoc['id'] | 'delete';
 
@@ -50,11 +50,6 @@ export default function SettingsTab(props: {
   const [talkNotif, setTalkNotif] = useState<boolean | null>(null);
   // Default-assistant status (phone app only).
   const [isAssistant, setIsAssistant] = useState<boolean | null>(null);
-  const [askingAssistant, setAskingAssistant] = useState(false);
-  // True while the phone's own popup should be on screen (cleared when
-  // the app comes back to the front and the status is re-read).
-  const [waitingAnswer, setWaitingAnswer] = useState(false);
-  const [assistantError, setAssistantError] = useState<string | null>(null);
 
   // Stop a voice preview when leaving Settings.
   useEffect(() => () => stopVoice(), []);
@@ -72,7 +67,6 @@ export default function SettingsTab(props: {
         void getAssistantStatus().then((on) => {
           if (!cancelled) {
             setIsAssistant(on);
-            setWaitingAnswer(false);
           }
         });
       };
@@ -281,50 +275,23 @@ export default function SettingsTab(props: {
                 ? 'Checking…'
                 : isAssistant
                   ? 'Bud-E is your assistant — Talk opens Bud-E straight away.'
-                  : waitingAnswer
-                    ? "The phone should be asking — answer it, then come back here."
-                    : "Bud-E is not your assistant yet — Talk shows the phone's list instead."}
+                  : "Bud-E is not your assistant yet — Talk opens the app instead of the voice session."}
             </p>
-            {isAssistant === false && !waitingAnswer && (
-              <>
-                <button
-                  type="button"
-                  className="btn"
-                  disabled={askingAssistant}
-                  onClick={() => {
-                    setAssistantError(null);
-                    setAskingAssistant(true);
-                    void requestAssistantRole().then((launched) => {
-                      setAskingAssistant(false);
-                      if (launched) {
-                        setWaitingAnswer(true);
-                      } else {
-                        setAssistantError("The phone wouldn't open the request — try the settings page instead.");
-                      }
-                    });
-                  }}
-                >
-                  {askingAssistant ? 'Asking…' : 'Make Bud-E your assistant'}
-                </button>
-                <button
-                  type="button"
-                  className="btn secondary"
-                  style={{ marginTop: 8 }}
-                  onClick={() => {
-                    void openDefaultAppsSettings();
-                  }}
-                >
-                  Open default apps settings
-                </button>
-              </>
-            )}
-            {assistantError !== null && (
-              <p className="muted" style={{ marginTop: 12 }}>{assistantError}</p>
+            {isAssistant === false && (
+              <button
+                type="button"
+                className="btn"
+                onClick={() => {
+                  void openDefaultAppsSettings();
+                }}
+              >
+                Open default assistant settings
+              </button>
             )}
             <p className="muted" style={{ marginTop: 6 }}>
-              A fresh install can drop Bud-E from the phone's assistant list. If Bud-E
-              doesn't show when the phone asks, restart the phone once and tap the button
-              again.
+              A fresh install can drop Bud-E from the phone's assistant list. Pick Bud-E on
+              that settings page — that is the switch that sticks. If Bud-E doesn't show
+              there, restart the phone once and look again.
             </p>
           </div>
         </section>
