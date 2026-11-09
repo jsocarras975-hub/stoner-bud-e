@@ -8,6 +8,7 @@
 
 import { isPreflight, setCorsHeaders } from '../../src/lib/cors.ts';
 import type { ReqLike, ResLike } from '../../src/lib/cors.ts';
+import { clientIp, rateLimited } from '../../src/lib/rate-limit.ts';
 
 const GROQ_TRANSCRIBE_URL = 'https://api.groq.com/openai/v1/audio/transcriptions';
 const MAX_AUDIO_BYTES = 25 * 1024 * 1024;
@@ -85,6 +86,11 @@ export default async function handler(req: ReqLike, res: ResLike): Promise<void>
     }
     if (req.method !== 'POST') {
       res.status(200).json({ ok: false, error: 'post only' });
+      return;
+    }
+    // Generous per-IP cap (20/min) — a voice message is one call.
+    if (rateLimited(`transcribe:${clientIp(req)}`, 20, 60_000)) {
+      res.status(429).json({ ok: false, error: 'rate_limited' });
       return;
     }
 

@@ -62,9 +62,12 @@ public class BudEActionsPlugin extends Plugin {
         call.resolve(res);
     }
 
-    /** Retry the pending action after the user answers a permission prompt. */
-    private void retryPending(PluginCall call, String alias, String emptyMessage,
-                              String deniedMessage) {
+    /** Retry the pending action after the user answers a permission prompt.
+     *  When the denial is permanent (the phone will not ask again), open
+     *  Bud-E's app settings directly instead of just saying no — the
+     *  toggle the user needs is right there. */
+    private void retryPending(PluginCall call, String alias, String permission,
+                              String emptyMessage, String deniedMessage) {
         JSONObject action = pendingAction;
         pendingAction = null;
         if (action == null) {
@@ -74,6 +77,23 @@ public class BudEActionsPlugin extends Plugin {
             return;
         }
         if (getPermissionState(alias) != PermissionState.GRANTED) {
+            if (permission != null && getActivity() != null
+                    && !getActivity().shouldShowRequestPermissionRationale(permission)) {
+                try {
+                    android.content.Intent settings =
+                            new android.content.Intent(
+                                    android.provider.Settings.ACTION_APPLICATION_DETAILS_SETTINGS);
+                    settings.setData(android.net.Uri.parse("package:" + getContext().getPackageName()));
+                    settings.addFlags(android.content.Intent.FLAG_ACTIVITY_NEW_TASK);
+                    getContext().startActivity(settings);
+                    call.resolve(new JSObject()
+                            .put("ok", false)
+                            .put("message", "Contacts access is off — I opened Bud-E's settings so you can switch it on, then ask again."));
+                    return;
+                } catch (Exception ignored) {
+                    // Fall through to the plain message below.
+                }
+            }
             call.resolve(new JSObject()
                     .put("ok", false)
                     .put("message", deniedMessage));
@@ -88,14 +108,14 @@ public class BudEActionsPlugin extends Plugin {
 
     @PermissionCallback
     private void onCameraPermission(PluginCall call) {
-        retryPending(call, "camera",
+        retryPending(call, "camera", null,
                 "the flashlight is not available right now",
                 "Camera access is off — allow it in the Bud-E app settings to use the flashlight.");
     }
 
     @PermissionCallback
     private void onContactsPermission(PluginCall call) {
-        retryPending(call, "contacts",
+        retryPending(call, "contacts", Manifest.permission.READ_CONTACTS,
                 "I could not look them up right now",
                 "Contacts access is off — allow it in the Bud-E app settings so I can find who to call or text.");
     }

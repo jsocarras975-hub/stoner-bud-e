@@ -8,6 +8,7 @@
 import { BUD_E_SYSTEM_PROMPT } from '../src/bude.ts';
 import type { ChatMessage, Session } from '../src/bude.ts';
 import { isPersonaId, personaById } from '../src/voice.ts';
+import { clientIp, rateLimited } from '../src/lib/rate-limit.ts';
 
 const GROQ_URL = 'https://api.groq.com/openai/v1/chat/completions';
 // NOTE (2026-11-08): Groq retired llama-3.3-70b-versatile and
@@ -309,6 +310,13 @@ export default async function handler(req: ReqLike, res: ResLike): Promise<void>
     }
     if (req.method !== 'POST') {
       res.status(200).json({ ok: true, source: 'fallback', reply: null });
+      return;
+    }
+    // Generous per-IP cap (60/min): normal use never trips it, a hammer
+    // does. The client treats a non-ok answer as a fallback, so the chat
+    // still answers.
+    if (rateLimited(`chat:${clientIp(req)}`, 60, 60_000)) {
+      res.status(429).json({ ok: false, error: 'rate_limited' });
       return;
     }
 

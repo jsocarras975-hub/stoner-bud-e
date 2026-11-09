@@ -243,13 +243,13 @@ function cleanSettings(
       data.voice = { persona: v.persona, voiceReplies: v.voiceReplies, autoPlay: v.autoPlay };
     }
   }
-  if (rest.premiumTier === 'lit' || rest.premiumTier === 'cloudnine') {
-    data.premiumTier = rest.premiumTier;
-  }
-  // null or missing: do not set — the upsert leaves the stored value alone.
+  // Premium fields are server-only and are NEVER taken from a sync
+  // payload: a signed-in client could otherwise grant itself a paid tier
+  // (or a custom persona/theme) just by sending it. They are set only by
+  // a verified payment/webhook handler. The upsert below carries whatever
+  // is already stored forward, so stripping them here cannot wipe a paid
+  // tier either.
   if (isRecord(rest.personalization)) data.personalization = rest.personalization;
-  if (rest.customPersona === null || isRecord(rest.customPersona)) data.customPersona = rest.customPersona;
-  if (rest.customTheme === null || isRecord(rest.customTheme)) data.customTheme = rest.customTheme;
   if (Array.isArray(rest.savedPlans)) data.savedPlans = rest.savedPlans;
   return { data, updatedAt: parseUpdatedAt(raw.updatedAt) };
 }
@@ -448,17 +448,23 @@ export default async function handler(req: Req, res: Res): Promise<void> {
         );
       }
       if (settings !== undefined) {
-        // If the client did not send a real tier, keep whatever is already
-        // stored so a sync with null/missing premiumTier cannot wipe it.
-        if (!('premiumTier' in settings.data)) {
-          const existing = await client.query<Row>(
-            'select data from user_settings where user_id = $1',
-            [user.id],
-          );
-          const stored = existing.rows[0]?.data?.premiumTier;
-          if (stored === 'lit' || stored === 'cloudnine') {
-            settings.data.premiumTier = stored;
-          }
+        // Premium fields are server-only (see cleanSettings): carry
+        // whatever is already stored forward, so a sync can neither
+        // grant a paid tier nor wipe one — and the same for a custom
+        // persona or theme.
+        const existing = await client.query<Row>(
+          'select data from user_settings where user_id = $1',
+          [user.id],
+        );
+        const stored = existing.rows[0]?.data;
+        if (stored?.premiumTier === 'lit' || stored?.premiumTier === 'cloudnine') {
+          settings.data.premiumTier = stored.premiumTier;
+        }
+        if (stored?.customPersona === null || isRecord(stored?.customPersona)) {
+          settings.data.customPersona = stored.customPersona;
+        }
+        if (stored?.customTheme === null || isRecord(stored?.customTheme)) {
+          settings.data.customTheme = stored.customTheme;
         }
         await client.query(
           `insert into user_settings (user_id, data, updated_at)

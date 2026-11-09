@@ -8,6 +8,7 @@
 
 import { isPreflight, readJsonBody, setCorsHeaders } from '../../src/lib/cors.ts';
 import type { ReqLike, ResLike } from '../../src/lib/cors.ts';
+import { clientIp, rateLimited } from '../../src/lib/rate-limit.ts';
 import { isPersonaId, personaById } from '../../src/voice.ts';
 
 const GROQ_SPEECH_URL = 'https://api.groq.com/openai/v1/audio/speech';
@@ -68,6 +69,12 @@ export default async function handler(req: ReqLike, res: ResLike): Promise<void>
     }
     if (req.method !== 'POST') {
       unavailable();
+      return;
+    }
+    // Generous per-IP cap (30/min). Answered in the client's own
+    // "unavailable" shape so it falls back the way it already does.
+    if (rateLimited(`speak:${clientIp(req)}`, 30, 60_000)) {
+      unavailable({ groqError: 'rate limited — try again in a moment' });
       return;
     }
 
