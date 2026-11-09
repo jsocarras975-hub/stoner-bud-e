@@ -106,4 +106,9 @@
          local-notifications plugin; stated here because BudEActions
          depends on it directly). -->
     <uses-permission android:name="android.permission.SCHEDULE_EXACT_ALARM" />
+    <!-- Alarms: the clock app's SET_ALARM screen refuses callers that do
+         not hold this (normal permission, granted automatically at
+         install). Without it every alarm start fails with a
+         SecurityException — from the app and from the voice session. -->
+    <uses-permission android:name="com.android.alarm.permission.SET_ALARM" />
 </manifest>

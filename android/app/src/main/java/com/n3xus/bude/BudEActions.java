@@ -202,17 +202,34 @@ public final class BudEActions {
 
     // ------------------------------------------------------------ Intents
 
+    /** Short cause for the user: "SecurityException: Permission Denial: ...".
+     *  The message is what actually diagnoses a refusal, so keep the first
+     *  bit of it instead of only the class name. */
+    private static String describe(Exception e) {
+        String message = e.getMessage();
+        if (message == null || message.isEmpty()) {
+            return e.getClass().getSimpleName();
+        }
+        if (message.length() > 160) {
+            message = message.substring(0, 160);
+        }
+        return e.getClass().getSimpleName() + ": " + message;
+    }
+
     private static Result launch(Context context, Intent intent, ActivityLauncher launcher,
                                  String okMessage) {
         intent.addFlags(Intent.FLAG_ACTIVITY_NEW_TASK);
+        String targetPackage = null;
         try {
-            if (intent.resolveActivity(context.getPackageManager()) == null) {
+            android.content.ComponentName component =
+                    intent.resolveActivity(context.getPackageManager());
+            if (component == null) {
                 return fail("no-app", "there is no app on this phone that can do that");
             }
+            targetPackage = component.getPackageName();
         } catch (Exception e) {
             android.util.Log.e("BudEActions", "resolveActivity failed", e);
-            return fail("failed",
-                    "the phone could not open that (" + e.getClass().getSimpleName() + ")");
+            return fail("failed", "the phone could not open that (" + describe(e) + ")");
         }
         // The assistant launcher (startAssistantActivity) can refuse in some
         // states even when an app can handle the intent, so fall back to a
@@ -232,8 +249,23 @@ public final class BudEActions {
             return ok(okMessage);
         } catch (Exception e) {
             android.util.Log.e("BudEActions", "startActivity failed", e);
+            // Last resort: open the app itself (its launcher screen is
+            // always openable) so the user can set it there by hand
+            // instead of getting nothing.
+            if (targetPackage != null) {
+                try {
+                    Intent openApp = context.getPackageManager()
+                            .getLaunchIntentForPackage(targetPackage);
+                    if (openApp != null) {
+                        context.startActivity(openApp);
+                        return ok("I opened the app instead — set it there.");
+                    }
+                } catch (Exception ignored) {
+                    // Fall through to the failure below.
+                }
+            }
             return fail("failed",
-                    "the phone could not open that (" + e.getClass().getSimpleName() + ")");
+                    "the phone could not open that (" + describe(e) + ")");
         }
     }
 
