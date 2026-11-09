@@ -1,0 +1,40 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- Bud-E's home-screen shortcuts (long-press the app icon). Talk opens the
+     default digital assistant — Bud-E when it is set as the assistant.
+     Tonight and Log open the app straight to that tab. -->
+<shortcuts xmlns:android="http://schemas.android.com/apk/res/android">
+    <shortcut
+        android:shortcutId="talk"
+        android:enabled="true"
+        android:icon="@mipmap/ic_launcher"
+        android:shortcutShortLabel="@string/shortcut_talk"
+        android:shortcutLongLabel="@string/shortcut_talk">
+        <intent android:action="android.intent.action.ASSIST" />
+    </shortcut>
+    <shortcut
+        android:shortcutId="tonight"
+        android:enabled="true"
+        android:icon="@mipmap/ic_launcher"
+        android:shortcutShortLabel="@string/shortcut_tonight_short"
+        android:shortcutLongLabel="@string/shortcut_tonight_long">
+        <intent
+            android:action="android.intent.action.VIEW"
+            android:targetPackage="com.n3xus.bude"
+            android:targetClass="com.n3xus.bude.MainActivity">
+            <extra android:name="bude_tab" android:value="tonight" />
+        </intent>
+    </shortcut>
+    <shortcut
+        android:shortcutId="log"
+        android:enabled="true"
+        android:icon="@mipmap/ic_launcher"
+        android:shortcutShortLabel="@string/shortcut_log"
+        android:shortcutLongLabel="@string/shortcut_log">
+        <intent
+            android:action="android.intent.action.VIEW"
+            android:targetPackage="com.n3xus.bude"
+            android:targetClass="com.n3xus.bude.MainActivity">
+            <extra android:name="bude_tab" android:value="journal" />
+        </intent>
+    </shortcut>
+</shortcuts>

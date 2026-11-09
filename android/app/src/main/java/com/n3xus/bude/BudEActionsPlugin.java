@@ -62,6 +62,32 @@ public class BudEActionsPlugin extends Plugin {
         call.resolve(res);
     }
 
+    @PluginMethod
+    public void getTalkNotification(PluginCall call) {
+        call.resolve(new JSObject().put("enabled", BudENotification.isEnabled(getContext())));
+    }
+
+    @PluginMethod
+    public void setTalkNotification(PluginCall call) {
+        Boolean on = call.getBoolean("enabled");
+        if (on == null) {
+            call.reject("missing enabled");
+            return;
+        }
+        BudENotification.setEnabled(getContext(), on);
+        call.resolve(new JSObject().put("enabled", on));
+    }
+
+    /** One-shot launch info for the web app (shortcut tab, shared text). */
+    @PluginMethod
+    public void getLaunchInfo(PluginCall call) {
+        JSONObject info = BudELaunchInfo.readAndClear(getContext());
+        JSObject res = new JSObject();
+        res.put("tab", info.optString("tab", ""));
+        res.put("sharedText", info.optString("sharedText", ""));
+        call.resolve(res);
+    }
+
     /** Retry the pending action after the user answers a permission prompt.
      *  When the denial is permanent (the phone will not ask again), open
      *  Bud-E's app settings directly instead of just saying no — the

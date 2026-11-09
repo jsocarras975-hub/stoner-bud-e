@@ -139,9 +139,52 @@ export function localIsoNow(): string {
 
 interface BudEActionsPlugin {
   execute(options: { action: DeviceAction }): Promise<{ ok: boolean; message: string }>;
+  getLaunchInfo(): Promise<{ tab?: string; sharedText?: string }>;
+  getTalkNotification(): Promise<{ enabled?: boolean }>;
+  setTalkNotification(options: { enabled: boolean }): Promise<{ enabled?: boolean }>;
 }
 
 const BudEActions = registerPlugin<BudEActionsPlugin>('BudEActions');
+
+/**
+ * One-shot launch info (a shortcut's tab, text shared in from another
+ * app). The native side clears it on read, so it never fires twice.
+ * Empty on the plain web.
+ */
+export async function getLaunchInfo(): Promise<{ tab: string; sharedText: string }> {
+  if (!isNativeApp()) return { tab: '', sharedText: '' };
+  try {
+    const res = await BudEActions.getLaunchInfo();
+    return {
+      tab: typeof res?.tab === 'string' ? res.tab : '',
+      sharedText: typeof res?.sharedText === 'string' ? res.sharedText : '',
+    };
+  } catch {
+    return { tab: '', sharedText: '' };
+  }
+}
+
+/** Whether the persistent Talk notification is switched on. */
+export async function getTalkNotification(): Promise<boolean> {
+  if (!isNativeApp()) return false;
+  try {
+    const res = await BudEActions.getTalkNotification();
+    return res?.enabled === true;
+  } catch {
+    return false;
+  }
+}
+
+/** Switch the persistent Talk notification on or off. */
+export async function setTalkNotification(enabled: boolean): Promise<boolean> {
+  if (!isNativeApp()) return false;
+  try {
+    const res = await BudEActions.setTalkNotification({ enabled });
+    return res?.enabled === true;
+  } catch {
+    return false;
+  }
+}
 
 /**
  * Run one action on the phone through the native BudEActions plugin.

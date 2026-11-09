@@ -14,12 +14,18 @@ public class MainActivity extends BridgeActivity {
         // App-local native plugins must be registered before the bridge loads.
         registerPlugin(BudEActionsPlugin.class);
         super.onCreate(savedInstanceState);
+        // Shortcuts, the widget, and shares from other apps arrive as the
+        // launch intent — stash what they asked for so the web app can
+        // pick it up, and keep the Talk notification showing.
+        BudELaunchInfo.capture(this, getIntent());
+        BudENotification.showIfEnabled(this);
     }
 
     @Override
     protected void onNewIntent(Intent intent) {
         super.onNewIntent(intent);
         setIntent(intent);
+        BudELaunchInfo.capture(this, intent);
     }
 
     @Override

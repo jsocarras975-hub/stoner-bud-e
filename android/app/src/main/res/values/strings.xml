@@ -4,4 +4,8 @@
     <string name="title_activity_main">Stoner Bud-E</string>
     <string name="package_name">com.n3xus.bude</string>
     <string name="custom_url_scheme">com.n3xus.bude</string>
+    <string name="shortcut_talk">Talk to Bud-E</string>
+    <string name="shortcut_tonight_short">Tonight</string>
+    <string name="shortcut_tonight_long">Tonight\'s plan</string>
+    <string name="shortcut_log">Log a session</string>
 </resources>

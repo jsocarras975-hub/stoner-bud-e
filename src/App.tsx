@@ -58,7 +58,7 @@ import type { AuthUser } from './lib/auth-client';
 import { DEFAULT_VOICE_SETTINGS, cleanVoiceSettings } from './voice';
 import type { VoiceSettings } from './voice';
 import { speakVoice, startRecording, stopVoice, transcribeVoice, unlockAudio } from './lib/voice-client';
-import { executeDeviceAction, extractDeviceAction, isNative, localIsoNow } from './lib/device-actions';
+import { executeDeviceAction, extractDeviceAction, getLaunchInfo, isNative, localIsoNow } from './lib/device-actions';
 import type { ActiveRecording } from './lib/voice-client';
 import { TIMER_ALERTS, buzz, planAlerts, type PlannedAlert, type TimerAlert, type TimerAlertId } from './lib/timer-alerts';
 import {
@@ -119,6 +119,15 @@ function apiUrl(): string {
 
 type Tab = 'tonight' | 'chat' | 'tools' | 'plan' | 'strains' | 'music' | 'journal' | 'stash' | 'break' | 'dose' | 'settings' | 'account';
 type Source = 'live' | 'fallback' | null;
+
+/** True when a string from the native side names a real tab. */
+function isTab(value: string): value is Tab {
+  return (
+    value === 'tonight' || value === 'chat' || value === 'tools' || value === 'plan' ||
+    value === 'strains' || value === 'music' || value === 'journal' || value === 'stash' ||
+    value === 'break' || value === 'dose' || value === 'settings' || value === 'account'
+  );
+}
 
 /** Which tool is open inside the Tools tab (Grok drill-in). Null = the tool grid. */
 type ToolId = 'timer' | 'breathe' | 'munchies' | 'thoughts' | 'trivia';
@@ -325,6 +334,33 @@ export default function App() {
     });
     return () => {
       cancelled = true;
+    };
+  }, []);
+
+  // Phone extras: a home-screen shortcut, the widget, or a share from
+  // another app can ask for a tab or hand over text. Runs on load and
+  // whenever the app comes back to the front (a share can arrive while
+  // the app is already open). Shared text lands in the chat box through
+  // the same prefill the strain pages use. One-shot — the native side
+  // clears it.
+  useEffect(() => {
+    let cancelled = false;
+    const applyLaunchInfo = async () => {
+      if (!isNative()) return;
+      const info = await getLaunchInfo();
+      if (cancelled) return;
+      if (info.sharedText !== '') {
+        setPendingQuestion(info.sharedText);
+        setTab('chat');
+      } else if (isTab(info.tab)) {
+        setTab(info.tab);
+      }
+    };
+    void applyLaunchInfo();
+    window.addEventListener('focus', applyLaunchInfo);
+    return () => {
+      cancelled = true;
+      window.removeEventListener('focus', applyLaunchInfo);
     };
   }, []);
 

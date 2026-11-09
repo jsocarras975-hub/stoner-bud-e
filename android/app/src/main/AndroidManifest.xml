@@ -39,6 +39,19 @@
                 <category android:name="android.intent.category.LAUNCHER" />
             </intent-filter>
 
+            <!-- Share into Bud-E from any app (text or a link lands in the
+                 chat box). -->
+            <intent-filter>
+                <action android:name="android.intent.action.SEND" />
+                <category android:name="android.intent.category.DEFAULT" />
+                <data android:mimeType="text/plain" />
+            </intent-filter>
+
+            <!-- Long-press the app icon: Talk / Tonight / Log a session. -->
+            <meta-data
+                android:name="android.app.shortcuts"
+                android:resource="@xml/shortcuts" />
+
         </activity>
 
         <provider
@@ -91,6 +104,19 @@
         <receiver
             android:name=".BudEReminderReceiver"
             android:exported="false" />
+
+        <!-- Home-screen widget: Talk / Open Bud-E. -->
+        <receiver
+            android:name=".BudEWidgetProvider"
+            android:exported="true"
+            android:label="Bud-E">
+            <intent-filter>
+                <action android:name="android.appwidget.action.APPWIDGET_UPDATE" />
+            </intent-filter>
+            <meta-data
+                android:name="android.appwidget.provider"
+                android:resource="@xml/bud_e_widget_info" />
+        </receiver>
     </application>
 
     <!-- Permissions -->

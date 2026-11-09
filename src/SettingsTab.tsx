@@ -17,6 +17,7 @@ import { Chip, ChipRow, Label, PageHead } from './bits';
 import type { Personalization } from './lib/sync';
 import type { JournalEntry } from './journal';
 import type { SyncedChatConversation } from './lib/sync';
+import { getTalkNotification, isNative, setTalkNotification } from './lib/device-actions';
 
 type LegalView = 'main' | LegalDoc['id'] | 'delete';
 
@@ -45,9 +46,24 @@ export default function SettingsTab(props: {
   const [deleting, setDeleting] = useState(false);
   const [deleteError, setDeleteError] = useState('');
   const [trying, setTrying] = useState(false);
+  // Persistent Talk notification (phone app only; on by default).
+  const [talkNotif, setTalkNotif] = useState<boolean | null>(null);
 
   // Stop a voice preview when leaving Settings.
   useEffect(() => () => stopVoice(), []);
+
+  // Load the Talk notification switch (phone app only).
+  useEffect(() => {
+    let cancelled = false;
+    if (isNative()) {
+      void getTalkNotification().then((on) => {
+        if (!cancelled) setTalkNotif(on);
+      });
+    }
+    return () => {
+      cancelled = true;
+    };
+  }, []);
 
   /** Read one short line out loud in the current voice. Tap again to stop. */
   async function tryVoice(): Promise<void> {
@@ -199,6 +215,44 @@ export default function SettingsTab(props: {
           })}
         </div>
       </section>
+
+      {isNative() && (
+        <section className="card" aria-label="Phone">
+          <p className="eyebrow">Phone</p>
+          <p className="muted">Bud-E on your home screen and in your notifications.</p>
+          <Label>Talk notification</Label>
+          <div className="unit-toggle">
+            <button
+              type="button"
+              aria-pressed={talkNotif === true}
+              className={talkNotif === true ? 'on' : ''}
+              disabled={talkNotif === null}
+              onClick={() => {
+                void setTalkNotification(true).then(() => setTalkNotif(true));
+              }}
+            >
+              On
+            </button>
+            <button
+              type="button"
+              aria-pressed={talkNotif === false}
+              className={talkNotif === false ? 'on' : ''}
+              disabled={talkNotif === null}
+              onClick={() => {
+                void setTalkNotification(false).then(() => setTalkNotif(false));
+              }}
+            >
+              Off
+            </button>
+          </div>
+          <p className="muted" style={{ marginTop: 6 }}>
+            When on, Bud-E sits in your notifications with a Talk button — one tap to ask
+            anything. It needs notifications allowed for Bud-E; if it never shows, allow
+            notifications for the app. Long-press the app icon for shortcuts, and add the
+            Bud-E widget from your home screen.
+          </p>
+        </section>
+      )}
 
       <section className="card" aria-label="Personalization">
         <p className="eyebrow">Personalization</p>
