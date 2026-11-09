@@ -1,0 +1,13 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- Stoner Bud-E — assistant config, read by Android from the
+     android.voice_interaction meta-data on BudEInteractionService.
+     sessionService + recognitionService are both mandatory: Android refuses
+     an assistant with either one missing. supportsAssist is what lets the
+     phone offer Bud-E in Settings → Default apps → Digital assistant app. -->
+<voice-interaction-service xmlns:android="http://schemas.android.com/apk/res/android"
+    android:sessionService="com.n3xus.bude.BudESessionService"
+    android:recognitionService="com.n3xus.bude.BudERecognitionService"
+    android:settingsActivity="com.n3xus.bude.MainActivity"
+    android:supportsAssist="true"
+    android:supportsLaunchVoiceAssistFromKeyguard="true"
+    android:supportsLocalInteraction="true" />

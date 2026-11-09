@@ -1,0 +1,75 @@
+package com.n3xus.bude;
+
+import org.json.JSONArray;
+import org.json.JSONObject;
+
+import java.io.BufferedReader;
+import java.io.InputStream;
+import java.io.InputStreamReader;
+import java.io.OutputStream;
+import java.net.HttpURLConnection;
+import java.net.URL;
+import java.nio.charset.StandardCharsets;
+
+/**
+ * Minimal client for the existing Bud-E chat backend — the same contract the
+ * web app uses, no new endpoints. POST /api/chat with
+ * { messages: [{role, text}], persona } and read back { ok, source, reply }.
+ *
+ * Call it from a background thread (it does blocking network I/O). Returns
+ * the reply text, or null when the server could not answer (fallback reply,
+ * network failure, or a bad response). No auth, no cookies, no keys.
+ */
+public final class BudEChatClient {
+    /** Production origin — the same live site the Capacitor app talks to. */
+    private static final String CHAT_URL = "https://stoner-bud-e.vercel.app/api/chat";
+    private static final int TIMEOUT_MS = 30000;
+
+    private BudEChatClient() {
+    }
+
+    public static String ask(String text) {
+        HttpURLConnection conn = null;
+        try {
+            conn = (HttpURLConnection) new URL(CHAT_URL).openConnection();
+            conn.setRequestMethod("POST");
+            conn.setRequestProperty("Content-Type", "application/json");
+            conn.setRequestProperty("Accept", "application/json");
+            conn.setConnectTimeout(TIMEOUT_MS);
+            conn.setReadTimeout(TIMEOUT_MS);
+            conn.setDoOutput(true);
+
+            JSONObject message = new JSONObject();
+            message.put("role", "user");
+            message.put("text", text);
+            JSONObject body = new JSONObject();
+            body.put("messages", new JSONArray().put(message));
+            body.put("persona", "chill");
+
+            byte[] payload = body.toString().getBytes(StandardCharsets.UTF_8);
+            try (OutputStream out = conn.getOutputStream()) {
+                out.write(payload);
+            }
+
+            int status = conn.getResponseCode();
+            InputStream in = status >= 200 && status < 300
+                    ? conn.getInputStream() : conn.getErrorStream();
+            if (in == null) return null;
+            StringBuilder sb = new StringBuilder();
+            try (BufferedReader reader = new BufferedReader(
+                    new InputStreamReader(in, StandardCharsets.UTF_8))) {
+                String line;
+                while ((line = reader.readLine()) != null) sb.append(line);
+            }
+            JSONObject res = new JSONObject(sb.toString());
+            if (!res.optBoolean("ok", false)) return null;
+            String reply = res.optString("reply", null);
+            if (reply == null || reply.trim().isEmpty()) return null;
+            return reply;
+        } catch (Exception e) {
+            return null;
+        } finally {
+            if (conn != null) conn.disconnect();
+        }
+    }
+}
