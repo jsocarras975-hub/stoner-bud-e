@@ -12,6 +12,7 @@ import {
   MessageCircle,
   Mic,
   Moon,
+  Music,
   Package,
   Pause,
   Scale,
@@ -36,6 +37,7 @@ import {
 } from './bude';
 import type { ChatMessage, Session } from './bude';
 import StrainsTab from './StrainsTab';
+import MusicTab from './MusicTab';
 import TonightTab from './TonightTab';
 import SettingsTab from './SettingsTab';
 import { AGE_GATE_KEY, THEME_KEY, isThemeId, loadTheme } from './theme';
@@ -99,7 +101,7 @@ function apiUrl(): string {
   return `${apiBase()}/chat`;
 }
 
-type Tab = 'tonight' | 'chat' | 'tools' | 'plan' | 'strains' | 'journal' | 'stash' | 'break' | 'dose' | 'settings' | 'account';
+type Tab = 'tonight' | 'chat' | 'tools' | 'plan' | 'strains' | 'music' | 'journal' | 'stash' | 'break' | 'dose' | 'settings' | 'account';
 type Source = 'live' | 'fallback' | null;
 
 /** Which tool is open inside the Tools tab (Grok drill-in). Null = the tool grid. */
@@ -127,6 +129,7 @@ const NAV_ITEMS: { id: Tab; label: string; icon: typeof Moon }[] = [
 
 /** Destinations that live in the More sheet above the nav. */
 const MORE_ITEMS: { id: Tab; label: string; icon: typeof Leaf }[] = [
+  { id: 'music', label: 'Music', icon: Music },
   { id: 'strains', label: 'Strains', icon: Leaf },
   { id: 'break', label: 'Break', icon: Pause },
   { id: 'dose', label: 'Dose', icon: Scale },
@@ -558,6 +561,7 @@ export default function App() {
         />
       )}
       {tab === 'strains' && <StrainsTab onAskAbout={askAboutStrain} />}
+      {tab === 'music' && <MusicTab />}
       {tab === 'journal' && (
         <JournalTab
           key={`${session.method}-${session.amount}-${session.timeTaken}`}
