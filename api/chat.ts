@@ -65,6 +65,8 @@ type Body = {
   journal?: string;
   persona?: string;
   memory?: string;
+  /** Local wall-clock time from the client, ISO with offset (e.g. 2026-11-09T15:30:00-06:00). */
+  now?: string;
   personalization?: {
     buddyName?: string;
     userName?: string;
@@ -177,6 +179,56 @@ function cleanReply(text: string): string {
     .trim();
 }
 
+const MONTHS = [
+  'January', 'February', 'March', 'April', 'May', 'June',
+  'July', 'August', 'September', 'October', 'November', 'December',
+];
+const WEEKDAYS = ['Sunday', 'Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday'];
+
+/**
+ * Turn the client's local-time ISO string (with offset) into plain words
+ * for the prompt, e.g. "Sunday, November 9, 2026 at 3:45 PM (UTC-06:00)".
+ * The wall-clock parts come straight from the string so no timezone math
+ * is needed on the server. Falls back to server time when missing.
+ */
+function localTimeText(now: string | undefined): string {
+  const m = typeof now === 'string'
+    ? now.match(/^(\d{4})-(\d{2})-(\d{2})T(\d{2}):(\d{2})(?::\d{2})?(Z|[+-]\d{2}:?\d{2})?$/)
+    : null;
+  if (m) {
+    const year = Number(m[1]);
+    const month = Number(m[2]);
+    const day = Number(m[3]);
+    let hour = Number(m[4]);
+    const minute = m[5];
+    const ampm = hour >= 12 ? 'PM' : 'AM';
+    hour = hour % 12;
+    if (hour === 0) hour = 12;
+    const weekday = WEEKDAYS[new Date(year, month - 1, day).getDay()];
+    const offset = m[6] && m[6] !== 'Z' ? ` (UTC${m[6]})` : '';
+    return `${weekday}, ${MONTHS[month - 1]} ${day}, ${year} at ${hour}:${minute} ${ampm}${offset}`;
+  }
+  const d = new Date();
+  return `${WEEKDAYS[d.getUTCDay()]}, ${MONTHS[d.getUTCMonth()]} ${d.getUTCDate()}, ${d.getUTCFullYear()} at ${d.getUTCHours()}:${String(d.getUTCMinutes()).padStart(2, '0')} UTC (server time — the user's local time was not sent)`;
+}
+
+// Device actions — the phone can DO things, not just talk. When the user
+// asks for one of the five actions below, the reply ends with one short
+// spoken sentence saying what will happen, then a JSON action block the
+// app reads and runs. The app strips the block before showing or speaking
+// the reply, so the user only ever hears the sentence.
+const ACTIONS_GUIDE = (localTime: string): string =>
+  `Device actions — you can do things on this phone, not just talk about them. The user's local time right now is ${localTime}. All times the user mentions are in their local time.\n` +
+  `When the user asks for one of these five things, end your reply with one short spoken sentence saying what will happen, then a JSON action block on its own lines, exactly like this:\n` +
+  '```action\n{"action":"set_alarm","hour":7,"minute":0,"label":"Wake up"}\n```\n' +
+  'The five actions:\n' +
+  '- set_alarm {"action":"set_alarm","hour":0-23,"minute":0-59,"label":"optional"} — the phone opens the clock app with the alarm filled in; the user taps save there. Say something like "Opening your clock to set the alarm for 7 AM."\n' +
+  '- set_timer {"action":"set_timer","seconds":600,"label":"optional"} — seconds is the total length. Say something like "Starting a 10 minute timer."\n' +
+  '- set_reminder {"action":"set_reminder","minutes":30,"text":"water the plants"} — Bud-E buzzes them later with a notification. Say something like "I\'ll remind you in 30 minutes."\n' +
+  '- add_event {"action":"add_event","title":"Lunch with Ryan","startMillis":1794348000000,"endMillis":1794351600000,"description":"optional"} — startMillis and endMillis are epoch milliseconds in the user\'s local time. The phone opens the calendar with it filled in. Say something like "Adding it to your calendar."\n' +
+  '- flashlight {"action":"flashlight","on":true} — turn the flashlight on (true) or off (false). Say something like "Turning the flashlight on."\n' +
+  'Rules: only emit an action block when the user asked for one of these five AND every required field is clear from what they said. If anything is missing or unclear — no time for the alarm, no length for the timer, no reminder text, no title or time for the event — ask one short follow-up question instead and emit no action block. Never emit an action block for anything else: no calls, no texts, no messages, no other phone features. Never explain the JSON or mention it. The spoken sentence comes first, the action block last.';
+
 async function callGroq(
   apiKey: string,
   model: string,
@@ -274,6 +326,7 @@ export default async function handler(req: ReqLike, res: ResLike): Promise<void>
       lengthLine,
       styleLine,
       memoryLine,
+      ACTIONS_GUIDE(localTimeText(body.now)),
     ]
       .filter(Boolean)
       .join(' ');

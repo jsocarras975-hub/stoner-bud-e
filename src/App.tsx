@@ -58,6 +58,7 @@ import type { AuthUser } from './lib/auth-client';
 import { DEFAULT_VOICE_SETTINGS, cleanVoiceSettings } from './voice';
 import type { VoiceSettings } from './voice';
 import { speakVoice, startRecording, stopVoice, transcribeVoice, unlockAudio } from './lib/voice-client';
+import { executeDeviceAction, extractDeviceAction, isNative, localIsoNow } from './lib/device-actions';
 import type { ActiveRecording } from './lib/voice-client';
 import { TIMER_ALERTS, buzz, planAlerts, type PlannedAlert, type TimerAlert, type TimerAlertId } from './lib/timer-alerts';
 import {
@@ -1093,6 +1094,7 @@ function ChatTab({
           messages: next.slice(-12),
           session,
           persona: voice.persona,
+          now: localIsoNow(),
           personalization: {
             buddyName: personalization.buddyName,
             userName: personalization.userName,
@@ -1118,7 +1120,22 @@ function ChatTab({
           ? (data as { sources?: unknown }).sources
           : undefined;
       if (typeof reply === 'string' && reply.trim() !== '') {
-        const budMsg: ChatMessage = { role: 'bud', text: reply };
+        // Device actions: the server may end the reply with a JSON action
+        // block (see api/chat.ts). Strip it, run it on the phone, and show
+        // the user only the spoken sentence plus what actually happened.
+        const { text: cleanText, action } = extractDeviceAction(reply);
+        let finalText = cleanText;
+        if (action) {
+          if (isNative()) {
+            const done = await executeDeviceAction(action);
+            if (!done.ok) {
+              finalText = `${cleanText}\n\nI couldn't do that one — ${done.message}`;
+            }
+          } else {
+            finalText = `${cleanText}\n\nThat's a phone thing — ask me in the Bud-E app and I'll set it up.`;
+          }
+        }
+        const budMsg: ChatMessage = { role: 'bud', text: finalText };
         if (Array.isArray(sources)) {
           const clean = sources
             .filter(
@@ -1134,7 +1151,7 @@ function ChatTab({
         }
         updateChat([...next, budMsg]);
         setSource(src === 'live' ? 'live' : 'fallback');
-        speakReply(reply, next.length);
+        speakReply(finalText, next.length);
       } else {
         throw new Error(
           serverSource

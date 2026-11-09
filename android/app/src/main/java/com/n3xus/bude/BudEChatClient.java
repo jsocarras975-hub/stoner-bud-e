@@ -10,6 +10,10 @@ import java.io.OutputStream;
 import java.net.HttpURLConnection;
 import java.net.URL;
 import java.nio.charset.StandardCharsets;
+import java.text.SimpleDateFormat;
+import java.util.Date;
+import java.util.Locale;
+import java.util.TimeZone;
 
 /**
  * Minimal client for the existing Bud-E chat backend — the same contract the
@@ -26,6 +30,14 @@ public final class BudEChatClient {
     private static final int TIMEOUT_MS = 30000;
 
     private BudEChatClient() {
+    }
+
+    /** The device's local wall-clock time as ISO with offset, so the server
+     *  can resolve relative times ("tomorrow at noon") for device actions. */
+    private static String localIsoNow() {
+        SimpleDateFormat fmt = new SimpleDateFormat("yyyy-MM-dd'T'HH:mm:ssXXX", Locale.US);
+        fmt.setTimeZone(TimeZone.getDefault());
+        return fmt.format(new Date());
     }
 
     public static String ask(String text) {
@@ -45,6 +57,9 @@ public final class BudEChatClient {
             JSONObject body = new JSONObject();
             body.put("messages", new JSONArray().put(message));
             body.put("persona", "chill");
+            // The server uses this to resolve "tomorrow at noon" and other
+            // relative times into real dates for device actions.
+            body.put("now", localIsoNow());
 
             byte[] payload = body.toString().getBytes(StandardCharsets.UTF_8);
             try (OutputStream out = conn.getOutputStream()) {

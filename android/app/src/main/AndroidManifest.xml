@@ -69,6 +69,11 @@
                 <action android:name="android.speech.RecognitionService" />
             </intent-filter>
         </service>
+
+        <!-- Reminder alarms: fires the notification even with the app closed. -->
+        <receiver
+            android:name=".BudEReminderReceiver"
+            android:exported="false" />
     </application>
 
     <!-- Permissions -->
@@ -78,4 +83,10 @@
          asks for the microphone and recording fails silently. -->
     <uses-permission android:name="android.permission.RECORD_AUDIO" />
     <uses-permission android:name="android.permission.MODIFY_AUDIO_SETTINGS" />
+    <!-- Flashlight: CameraManager torch needs the camera permission. -->
+    <uses-permission android:name="android.permission.CAMERA" />
+    <!-- Reminders: exact alarms while idle (also declared by the
+         local-notifications plugin; stated here because BudEActions
+         depends on it directly). -->
+    <uses-permission android:name="android.permission.SCHEDULE_EXACT_ALARM" />
 </manifest>

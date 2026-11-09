@@ -396,9 +396,26 @@ public class BudESession extends VoiceInteractionSession {
                     public void run() {
                         if (destroyed) return;
                         if (reply != null) {
-                            replyView.setText(reply);
+                            // Device actions: if the brain decided on one,
+                            // run it here, then show/speak the result. The
+                            // session launches other apps through
+                            // startAssistantActivity; the helper falls back
+                            // to a plain start when that is not available.
+                            BudEActions.Outcome outcome = BudEActions.handleReply(
+                                    getContext(), reply,
+                                    new BudEActions.ActivityLauncher() {
+                                        @Override
+                                        public void launch(Intent intent) {
+                                            startAssistantActivity(intent);
+                                        }
+                                    });
+                            String shown = outcome.cleanText;
+                            if (outcome.attempted && !outcome.ok) {
+                                shown = outcome.cleanText + " " + outcome.message;
+                            }
+                            replyView.setText(shown);
                             setStatus("Here's what Bud-E says — tap the mic to ask more.");
-                            speak(reply);
+                            speak(shown);
                         } else {
                             replyView.setText("");
                             setStatus("Couldn't reach Bud-E — check your connection "
