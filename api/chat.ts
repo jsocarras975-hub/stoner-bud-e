@@ -212,13 +212,37 @@ function localTimeText(now: string | undefined): string {
   return `${WEEKDAYS[d.getUTCDay()]}, ${MONTHS[d.getUTCMonth()]} ${d.getUTCDate()}, ${d.getUTCFullYear()} at ${d.getUTCHours()}:${String(d.getUTCMinutes()).padStart(2, '0')} UTC (server time — the user's local time was not sent)`;
 }
 
+/**
+ * Epoch milliseconds for the start of the user's local today (midnight),
+ * so the model can work out event times by adding hours instead of doing
+ * calendar math from scratch. Returns null when no usable time was sent.
+ */
+function localMidnightMillis(now: string | undefined): number | null {
+  const m = typeof now === 'string'
+    ? now.match(/^(\d{4})-(\d{2})-(\d{2})T\d{2}:\d{2}(?::\d{2})?(Z|[+-]\d{2}:?\d{2})?$/)
+    : null;
+  if (!m) return null;
+  let offsetMs = 0;
+  const offsetStr = m[4];
+  if (offsetStr && offsetStr !== 'Z') {
+    const sign = offsetStr.startsWith('-') ? -1 : 1;
+    const clean = offsetStr.replace(/[^0-9]/g, '');
+    offsetMs = sign * (Number(clean.slice(0, 2)) * 60 + Number(clean.slice(2, 4))) * 60_000;
+  }
+  // Local midnight = UTC midnight of that date, shifted by the offset.
+  return Date.UTC(Number(m[1]), Number(m[2]) - 1, Number(m[3])) - offsetMs;
+}
+
 // Device actions — the phone can DO things, not just talk. When the user
 // asks for one of the five actions below, the reply ends with one short
 // spoken sentence saying what will happen, then a JSON action block the
 // app reads and runs. The app strips the block before showing or speaking
 // the reply, so the user only ever hears the sentence.
-const ACTIONS_GUIDE = (localTime: string): string =>
+const ACTIONS_GUIDE = (localTime: string, midnightMillis: number | null): string =>
   `Device actions — you can do things on this phone, not just talk about them. The user's local time right now is ${localTime}. All times the user mentions are in their local time.\n` +
+  (midnightMillis !== null
+    ? `Today at local midnight is epoch ${midnightMillis}. Work out calendar event times from that anchor: tomorrow at noon is midnight + 36 hours, today at 3 PM is midnight + 15 hours. Double-check the date before you answer.\n`
+    : '') +
   `When the user asks for one of these five things, end your reply with one short spoken sentence saying what will happen, then a JSON action block on its own lines, exactly like this:\n` +
   '```action\n{"action":"set_alarm","hour":7,"minute":0,"label":"Wake up"}\n```\n' +
   'The five actions:\n' +
@@ -326,7 +350,7 @@ export default async function handler(req: ReqLike, res: ResLike): Promise<void>
       lengthLine,
       styleLine,
       memoryLine,
-      ACTIONS_GUIDE(localTimeText(body.now)),
+      ACTIONS_GUIDE(localTimeText(body.now), localMidnightMillis(body.now)),
     ]
       .filter(Boolean)
       .join(' ');
