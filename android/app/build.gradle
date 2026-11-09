@@ -16,10 +16,26 @@ android {
             ignoreAssetsPattern = '!.svn:!.git:!.ds_store:!*.scc:.*:!CVS:!thumbs.db:!picasa.ini:!*~'
         }
     }
+    signingConfigs {
+        release {
+            // Release signing comes from ~/.gradle/gradle.properties
+            // (budeStoreFile / budeStorePassword / budeKeyAlias / budeKeyPassword).
+            // If those are absent the release build stays unsigned instead of breaking.
+            if (project.hasProperty('budeStoreFile')) {
+                storeFile file(budeStoreFile)
+                storePassword budeStorePassword
+                keyAlias budeKeyAlias
+                keyPassword budeKeyPassword
+            }
+        }
+    }
     buildTypes {
         release {
             minifyEnabled false
             proguardFiles getDefaultProguardFile('proguard-android.txt'), 'proguard-rules.pro'
+            if (project.hasProperty('budeStoreFile')) {
+                signingConfig signingConfigs.release
+            }
         }
     }
 }
