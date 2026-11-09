@@ -17,7 +17,7 @@
       // Apply the saved garden theme before first paint (no flash of default).
       try {
         var t = localStorage.getItem('bude-theme-v1');
-        if (t === 'night' || t === 'day' || t === 'ember' || t === 'moon') {
+        if (t === 'night' || t === 'day' || t === 'ember' || t === 'moon' || t === 'forest' || t === 'sunset') {
           document.documentElement.setAttribute('data-theme', t);
         }
       } catch (e) {}

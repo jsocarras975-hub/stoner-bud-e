@@ -1,6 +1,6 @@
 /* Stoner Bud-E — night-garden theme (tokens from the Grok night-garden app).
-   Four themes switch via html[data-theme]: night (default), day, ember, moon.
-   Fraunces for headings, Outfit for body, system fonts as offline fallback. */
+   Themes switch via html[data-theme]: night (default), day, ember, moon,
+   plus premium forest and sunset. */
 
 * {
   box-sizing: border-box;
@@ -79,6 +79,42 @@ html[data-theme='moon'] {
   --muted: #b7c9d6;
   --accent: #7ddec8;
   --accent-ink: #04221c;
+  --danger: #ffb0a4;
+  --danger-bg: #3c2428;
+  --warn: #f5c542;
+}
+
+/* Premium (Lit+): Deep forest — darker greens, quieter. */
+html[data-theme='forest'] {
+  color-scheme: dark;
+  --bg: #040a07;
+  --glow: #0e2418;
+  --surface: #08130d;
+  --card: #0f2218;
+  --card-2: #163024;
+  --line: #2a5a3e;
+  --text: #e8f0e4;
+  --muted: #9ab39a;
+  --accent: #8bc34a;
+  --accent-ink: #0a1406;
+  --danger: #ffb0a4;
+  --danger-bg: #2c1c18;
+  --warn: #f5c542;
+}
+
+/* Premium (Lit+): Sunset — warm oranges and pinks. */
+html[data-theme='sunset'] {
+  color-scheme: dark;
+  --bg: #14080c;
+  --glow: #4a1e28;
+  --surface: #1c0e14;
+  --card: #2c1620;
+  --card-2: #3c202c;
+  --line: #a05060;
+  --text: #f8eee8;
+  --muted: #d4b8b0;
+  --accent: #ff8a65;
+  --accent-ink: #1c0c08;
   --danger: #ffb0a4;
   --danger-bg: #3c2428;
   --warn: #f5c542;
