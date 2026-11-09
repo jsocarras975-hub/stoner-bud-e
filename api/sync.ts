@@ -243,9 +243,10 @@ function cleanSettings(
       data.voice = { persona: v.persona, voiceReplies: v.voiceReplies, autoPlay: v.autoPlay };
     }
   }
-  if (rest.premiumTier === 'lit' || rest.premiumTier === 'cloudnine' || rest.premiumTier === null) {
+  if (rest.premiumTier === 'lit' || rest.premiumTier === 'cloudnine') {
     data.premiumTier = rest.premiumTier;
   }
+  // null or missing: do not set — the upsert leaves the stored value alone.
   if (rest.customPersona === null || isRecord(rest.customPersona)) data.customPersona = rest.customPersona;
   if (rest.customTheme === null || isRecord(rest.customTheme)) data.customTheme = rest.customTheme;
   if (Array.isArray(rest.savedPlans)) data.savedPlans = rest.savedPlans;
@@ -446,6 +447,18 @@ export default async function handler(req: Req, res: Res): Promise<void> {
         );
       }
       if (settings !== undefined) {
+        // If the client did not send a real tier, keep whatever is already
+        // stored so a sync with null/missing premiumTier cannot wipe it.
+        if (!('premiumTier' in settings.data)) {
+          const existing = await client.query<Row>(
+            'select data from user_settings where user_id = $1',
+            [user.id],
+          );
+          const stored = existing.rows[0]?.data?.premiumTier;
+          if (stored === 'lit' || stored === 'cloudnine') {
+            settings.data.premiumTier = stored;
+          }
+        }
         await client.query(
           `insert into user_settings (user_id, data, updated_at)
            values ($1, $2, $3)
