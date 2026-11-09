@@ -1,7 +1,6 @@
 package com.n3xus.bude;
 
 import android.Manifest;
-import android.app.Activity;
 import android.app.role.RoleManager;
 import android.content.Context;
 import android.content.Intent;
@@ -34,8 +33,6 @@ import org.json.JSONObject;
 )
 public class BudEActionsPlugin extends Plugin {
     private JSONObject pendingAction;
-    private static final int REQUEST_ASSISTANT_ROLE = 2001;
-    private PluginCall pendingRoleCall;
 
     @PluginMethod
     public void execute(PluginCall call) {
@@ -123,22 +120,30 @@ public class BudEActionsPlugin extends Plugin {
             call.resolve(new JSObject().put("isAssistant", true));
             return;
         }
-        pendingRoleCall = call;
-        Intent intent = roleManager.createRequestRoleIntent(RoleManager.ROLE_ASSISTANT);
-        startActivityForResult(call, intent, REQUEST_ASSISTANT_ROLE);
+        // Fire-and-forget on purpose: the role dialog takes the user away
+        // from the app, and waiting on its result is what left the button
+        // stuck on "Asking..." — the web side re-checks the status when
+        // the app comes back to the front instead.
+        try {
+            Intent intent = roleManager.createRequestRoleIntent(RoleManager.ROLE_ASSISTANT);
+            getActivity().startActivity(intent);
+            call.resolve(new JSObject().put("launched", true));
+        } catch (Exception e) {
+            call.reject("could not open the assistant request: " + e.getMessage());
+        }
     }
 
-    @Override
-    protected void handleOnActivityResult(int requestCode, int resultCode, Intent data) {
-        super.handleOnActivityResult(requestCode, resultCode, data);
-        if (requestCode != REQUEST_ASSISTANT_ROLE) return;
-        PluginCall call = pendingRoleCall;
-        pendingRoleCall = null;
-        if (call == null) return;
-        // The dialog answers RESULT_OK when the user accepts; some versions
-        // answer CANCELED even when it worked, so re-check the role itself.
-        boolean granted = resultCode == Activity.RESULT_OK || isAssistantHeld();
-        call.resolve(new JSObject().put("isAssistant", granted));
+    /** Open the phone's Default apps settings page (the manual fallback). */
+    @PluginMethod
+    public void openDefaultAppsSettings(PluginCall call) {
+        try {
+            Intent intent = new Intent(android.provider.Settings.ACTION_MANAGE_DEFAULT_APPS_SETTINGS);
+            intent.addFlags(Intent.FLAG_ACTIVITY_NEW_TASK);
+            getContext().startActivity(intent);
+            call.resolve(new JSObject().put("ok", true));
+        } catch (Exception e) {
+            call.reject("could not open settings: " + e.getMessage());
+        }
     }
 
     private RoleManager roleManager() {

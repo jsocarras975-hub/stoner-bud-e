@@ -17,7 +17,7 @@ import { Chip, ChipRow, Label, PageHead } from './bits';
 import type { Personalization } from './lib/sync';
 import type { JournalEntry } from './journal';
 import type { SyncedChatConversation } from './lib/sync';
-import { getAssistantStatus, getTalkNotification, isNative, requestAssistantRole, setTalkNotification } from './lib/device-actions';
+import { getAssistantStatus, getTalkNotification, isNative, openDefaultAppsSettings, requestAssistantRole, setTalkNotification } from './lib/device-actions';
 
 type LegalView = 'main' | LegalDoc['id'] | 'delete';
 
@@ -51,20 +51,37 @@ export default function SettingsTab(props: {
   // Default-assistant status (phone app only).
   const [isAssistant, setIsAssistant] = useState<boolean | null>(null);
   const [askingAssistant, setAskingAssistant] = useState(false);
+  // True while the phone's own popup should be on screen (cleared when
+  // the app comes back to the front and the status is re-read).
+  const [waitingAnswer, setWaitingAnswer] = useState(false);
+  const [assistantError, setAssistantError] = useState<string | null>(null);
 
   // Stop a voice preview when leaving Settings.
   useEffect(() => () => stopVoice(), []);
 
   // Load the Talk notification switch + assistant status (phone app only).
+  // The status is re-read whenever the app comes back to the front, so
+  // answering the phone's assistant popup updates it with no extra tap.
   useEffect(() => {
     let cancelled = false;
     if (isNative()) {
       void getTalkNotification().then((on) => {
         if (!cancelled) setTalkNotif(on);
       });
-      void getAssistantStatus().then((on) => {
-        if (!cancelled) setIsAssistant(on);
-      });
+      const refreshAssistant = () => {
+        void getAssistantStatus().then((on) => {
+          if (!cancelled) {
+            setIsAssistant(on);
+            setWaitingAnswer(false);
+          }
+        });
+      };
+      refreshAssistant();
+      window.addEventListener('focus', refreshAssistant);
+      return () => {
+        cancelled = true;
+        window.removeEventListener('focus', refreshAssistant);
+      };
     }
     return () => {
       cancelled = true;
@@ -264,23 +281,44 @@ export default function SettingsTab(props: {
                 ? 'Checking…'
                 : isAssistant
                   ? 'Bud-E is your assistant — Talk opens Bud-E straight away.'
-                  : "Bud-E is not your assistant yet — Talk shows the phone's list instead."}
+                  : waitingAnswer
+                    ? "The phone should be asking — answer it, then come back here."
+                    : "Bud-E is not your assistant yet — Talk shows the phone's list instead."}
             </p>
-            {isAssistant === false && (
+            {isAssistant === false && !waitingAnswer && (
               <button
                 type="button"
                 className="btn"
                 disabled={askingAssistant}
                 onClick={() => {
+                  setAssistantError(null);
                   setAskingAssistant(true);
-                  void requestAssistantRole().then((on) => {
-                    setIsAssistant(on);
+                  void requestAssistantRole().then((launched) => {
                     setAskingAssistant(false);
+                    if (launched) {
+                      setWaitingAnswer(true);
+                    } else {
+                      setAssistantError("The phone wouldn't open the request — try the settings page instead.");
+                    }
                   });
                 }}
               >
                 {askingAssistant ? 'Asking…' : 'Make Bud-E your assistant'}
               </button>
+            )}
+            {assistantError !== null && (
+              <div style={{ marginTop: 12 }}>
+                <p className="muted">{assistantError}</p>
+                <button
+                  type="button"
+                  className="btn secondary"
+                  onClick={() => {
+                    void openDefaultAppsSettings();
+                  }}
+                >
+                  Open default apps settings
+                </button>
+              </div>
             )}
             <p className="muted" style={{ marginTop: 6 }}>
               A fresh install can drop Bud-E from the phone's assistant list. If Bud-E

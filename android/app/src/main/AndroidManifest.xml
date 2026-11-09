@@ -47,6 +47,16 @@
                 <data android:mimeType="text/plain" />
             </intent-filter>
 
+            <!-- Talk fallback: when Bud-E is not the default assistant, the
+                 phone shows a list of apps for the Talk action — this filter
+                 puts Bud-E in that list. Tapping it opens the app to the
+                 chat tab. When Bud-E IS the default, the phone goes straight
+                 to the voice session instead. -->
+            <intent-filter>
+                <action android:name="android.intent.action.ASSIST" />
+                <category android:name="android.intent.category.DEFAULT" />
+            </intent-filter>
+
             <!-- Long-press the app icon: Talk / Tonight / Log a session. -->
             <meta-data
                 android:name="android.app.shortcuts"

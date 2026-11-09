@@ -43,6 +43,12 @@ public final class BudELaunchInfo {
                 changed = true;
             }
         }
+        // Talk fallback: the phone's assistant list opened the app itself
+        // (Bud-E was not the default assistant) — land on the chat tab.
+        if (Intent.ACTION_ASSIST.equals(intent.getAction())) {
+            editor.putString(TAB_KEY, "chat");
+            changed = true;
+        }
         if (changed) editor.apply();
     }
 
