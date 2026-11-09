@@ -59,6 +59,16 @@ import { DEFAULT_VOICE_SETTINGS, cleanVoiceSettings } from './voice';
 import type { VoiceSettings } from './voice';
 import { speakVoice, startRecording, stopVoice, transcribeVoice } from './lib/voice-client';
 import type { ActiveRecording } from './lib/voice-client';
+import { TIMER_ALERTS, buzz, planAlerts, type PlannedAlert, type TimerAlert, type TimerAlertId } from './lib/timer-alerts';
+import {
+  cancelNativeAlerts,
+  checkAlertPermission,
+  isNativeApp,
+  requestAlertPermission,
+  scheduleNativeAlert,
+  scheduleNativeAlerts,
+  type AlertPermission,
+} from './lib/timer-notifications';
 import { Chip, ChipRow, Label, PageHead } from './bits';
 
 const TRANSCRIPT_KEY = 'bude-transcript-v1';
@@ -215,6 +225,9 @@ export default function App() {
   const [source, setSource] = useState<Source>(null);
   const [timerStatus, setTimerStatus] = useState('No timer running yet.');
   const [timerState, setTimerState] = useState<TimerState>(IDLE_TIMER);
+  // The latest edible-timer milestone alert (kick-in / peak / wearing-off).
+  // Lifted to App so the banner shows on every tab, not just Tools.
+  const [timerAlert, setTimerAlert] = useState<TimerAlert | null>(null);
   // Which tool is open in the Tools tab (null = the grid). Lifted to App so
   // the header timer pill can open the timer tool directly (Grok behavior).
   const [activeTool, setActiveTool] = useState<ToolId | null>(null);
@@ -511,6 +524,29 @@ export default function App() {
         )}
 
         <div className={tab === 'chat' ? 'app-content chat-active' : 'app-content'}>
+          {timerAlert && (
+            <div className="alert-banner" role="status">
+              <div className="alert-banner-text">
+                <strong>{timerAlert.title}</strong>
+                <span>{timerAlert.body}</span>
+              </div>
+              <div className="alert-banner-actions">
+                <button
+                  type="button"
+                  onClick={() => {
+                    setActiveTool('timer');
+                    setTab('tools');
+                    setTimerAlert(null);
+                  }}
+                >
+                  See timer
+                </button>
+                <button type="button" aria-label="Dismiss" onClick={() => setTimerAlert(null)}>
+                  ✕
+                </button>
+              </div>
+            </div>
+          )}
           {!isOnline && (
             <p className="offline-banner" role="status">
               📶 You&apos;re offline — Bud-E&apos;s tools still work, but chat needs internet for
@@ -547,6 +583,7 @@ export default function App() {
           timerStatus={timerStatus}
           setTimerStatus={setTimerStatus}
           onTimerState={setTimerState}
+          onAlert={setTimerAlert}
           activeTool={activeTool}
           onToolChange={setActiveTool}
         />
@@ -1146,6 +1183,7 @@ function ToolsTab({
   timerStatus,
   setTimerStatus,
   onTimerState,
+  onAlert,
   activeTool,
   onToolChange,
 }: {
@@ -1153,6 +1191,7 @@ function ToolsTab({
   timerStatus: string;
   setTimerStatus: (s: string) => void;
   onTimerState: (s: TimerState) => void;
+  onAlert: (a: TimerAlert | null) => void;
   activeTool: ToolId | null;
   onToolChange: (t: ToolId | null) => void;
 }) {
@@ -1186,7 +1225,12 @@ function ToolsTab({
         <ArrowLeft size={16} aria-hidden /> All tools
       </button>
       {activeTool === 'timer' && (
-        <EdibleTimer session={session} setTimerStatus={setTimerStatus} onTimerState={onTimerState} />
+        <EdibleTimer
+          session={session}
+          setTimerStatus={setTimerStatus}
+          onTimerState={onTimerState}
+          onAlert={onAlert}
+        />
       )}
       {activeTool === 'breathe' && <BreathingBubble />}
       {activeTool === 'munchies' && <MunchiesMaker />}
@@ -1239,16 +1283,55 @@ function EdibleTimer({
   session,
   setTimerStatus,
   onTimerState,
+  onAlert,
 }: {
   session: Session;
   setTimerStatus: (s: string) => void;
   onTimerState: (s: TimerState) => void;
+  onAlert: (a: TimerAlert | null) => void;
 }) {
   const [minutesInput, setMinutesInput] = useState(120);
   const [remaining, setRemaining] = useState(0);
   const [totalSec, setTotalSec] = useState(0);
   const [running, setRunning] = useState(false);
   const [finished, setFinished] = useState(false);
+  // Notification permission, native app only. Null on the web — there is no
+  // permission to ask for there; buzzes just work while the app is open.
+  const [perm, setPerm] = useState<AlertPermission | null>(() =>
+    isNativeApp() ? 'prompt' : null,
+  );
+  const [permBusy, setPermBusy] = useState(false);
+  const permRef = useRef<AlertPermission | null>(perm);
+  // The current run's alert plan + what has already fired. Refs, not state:
+  // the tick reads them every second without re-rendering.
+  const planRef = useRef<PlannedAlert[]>([]);
+  const firedRef = useRef<Set<TimerAlertId>>(new Set());
+  // Wall-clock timeout for the wearing-off alert, started when the timer
+  // finishes (the countdown has stopped by then).
+  const wearOffTimerRef = useRef<number | null>(null);
+
+  // What the phone says about notifications — checked once, never prompted
+  // on load. Only the "Turn on buzzes" button below ever asks.
+  useEffect(() => {
+    if (!isNativeApp()) return;
+    let cancelled = false;
+    void checkAlertPermission().then((p) => {
+      if (!cancelled) {
+        permRef.current = p;
+        setPerm(p);
+      }
+    });
+    return () => {
+      cancelled = true;
+    };
+  }, []);
+
+  // Clear the wearing-off timeout when leaving the timer.
+  useEffect(() => {
+    return () => {
+      if (wearOffTimerRef.current !== null) window.clearTimeout(wearOffTimerRef.current);
+    };
+  }, []);
 
   // Report the live timer state up to App on every change, so the header
   // pill can show the countdown and progress.
@@ -1263,12 +1346,110 @@ function EdibleTimer({
     onTimerState({ status, remainingSec: remaining, totalSec });
   }, [finished, running, remaining, totalSec, onTimerState]);
 
+  /** Show a milestone: banner on every tab + a phone buzz. */
+  function fireAlert(id: TimerAlertId): void {
+    if (firedRef.current.has(id)) return;
+    firedRef.current.add(id);
+    buzz();
+    onAlert(TIMER_ALERTS[id]);
+  }
+
+  /**
+   * (Re-)schedule the closed-app buzzes for what is still to come.
+   * Takes the timer's numbers as arguments: beginRun calls this before the
+   * new total/remaining state has landed, so the state values would be stale.
+   */
+  function scheduleBuzzes(total = totalSec, rem = remaining): void {
+    if (permRef.current !== 'granted') return;
+    const elapsed = total - rem;
+    const planned = planRef.current
+      .filter((a) => !firedRef.current.has(a.id))
+      .map((a) => ({ ...a, delayMs: Math.max(0, (a.atElapsedSec - elapsed) * 1000) }));
+    void scheduleNativeAlerts(planned);
+  }
+
+  /** Start a fresh run: plan the alerts, arm the buzzes, clear the banner. */
+  function beginRun(seconds: number, elapsedAtStartSec: number): void {
+    if (wearOffTimerRef.current !== null) {
+      window.clearTimeout(wearOffTimerRef.current);
+      wearOffTimerRef.current = null;
+    }
+    planRef.current = planAlerts(seconds, elapsedAtStartSec);
+    firedRef.current = new Set();
+    onAlert(null);
+    setRemaining(seconds);
+    setTotalSec(seconds);
+    setFinished(false);
+    setRunning(true);
+    scheduleBuzzes(seconds, 0);
+    // Already past kick-in (dose taken a while ago)? Say so right away.
+    for (const a of planRef.current) {
+      if (a.atElapsedSec === 0) fireAlert(a.id);
+    }
+  }
+
+  /** Stop everything: the countdown, the buzzes, the banner. */
+  function resetTimer(): void {
+    if (wearOffTimerRef.current !== null) {
+      window.clearTimeout(wearOffTimerRef.current);
+      wearOffTimerRef.current = null;
+    }
+    void cancelNativeAlerts();
+    planRef.current = [];
+    firedRef.current = new Set();
+    onAlert(null);
+    setRunning(false);
+    setRemaining(0);
+    setTotalSec(0);
+    setFinished(false);
+    setTimerStatus('Edible timer reset.');
+  }
+
+  /** Pause freezes the countdown — and the buzzes with it. Resume re-arms them. */
+  function togglePause(): void {
+    if (running) {
+      void cancelNativeAlerts();
+      setRunning(false);
+    } else {
+      setRunning(true);
+      scheduleBuzzes();
+    }
+  }
+
+  /** Ask the phone for notification permission — only from the button tap. */
+  async function turnOnBuzzes(): Promise<void> {
+    setPermBusy(true);
+    try {
+      const p = await requestAlertPermission();
+      permRef.current = p;
+      setPerm(p);
+      if (p === 'granted') scheduleBuzzes();
+    } finally {
+      setPermBusy(false);
+    }
+  }
+
   useEffect(() => {
     if (!running) return;
+    // Fire any milestone whose moment has come.
+    const elapsed = totalSec - remaining;
+    for (const a of planRef.current) {
+      if (!firedRef.current.has(a.id) && elapsed >= a.atElapsedSec) fireAlert(a.id);
+    }
     if (remaining <= 0) {
       setRunning(false);
       setFinished(true);
       setTimerStatus('Edible timer finished — waited the full time.');
+      // Peak already fired above. Wearing-off is 2 hours out: the countdown
+      // has stopped, so arm it on a wall-clock timeout + a native buzz.
+      if (!firedRef.current.has('wearing-off')) {
+        const wearOff = planRef.current.find((a) => a.id === 'wearing-off');
+        const delayMs = wearOff ? wearOff.delayMs - totalSec * 1000 : 2 * 60 * 60 * 1000;
+        wearOffTimerRef.current = window.setTimeout(() => fireAlert('wearing-off'), delayMs);
+        if (permRef.current === 'granted') {
+          void scheduleNativeAlert('wearing-off', delayMs);
+        }
+      }
       return;
     }
     const id = window.setInterval(() => setRemaining((r) => Math.max(0, r - 1)), 1000);
@@ -1280,8 +1461,7 @@ function EdibleTimer({
     const taken = parseClock(session.timeTaken);
     if (since === null || taken === null) {
       setMinutesInput(120);
-      setRemaining(120 * 60);
-      setTotalSec(120 * 60);
+      beginRun(120 * 60, 0);
       setTimerStatus('Edible timer running — 2 hours from now (no time taken set).');
     } else if (since >= 120) {
       setMinutesInput(0);
@@ -1292,23 +1472,17 @@ function EdibleTimer({
     } else {
       const left = 120 - since;
       setMinutesInput(left);
-      setRemaining(left * 60);
-      setTotalSec(left * 60);
+      beginRun(left * 60, since * 60);
       setTimerStatus(
         `Edible timer running — counting down to the 2-hour mark from ${formatClock(taken)}.`,
       );
     }
-    setFinished(false);
-    setRunning(true);
   }
 
   function startManual() {
     const mins = Math.max(1, Math.min(720, Math.floor(minutesInput) || 120));
     setMinutesInput(mins);
-    setRemaining(mins * 60);
-    setTotalSec(mins * 60);
-    setFinished(false);
-    setRunning(true);
+    beginRun(mins * 60, 0);
     setTimerStatus(`Edible timer running — ${mins} minutes.`);
   }
 
@@ -1348,24 +1522,49 @@ function EdibleTimer({
         )}
         {(running || remaining > 0) && (
           <>
-            <button className="btn secondary btn-block" onClick={() => setRunning((r) => !r)}>
+            <button className="btn secondary btn-block" onClick={togglePause}>
               {running ? '⏸ Pause' : '▶ Resume'}
             </button>
-            <button
-              className="btn ghost btn-block"
-              onClick={() => {
-                setRunning(false);
-                setRemaining(0);
-                setTotalSec(0);
-                setFinished(false);
-                setTimerStatus('Edible timer reset.');
-              }}
-            >
+            <button className="btn ghost btn-block" onClick={resetTimer}>
               Reset
             </button>
           </>
         )}
       </div>
+      {perm !== null ? (
+        <div className="alert-permission">
+          {perm === 'granted' ? (
+            <p>
+              🔔 Buzzes on — Bud-E will buzz you when it kicks in, at peak, and when it wears
+              off, even with the app closed.
+            </p>
+          ) : perm === 'denied' ? (
+            <p>
+              🔔 Buzzes are off — notifications are turned off for Bud-E. The timer still works
+              here, just without the buzzes. You can turn them back on in your phone settings.
+            </p>
+          ) : (
+            <>
+              <p>
+                🔔 Want a buzz at each stage — kicking in, peak, wearing off — even with the app
+                closed? Bud-E needs notification permission for that.
+              </p>
+              <button
+                className="btn secondary btn-block"
+                disabled={permBusy}
+                onClick={() => void turnOnBuzzes()}
+              >
+                {permBusy ? 'Asking…' : 'Turn on buzzes'}
+              </button>
+            </>
+          )}
+        </div>
+      ) : (
+        <p className="muted small" style={{ marginTop: 12 }}>
+          🔔 While the app is open, Bud-E shows a banner and buzzes at each stage. In the phone
+          app, turn on notifications to get buzzed with the app closed.
+        </p>
+      )}
       {finished && (
         <p className="timer-done">
           ⏰ Time&apos;s up! Still feel nothing? Wait one more hour — do NOT redose yet. Edibles are sneaky

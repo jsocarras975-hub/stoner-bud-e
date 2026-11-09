@@ -551,6 +551,72 @@ p {
   font-size: 0.95rem;
 }
 
+/* Edible-timer milestone alert — banner shown on every tab until dismissed. */
+
+.alert-banner {
+  margin: 12px 0 0;
+  padding: 12px 14px;
+  border-radius: 12px;
+  background: #123324;
+  border: 1px solid var(--accent);
+  color: var(--text);
+  display: flex;
+  align-items: flex-start;
+  gap: 12px;
+}
+
+.alert-banner-text {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+
+.alert-banner-text strong {
+  font-size: 1.02rem;
+}
+
+.alert-banner-text span {
+  font-size: 0.95rem;
+  color: var(--muted);
+}
+
+.alert-banner-actions {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  flex-shrink: 0;
+}
+
+.alert-banner-actions button {
+  background: none;
+  border: none;
+  color: var(--accent);
+  font-weight: 700;
+  font-size: 0.9rem;
+  padding: 6px 8px;
+  cursor: pointer;
+}
+
+/* Notification permission row inside the timer card. */
+
+.alert-permission {
+  margin-top: 14px;
+  padding: 12px;
+  border-radius: 12px;
+  background: var(--bg-soft);
+  border: 1px solid var(--line);
+}
+
+.alert-permission p {
+  margin: 0 0 8px;
+  font-size: 0.95rem;
+}
+
+.alert-permission p:last-child {
+  margin-bottom: 0;
+}
+
 /* Cards */
 
 .card {
