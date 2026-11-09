@@ -81,6 +81,55 @@ export interface BreakState {
 
 export type PremiumTier = 'lit' | 'cloudnine' | null;
 
+export interface Personalization {
+  buddyName: string;
+  userName: string;
+  replyLength: 'short' | 'normal' | 'detailed';
+  chatStyle: 'plain' | 'friendly';
+  aiMemory: boolean;
+  memoryNotes: string;
+  offlineOnly: boolean;
+  textSize: 'small' | 'normal' | 'large';
+  reduceMotion: boolean;
+  accent: 'default' | 'lime' | 'amber' | 'rose' | 'sky';
+  voiceSpeed: 'slow' | 'normal' | 'fast';
+  preferredUnit: 'mg' | 'g';
+}
+
+export const DEFAULT_PERSONALIZATION: Personalization = {
+  buddyName: 'Bud-E',
+  userName: '',
+  replyLength: 'normal',
+  chatStyle: 'friendly',
+  aiMemory: true,
+  memoryNotes: '',
+  offlineOnly: false,
+  textSize: 'normal',
+  reduceMotion: false,
+  accent: 'default',
+  voiceSpeed: 'normal',
+  preferredUnit: 'mg',
+};
+
+export function cleanPersonalization(raw: unknown): Personalization {
+  const base = { ...DEFAULT_PERSONALIZATION };
+  if (!raw || typeof raw !== 'object') return base;
+  const p = raw as Partial<Personalization>;
+  if (typeof p.buddyName === 'string' && p.buddyName.trim()) base.buddyName = p.buddyName.trim().slice(0, 24);
+  if (typeof p.userName === 'string') base.userName = p.userName.trim().slice(0, 24);
+  if (p.replyLength === 'short' || p.replyLength === 'normal' || p.replyLength === 'detailed') base.replyLength = p.replyLength;
+  if (p.chatStyle === 'plain' || p.chatStyle === 'friendly') base.chatStyle = p.chatStyle;
+  if (typeof p.aiMemory === 'boolean') base.aiMemory = p.aiMemory;
+  if (typeof p.memoryNotes === 'string') base.memoryNotes = p.memoryNotes.slice(0, 500);
+  if (typeof p.offlineOnly === 'boolean') base.offlineOnly = p.offlineOnly;
+  if (p.textSize === 'small' || p.textSize === 'normal' || p.textSize === 'large') base.textSize = p.textSize;
+  if (typeof p.reduceMotion === 'boolean') base.reduceMotion = p.reduceMotion;
+  if (p.accent === 'default' || p.accent === 'lime' || p.accent === 'amber' || p.accent === 'rose' || p.accent === 'sky') base.accent = p.accent;
+  if (p.voiceSpeed === 'slow' || p.voiceSpeed === 'normal' || p.voiceSpeed === 'fast') base.voiceSpeed = p.voiceSpeed;
+  if (p.preferredUnit === 'mg' || p.preferredUnit === 'g') base.preferredUnit = p.preferredUnit;
+  return base;
+}
+
 export interface SyncSettings {
   theme?: ThemeId;
   experience?: Experience;
@@ -89,6 +138,7 @@ export interface SyncSettings {
   break?: BreakState | null;
   voice?: VoiceSettings;
   premiumTier?: PremiumTier;
+  personalization?: Personalization;
   customPersona?: { id: string; name: string; direction: string; tone: string } | null;
   customTheme?: { id: string; name: string; colors: Record<string, string> } | null;
   savedPlans?: { id: string; text: string; updatedAt?: string }[];

@@ -14,6 +14,9 @@ import { PERSONAS, personaById, isPremiumPersona } from './voice';
 import type { VoiceSettings } from './voice';
 import { speakVoice, stopVoice } from './lib/voice-client';
 import { Chip, ChipRow, Label, PageHead } from './bits';
+import type { Personalization } from './lib/sync';
+import type { JournalEntry } from './journal';
+import type { SyncedChatConversation } from './lib/sync';
 
 type LegalView = 'main' | LegalDoc['id'] | 'delete';
 
@@ -26,8 +29,18 @@ export default function SettingsTab(props: {
   onVoice: (voice: VoiceSettings) => void;
   apiBase: string;
   premiumTier?: 'lit' | 'cloudnine' | null;
+  personalization: Personalization;
+  onPersonalization: (p: Personalization) => void;
+  onClearChats: () => void;
+  onClearJournal: () => void;
+  journal: JournalEntry[];
+  chats: SyncedChatConversation[];
 }) {
-  const { theme, onTheme, user, onDeleteAccount, voice, onVoice, apiBase, premiumTier = null } = props;
+  const {
+    theme, onTheme, user, onDeleteAccount, voice, onVoice, apiBase,
+    premiumTier = null, personalization, onPersonalization,
+    onClearChats, onClearJournal, journal, chats,
+  } = props;
   const [view, setView] = useState<LegalView>('main');
   const [deleting, setDeleting] = useState(false);
   const [deleteError, setDeleteError] = useState('');
@@ -187,6 +200,103 @@ export default function SettingsTab(props: {
         </div>
       </section>
 
+      <section className="card" aria-label="Personalization">
+        <p className="eyebrow">Personalization</p>
+        <p className="muted">What the AI is called, what it calls you, and how it talks.</p>
+        <Label>Buddy name</Label>
+        <input
+          className="input"
+          value={personalization.buddyName}
+          maxLength={24}
+          onChange={(e) => onPersonalization({ ...personalization, buddyName: e.target.value })}
+          placeholder="Bud-E"
+        />
+        <div style={{ marginTop: 12 }}>
+          <Label>What it calls you</Label>
+          <input
+            className="input"
+            value={personalization.userName}
+            maxLength={24}
+            onChange={(e) => onPersonalization({ ...personalization, userName: e.target.value })}
+            placeholder="Leave blank for just “you”"
+          />
+        </div>
+        <div style={{ marginTop: 12 }}>
+          <Label>Reply length</Label>
+          <ChipRow>
+            {(['short', 'normal', 'detailed'] as const).map((len) => (
+              <Chip key={len} on={personalization.replyLength === len} onClick={() => onPersonalization({ ...personalization, replyLength: len })}>
+                {len[0].toUpperCase() + len.slice(1)}
+              </Chip>
+            ))}
+          </ChipRow>
+        </div>
+        <div style={{ marginTop: 12 }}>
+          <Label>Chat style</Label>
+          <ChipRow>
+            <Chip on={personalization.chatStyle === 'friendly'} onClick={() => onPersonalization({ ...personalization, chatStyle: 'friendly' })}>Friendly</Chip>
+            <Chip on={personalization.chatStyle === 'plain'} onClick={() => onPersonalization({ ...personalization, chatStyle: 'plain' })}>Plain</Chip>
+          </ChipRow>
+        </div>
+        <div style={{ marginTop: 12 }}>
+          <Label>AI memory</Label>
+          <div className="unit-toggle">
+            <button type="button" aria-pressed={personalization.aiMemory} className={personalization.aiMemory ? 'on' : ''} onClick={() => onPersonalization({ ...personalization, aiMemory: true })}>On</button>
+            <button type="button" aria-pressed={!personalization.aiMemory} className={!personalization.aiMemory ? 'on' : ''} onClick={() => onPersonalization({ ...personalization, aiMemory: false })}>Off</button>
+          </div>
+          <p className="muted" style={{ marginTop: 6 }}>When on, Bud-E sees recent chat titles and the notes below.</p>
+        </div>
+        {personalization.aiMemory && (
+          <div style={{ marginTop: 12 }}>
+            <Label>Things to remember</Label>
+            <textarea
+              className="input"
+              rows={3}
+              maxLength={500}
+              value={personalization.memoryNotes}
+              onChange={(e) => onPersonalization({ ...personalization, memoryNotes: e.target.value })}
+              placeholder="e.g. prefers flower, usually starts at 5mg, calls the dog Biscuit"
+            />
+          </div>
+        )}
+        <div style={{ marginTop: 12 }}>
+          <Label>Offline only</Label>
+          <div className="unit-toggle">
+            <button type="button" aria-pressed={personalization.offlineOnly} className={personalization.offlineOnly ? 'on' : ''} onClick={() => onPersonalization({ ...personalization, offlineOnly: true })}>On</button>
+            <button type="button" aria-pressed={!personalization.offlineOnly} className={!personalization.offlineOnly ? 'on' : ''} onClick={() => onPersonalization({ ...personalization, offlineOnly: false })}>Off</button>
+          </div>
+        </div>
+      </section>
+
+      <section className="card" aria-label="Display">
+        <p className="eyebrow">Display</p>
+        <Label>Text size</Label>
+        <ChipRow>
+          {(['small', 'normal', 'large'] as const).map((size) => (
+            <Chip key={size} on={personalization.textSize === size} onClick={() => onPersonalization({ ...personalization, textSize: size })}>
+              {size[0].toUpperCase() + size.slice(1)}
+            </Chip>
+          ))}
+        </ChipRow>
+        <div style={{ marginTop: 12 }}>
+          <Label>Accent</Label>
+          <ChipRow>
+            {(['default', 'lime', 'amber', 'rose', 'sky'] as const).map((a) => (
+              <Chip key={a} on={personalization.accent === a} onClick={() => onPersonalization({ ...personalization, accent: a })}>
+                {a[0].toUpperCase() + a.slice(1)}
+              </Chip>
+            ))}
+          </ChipRow>
+        </div>
+        <div style={{ marginTop: 12 }}>
+          <Label>Reduce motion</Label>
+          <div className="unit-toggle">
+            <button type="button" aria-pressed={personalization.reduceMotion} className={personalization.reduceMotion ? 'on' : ''} onClick={() => onPersonalization({ ...personalization, reduceMotion: true })}>On</button>
+            <button type="button" aria-pressed={!personalization.reduceMotion} className={!personalization.reduceMotion ? 'on' : ''} onClick={() => onPersonalization({ ...personalization, reduceMotion: false })}>Off</button>
+          </div>
+        </div>
+      </section>
+
       <section className="card" aria-label="Voice">
         <p className="eyebrow">Voice</p>
         <p className="muted">Pick how Bud-E sounds, and whether it talks back out loud.</p>
@@ -294,6 +404,36 @@ export default function SettingsTab(props: {
             </button>
           </>
         )}
+      </section>
+
+      <section className="card" aria-label="Privacy">
+        <p className="eyebrow">Privacy</p>
+        <p className="muted">These stay on this device until you clear them.</p>
+        <button type="button" className="btn secondary btn-block" onClick={onClearChats}>
+          Clear all chats
+        </button>
+        <button type="button" className="btn secondary btn-block" style={{ marginTop: 8 }} onClick={onClearJournal}>
+          Clear journal
+        </button>
+        <button
+          type="button"
+          className="btn secondary btn-block"
+          style={{ marginTop: 8 }}
+          onClick={() => {
+            const blob = new Blob(
+              [JSON.stringify({ journal, chats, personalization }, null, 2)],
+              { type: 'application/json' },
+            );
+            const url = URL.createObjectURL(blob);
+            const a = document.createElement('a');
+            a.href = url;
+            a.download = 'bude-export.json';
+            a.click();
+            URL.revokeObjectURL(url);
+          }}
+        >
+          Export my data
+        </button>
       </section>
 
       <section className="card" aria-label="About Bud-E">

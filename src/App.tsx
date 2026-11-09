@@ -51,8 +51,8 @@ import type { JournalEntry } from './journal';
 import { STASH_KEY } from './stash';
 import type { StashItem } from './stash';
 import AuthTab from './AuthTab';
-import { clearLocalSyncState, queueDeletion, uploadLocal } from './lib/sync';
-import type { SyncSettings, SyncedChatConversation, PremiumTier } from './lib/sync';
+import { clearLocalSyncState, queueDeletion, uploadLocal, DEFAULT_PERSONALIZATION, cleanPersonalization } from './lib/sync';
+import type { SyncSettings, SyncedChatConversation, PremiumTier, Personalization } from './lib/sync';
 import { deleteAccount, getSession, signOut } from './lib/auth-client';
 import type { AuthUser } from './lib/auth-client';
 import { DEFAULT_VOICE_SETTINGS, cleanVoiceSettings } from './voice';
@@ -259,6 +259,14 @@ export default function App() {
   const [vibe, setVibe] = useState<Vibe>(() => load(VIBE_KEY, DEFAULT_VIBE));
   const [voice, setVoice] = useState<VoiceSettings>(() => loadVoiceSettings());
   const [premiumTier, setPremiumTier] = useState<PremiumTier>(null);
+  const [personalization, setPersonalization] = useState<Personalization>(() => {
+    try {
+      const raw = localStorage.getItem('bude-personalization-v1');
+      return raw ? cleanPersonalization(JSON.parse(raw)) : { ...DEFAULT_PERSONALIZATION };
+    } catch {
+      return { ...DEFAULT_PERSONALIZATION };
+    }
+  });
   const [journal, setJournal] = useState<JournalEntry[]>(() => loadList(JOURNAL_KEY));
   const [stash, setStash] = useState<StashItem[]>(() => loadList(STASH_KEY));
   const [user, setUser] = useState<AuthUser | null>(null);
@@ -332,7 +340,16 @@ export default function App() {
   useEffect(() => save(CHATS_KEY, chats), [chats]);
   // After successful migration, the old key can be cleared on next save, but we leave it for safety.
   useEffect(() => save(VIBE_KEY, vibe), [vibe]);
-  useEffect(() => save(VOICE_KEY, voice), [voice]);
+  useEffect(() => {
+    try {
+      localStorage.setItem('bude-personalization-v1', JSON.stringify(personalization));
+    } catch {
+      // Storage blocked — still works for this visit.
+    }
+    document.documentElement.setAttribute('data-text', personalization.textSize);
+    document.documentElement.setAttribute('data-motion', personalization.reduceMotion ? 'reduce' : 'full');
+    document.documentElement.setAttribute('data-accent', personalization.accent);
+  }, [personalization]);
   useEffect(() => save(JOURNAL_KEY, journal), [journal]);
   useEffect(() => save(STASH_KEY, stash), [stash]);
 
@@ -381,6 +398,7 @@ export default function App() {
       voice,
       break: readBreak(),
       premiumTier,
+      personalization,
     };
   }
 
@@ -408,6 +426,9 @@ export default function App() {
       if (state.settings.voice) setVoice(cleanVoiceSettings(state.settings.voice));
       if (state.settings.premiumTier !== undefined) {
         setPremiumTier(state.settings.premiumTier);
+      }
+      if (state.settings.personalization) {
+        setPersonalization(cleanPersonalization(state.settings.personalization));
       }
       try {
         if (state.settings.break) {
@@ -643,6 +664,7 @@ export default function App() {
           onGoTonight={() => setTab('tonight')}
           voice={voice}
           onDeleteChat={(id) => queueDeletion('chat', id)}
+          personalization={personalization}
         />
       )}
       {tab === 'tools' && (
@@ -703,6 +725,12 @@ export default function App() {
           onVoice={setVoice}
           apiBase={apiBase()}
           premiumTier={premiumTier}
+          personalization={personalization}
+          onPersonalization={setPersonalization}
+          onClearChats={() => { setChats([]); setCurrentChatId(null); }}
+          onClearJournal={() => setJournal([])}
+          journal={journal}
+          chats={chats}
         />
       )}
       {tab === 'account' && (
@@ -871,6 +899,7 @@ function ChatTab({
   onGoTonight,
   voice,
   onDeleteChat,
+  personalization,
 }: {
   session: Session;
   chats: SyncedChatConversation[];
@@ -886,6 +915,7 @@ function ChatTab({
   onGoTonight: () => void;
   voice: VoiceSettings;
   onDeleteChat: (id: string) => void;
+  personalization: Personalization;
 }) {
   const current = chats.find((c) => c.id === currentChatId) ?? null;
   const transcript = current?.messages ?? [];
@@ -1038,6 +1068,24 @@ function ChatTab({
     setSending(true);
     let serverSource: string | undefined;
     try {
+      if (personalization.offlineOnly) {
+        throw new Error('offline only is on');
+      }
+      const memory = personalization.aiMemory
+        ? [
+            personalization.memoryNotes.trim(),
+            ...chats
+              .slice()
+              .sort((a, b) => (b.updatedAt || '').localeCompare(a.updatedAt || ''))
+              .slice(0, 4)
+              .map((c) => {
+                const last = c.messages.filter((m) => m.role === 'user').slice(-1)[0];
+                return last ? `${c.title}: ${last.text.slice(0, 80)}` : c.title;
+              }),
+          ]
+            .filter(Boolean)
+            .join('\n')
+        : '';
       const res = await fetch(apiUrl(), {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
@@ -1045,6 +1093,13 @@ function ChatTab({
           messages: next.slice(-12),
           session,
           persona: voice.persona,
+          personalization: {
+            buddyName: personalization.buddyName,
+            userName: personalization.userName,
+            replyLength: personalization.replyLength,
+            chatStyle: personalization.chatStyle,
+          },
+          ...(memory ? { memory } : {}),
           ...(journalNote !== '' ? { journal: journalNote } : {}),
         }),
       });

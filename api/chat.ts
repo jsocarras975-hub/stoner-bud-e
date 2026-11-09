@@ -64,6 +64,13 @@ type Body = {
   session?: Partial<Session>;
   journal?: string;
   persona?: string;
+  memory?: string;
+  personalization?: {
+    buddyName?: string;
+    userName?: string;
+    replyLength?: string;
+    chatStyle?: string;
+  };
 };
 
 type ReqLike = {
@@ -240,12 +247,36 @@ export default async function handler(req: ReqLike, res: ResLike): Promise<void>
       return;
     }
 
-    // The persona only adds its tone line — the system prompt itself is
-    // never edited here, so the harm-reduction rules stay exactly as they are.
     const persona = isPersonaId(body.persona) ? personaById(body.persona) : null;
-    const systemPrompt = persona
-      ? `${BUD_E_SYSTEM_PROMPT} ${persona.tone}`
-      : BUD_E_SYSTEM_PROMPT;
+    const p = body.personalization;
+    const buddyName = p?.buddyName?.trim() || 'Bud-E';
+    const userName = p?.userName?.trim();
+    const lengthLine =
+      p?.replyLength === 'short'
+        ? 'Keep replies to 1–2 short sentences.'
+        : p?.replyLength === 'detailed'
+          ? 'Give a fuller answer, up to a short paragraph, then one follow-up.'
+          : 'Keep replies to about 3–5 sentences, then one short follow-up question.';
+    const styleLine =
+      p?.chatStyle === 'plain'
+        ? 'Use plain text. No emoji.'
+        : 'A little warmth is fine. Emoji only when it fits, never forced.';
+    const nameLine = userName
+      ? `Your name is ${buddyName}. The user prefers to be called ${userName}.`
+      : `Your name is ${buddyName}.`;
+    const memoryLine = body.memory?.trim()
+      ? `Things you remember about this person:\n${body.memory.trim().slice(0, 800)}`
+      : '';
+    const systemPrompt = [
+      BUD_E_SYSTEM_PROMPT.replace(/Bud-E/g, buddyName),
+      persona?.tone ?? '',
+      nameLine,
+      lengthLine,
+      styleLine,
+      memoryLine,
+    ]
+      .filter(Boolean)
+      .join(' ');
 
     const groqMessages: GroqChatMessage[] = [
       { role: 'system', content: systemPrompt },

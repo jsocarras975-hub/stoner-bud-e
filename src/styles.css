@@ -120,6 +120,14 @@ html[data-theme='sunset'] {
   --warn: #f5c542;
 }
 
+html[data-text='small'] { font-size: 15px; }
+html[data-text='large'] { font-size: 19px; }
+html[data-motion='reduce'] .garden-glow { display: none; }
+html[data-accent='lime'] { --accent: #c6f25c; --accent-ink: #142107; }
+html[data-accent='amber'] { --accent: #f0a04b; --accent-ink: #1c0e06; }
+html[data-accent='rose'] { --accent: #ff8a9a; --accent-ink: #1c0c10; }
+html[data-accent='sky'] { --accent: #7ddec8; --accent-ink: #04221c; }
+
 html,
 body {
   margin: 0;

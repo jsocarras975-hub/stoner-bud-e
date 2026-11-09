@@ -247,6 +247,7 @@ function cleanSettings(
     data.premiumTier = rest.premiumTier;
   }
   // null or missing: do not set — the upsert leaves the stored value alone.
+  if (isRecord(rest.personalization)) data.personalization = rest.personalization;
   if (rest.customPersona === null || isRecord(rest.customPersona)) data.customPersona = rest.customPersona;
   if (rest.customTheme === null || isRecord(rest.customTheme)) data.customTheme = rest.customTheme;
   if (Array.isArray(rest.savedPlans)) data.savedPlans = rest.savedPlans;
