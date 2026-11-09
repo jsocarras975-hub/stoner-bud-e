@@ -117,6 +117,43 @@ public final class BudEActions {
         return ACTION_BLOCK.matcher(reply).replaceAll("").replaceAll(" {2,}", " ").trim();
     }
 
+    /** Extra carrying a device-action JSON string into MainActivity, so an
+     *  action that needs to open another app can be fired from a foreground
+     *  Activity. The voice session cannot start those intents itself: both
+     *  startAssistantActivity and a plain start from the session throw a
+     *  SecurityException for them, while an explicit intent to MainActivity
+     *  works fine. */
+    public static final String EXTRA_DEVICE_ACTION = "com.n3xus.bude.DEVICE_ACTION";
+
+    /** True when the action opens another app (alarm / timer / calendar).
+     *  Those must go through MainActivity; reminders and flashlight run
+     *  natively and are fine anywhere. */
+    public static boolean isIntentAction(JSONObject action) {
+        if (action == null) return false;
+        String kind = action.optString("action", "");
+        return "set_alarm".equals(kind) || "set_timer".equals(kind) || "add_event".equals(kind);
+    }
+
+    /** The short spoken line for an intent action, matching the launch() messages. */
+    public static String intentOkMessage(JSONObject action) {
+        if (action == null) return "";
+        switch (action.optString("action", "")) {
+            case "set_alarm": return "Opening your clock to set the alarm.";
+            case "set_timer": return "Starting the timer.";
+            case "add_event": return "Adding it to your calendar.";
+            default: return "";
+        }
+    }
+
+    /** Explicit intent for MainActivity carrying the action JSON, so the app
+     *  itself fires the intent from the foreground. */
+    public static Intent buildRelayIntent(Context context, JSONObject action) {
+        Intent intent = new Intent(context, MainActivity.class);
+        intent.addFlags(Intent.FLAG_ACTIVITY_NEW_TASK | Intent.FLAG_ACTIVITY_CLEAR_TOP);
+        intent.putExtra(EXTRA_DEVICE_ACTION, action.toString());
+        return intent;
+    }
+
     /**
      * Handle a full chat reply: extract any action, run it, and return the
      * text to show/speak plus what happened. When there is no action the

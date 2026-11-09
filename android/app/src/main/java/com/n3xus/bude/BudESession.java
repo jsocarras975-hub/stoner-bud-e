@@ -30,6 +30,8 @@ import java.util.Locale;
 import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
 
+import org.json.JSONObject;
+
 /**
  * Bud-E's assist session — the voice overlay Android shows when the user
  * long-presses home (or swipes the corner) with Bud-E set as the default
@@ -396,26 +398,46 @@ public class BudESession extends VoiceInteractionSession {
                     public void run() {
                         if (destroyed) return;
                         if (reply != null) {
-                            // Device actions: if the brain decided on one,
-                            // run it here, then show/speak the result. The
-                            // session launches other apps through
-                            // startAssistantActivity; the helper falls back
-                            // to a plain start when that is not available.
-                            BudEActions.Outcome outcome = BudEActions.handleReply(
-                                    getContext(), reply,
-                                    new BudEActions.ActivityLauncher() {
-                                        @Override
-                                        public void launch(Intent intent) {
-                                            startAssistantActivity(intent);
-                                        }
-                                    });
-                            String shown = outcome.cleanText;
-                            if (outcome.attempted && !outcome.ok) {
-                                shown = outcome.cleanText + " " + outcome.message;
+                            // Device actions: native ones (reminders,
+                            // flashlight) run here as before. Intent actions
+                            // (alarm / timer / calendar) cannot be started
+                            // from the session itself — both
+                            // startAssistantActivity and a plain start throw
+                            // a SecurityException for them — so they go
+                            // through the app: open MainActivity with the
+                            // action attached and let it fire the intent
+                            // from the foreground.
+                            JSONObject action = BudEActions.extractAction(reply);
+                            String clean = BudEActions.stripActionBlock(reply);
+                            String shown;
+                            if (action != null && BudEActions.isIntentAction(action)) {
+                                try {
+                                    startAssistantActivity(
+                                            BudEActions.buildRelayIntent(getContext(), action));
+                                    shown = clean + " " + BudEActions.intentOkMessage(action);
+                                } catch (Exception e) {
+                                    shown = clean + " The phone could not open that.";
+                                }
+                                replyView.setText(shown);
+                                setStatus("Here's what Bud-E says — tap the mic to ask more.");
+                                speak(shown);
+                            } else {
+                                BudEActions.Outcome outcome = BudEActions.handleReply(
+                                        getContext(), reply,
+                                        new BudEActions.ActivityLauncher() {
+                                            @Override
+                                            public void launch(Intent intent) {
+                                                startAssistantActivity(intent);
+                                            }
+                                        });
+                                shown = outcome.cleanText;
+                                if (outcome.attempted && !outcome.ok) {
+                                    shown = outcome.cleanText + " " + outcome.message;
+                                }
+                                replyView.setText(shown);
+                                setStatus("Here's what Bud-E says — tap the mic to ask more.");
+                                speak(shown);
                             }
-                            replyView.setText(shown);
-                            setStatus("Here's what Bud-E says — tap the mic to ask more.");
-                            speak(shown);
                         } else {
                             replyView.setText("");
                             setStatus("Couldn't reach Bud-E — check your connection "
