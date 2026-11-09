@@ -95,16 +95,20 @@ function loadVoiceSettings(): VoiceSettings {
 // VITE_API_URL override wins over both.
 const LIVE_ORIGIN = 'https://stoner-bud-e-toonzkorner-9149s-projects.vercel.app';
 
-/** Base URL for every /api call. Same Capacitor/live logic as before. */
+/** Base URL for every /api call. Same Capacitor/live logic as before.
+ *  Only the real native app (Capacitor.isNativePlatform()) needs the live
+ *  origin — the web build also loads the Capacitor bridge, but it must
+ *  stay same-origin or the cross-origin /api/chat call fails. */
 function apiBase(): string {
   const envUrl = import.meta.env.VITE_API_URL;
   if (typeof envUrl === 'string' && envUrl.trim() !== '') {
     return `${envUrl.replace(/\/$/, '')}/api`;
   }
-  const isCapacitor =
-    typeof window !== 'undefined' &&
-    (window as unknown as { Capacitor?: unknown }).Capacitor !== undefined;
-  if (isCapacitor) return `${LIVE_ORIGIN}/api`;
+  const cap = typeof window !== 'undefined'
+    ? (window as unknown as { Capacitor?: { isNativePlatform?: () => boolean } }).Capacitor
+    : undefined;
+  const isNative = !!cap?.isNativePlatform?.();
+  if (isNative) return `${LIVE_ORIGIN}/api`;
   return '/api';
 }
 
