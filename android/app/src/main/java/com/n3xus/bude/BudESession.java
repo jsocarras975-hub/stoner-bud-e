@@ -411,16 +411,35 @@ public class BudESession extends VoiceInteractionSession {
                             String clean = BudEActions.stripActionBlock(reply);
                             String shown;
                             if (action != null && BudEActions.isIntentAction(action)) {
+                                boolean relayed = false;
                                 try {
                                     startAssistantActivity(
                                             BudEActions.buildRelayIntent(getContext(), action));
                                     shown = clean + " " + BudEActions.intentOkMessage(action);
+                                    relayed = true;
                                 } catch (Exception e) {
                                     shown = clean + " The phone could not open that.";
                                 }
                                 replyView.setText(shown);
                                 setStatus("Here's what Bud-E says — tap the mic to ask more.");
                                 speak(shown);
+                                if (relayed) {
+                                    // The relay opens another app (dialer,
+                                    // clock, calendar) — but this session's
+                                    // overlay stays on top of it unless we
+                                    // go away, so the user would see Bud-E
+                                    // still and think nothing happened (same
+                                    // as openFullApp, which hides after
+                                    // launching). Hide after a short delay
+                                    // so the spoken sentence gets out first
+                                    // — hiding stops the speech.
+                                    mainHandler.postDelayed(new Runnable() {
+                                        @Override
+                                        public void run() {
+                                            if (!destroyed) hide();
+                                        }
+                                    }, 3500);
+                                }
                             } else {
                                 BudEActions.Outcome outcome = BudEActions.handleReply(
                                         getContext(), reply,
