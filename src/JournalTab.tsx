@@ -28,6 +28,9 @@ function stars(rating: number): string {
   return '★'.repeat(rating) + '☆'.repeat(Math.max(0, 5 - rating));
 }
 
+// 'main' is the menu. 'form' logs a session, 'history' lists past ones.
+type JournalView = 'main' | 'form' | 'history';
+
 interface JournalTabProps {
   entries: JournalEntry[];
   onAdd: (e: JournalEntry) => void;
@@ -52,8 +55,8 @@ export default function JournalTab(props: JournalTabProps) {
   const [expandedId, setExpandedId] = useState<string | null>(null);
   const [confirmDeleteId, setConfirmDeleteId] = useState<string | null>(null);
   const [error, setError] = useState('');
-  // The form starts open when there is nothing logged yet (Grok Journal).
-  const [formOpen, setFormOpen] = useState(entries.length === 0);
+  // Open on the form when there is nothing logged yet — nothing to look back at.
+  const [view, setView] = useState<JournalView>(entries.length === 0 ? 'form' : 'main');
 
   // Only stash items measured the same way as this entry can be used.
   const matchingStash = stash.filter((s) => s.unit === unit);
@@ -84,58 +87,71 @@ export default function JournalTab(props: JournalTabProps) {
     setRating(3);
     setDateVal(todayLocal());
     setError('');
+    // Show the past sessions so the new entry is right there.
+    setView('history');
   }
 
   const sorted = [...entries].sort((a, b) => b.date.localeCompare(a.date));
 
+  const historySub =
+    entries.length === 0
+      ? 'Nothing logged yet'
+      : `${entries.length} ${entries.length === 1 ? 'night' : 'nights'} logged`;
+
   return (
     <main>
-      <div className="log-hero">
-        <img src="/garden/leaf.jpg" alt="" />
-      </div>
-
-      <div
-        style={{
-          display: 'flex',
-          alignItems: 'baseline',
-          justifyContent: 'space-between',
-          gap: 12,
-        }}
-      >
-        <div>
+      {view === 'main' ? (
+        <>
+          <div className="log-hero">
+            <img src="/garden/leaf.jpg" alt="" />
+          </div>
           <h1 className="page-title">Log</h1>
           <p className="page-sub" style={{ marginBottom: 0 }}>
             What you took, what worked — just for you.
           </p>
-        </div>
-        <button type="button" className="btn ghost sm" onClick={() => setFormOpen((v) => !v)}>
-          {formOpen ? 'Close' : 'Add'}
-        </button>
-      </div>
+          <section className="card" aria-label="Log menu" style={{ marginTop: 16 }}>
+            <div className="legal-list">
+              <button type="button" className="legal-row" onClick={() => setView('form')}>
+                <span>
+                  <strong>Log tonight</strong>
+                  <span className="muted">Add what you took</span>
+                </span>
+                <span aria-hidden>›</span>
+              </button>
+              <button type="button" className="legal-row" onClick={() => setView('history')}>
+                <span>
+                  <strong>Past sessions</strong>
+                  <span className="muted">{historySub}</span>
+                </span>
+                <span aria-hidden>›</span>
+              </button>
+            </div>
+          </section>
+        </>
+      ) : (
+        <>
+          <button type="button" className="tool-back" onClick={() => setView('main')}>
+            ← Back to Log
+          </button>
+          <h1 className="page-title" style={{ marginTop: 8 }}>
+            {view === 'form' ? 'Log tonight' : 'Past sessions'}
+          </h1>
 
-      {formOpen && (
-        <section className="card" aria-label="Log tonight" style={{ marginTop: 16 }}>
-          <div
-            style={{
-              display: 'flex',
-              alignItems: 'baseline',
-              justifyContent: 'space-between',
-              gap: 12,
-            }}
-          >
-            <h2 style={{ marginBottom: 0 }}>Log tonight</h2>
-            <button
-              type="button"
-              className="btn ghost sm"
-              onClick={() => {
-                setMethod(session.method);
-                setAmount(session.amount);
-                setUnit(session.unit);
-              }}
-            >
-              Use tonight
-            </button>
-          </div>
+          {view === 'form' && (
+            <section className="card" aria-label="Log tonight" style={{ marginTop: 16 }}>
+              <div style={{ display: 'flex', justifyContent: 'flex-end' }}>
+                <button
+                  type="button"
+                  className="btn ghost sm"
+                  onClick={() => {
+                    setMethod(session.method);
+                    setAmount(session.amount);
+                    setUnit(session.unit);
+                  }}
+                >
+                  Use tonight
+                </button>
+              </div>
           <p className="muted small" style={{ marginTop: 8 }}>
             Jot down what you took so you remember what worked. Just for you — it stays on this device.
           </p>
@@ -264,12 +280,12 @@ export default function JournalTab(props: JournalTabProps) {
               Save entry
             </button>
           </p>
-        </section>
-      )}
+            </section>
+          )}
 
-      <section aria-label="Past sessions" style={{ marginTop: 16 }}>
-        <h2 style={{ marginBottom: 12 }}>Past sessions</h2>
-        {sorted.length === 0 ? (
+          {view === 'history' && (
+            <section aria-label="Past sessions" style={{ marginTop: 16 }}>
+              {sorted.length === 0 ? (
           <p className="muted">Nothing logged yet. Your first entry will show up here.</p>
         ) : (
           sorted.map((e) => (
@@ -338,8 +354,11 @@ export default function JournalTab(props: JournalTabProps) {
               </div>
             </article>
           ))
-        )}
-      </section>
+              )}
+            </section>
+          )}
+        </>
+      )}
     </main>
   );
 }

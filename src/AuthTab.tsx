@@ -35,6 +35,7 @@ import {
   signUp,
 } from './lib/auth-client';
 import type { AuthUser } from './lib/auth-client';
+import { PageHead } from './bits';
 
 export interface AuthTabProps {
   user: AuthUser | null;
@@ -79,6 +80,8 @@ export default function AuthTab({
   const [pwBusy, setPwBusy] = useState(false);
   const [pwMsg, setPwMsg] = useState('');
   const [pwErr, setPwErr] = useState('');
+  // Signed-in menu: 'main' is the menu, the rest open one section.
+  const [view, setView] = useState<'main' | 'profile' | 'email' | 'password'>('main');
 
   async function submit(event: FormEvent): Promise<void> {
     event.preventDefault();
@@ -201,6 +204,7 @@ export default function AuthTab({
     setError('');
     try {
       await signOut();
+      setView('main');
       onAuthChange(null);
     } catch (err) {
       setError(err instanceof Error ? err.message : 'Could not sign out — try again.');
@@ -215,12 +219,68 @@ export default function AuthTab({
     setNotice('');
   }
 
-  // -- Signed in: Grok ProfilePanel ------------------------------------------
+  // -- Signed in: menu, then one section at a time ---------------------------
   if (user) {
     const displayName = user.name !== '' ? user.name : user.email;
     const initial = (displayName.charAt(0) || '?').toUpperCase();
+    if (view === 'main') {
+      return (
+        <main>
+          <PageHead title="Account" sub="Your profile and sign-in details." />
+          <section className="card" aria-label="Account menu" style={{ marginTop: 16 }}>
+            <div className="legal-list">
+              <button type="button" className="legal-row" onClick={() => setView('profile')}>
+                <span>
+                  <strong>Profile</strong>
+                  <span className="muted">{user.email}</span>
+                </span>
+                <span aria-hidden>›</span>
+              </button>
+              <button type="button" className="legal-row" onClick={() => setView('email')}>
+                <span>
+                  <strong>Change email</strong>
+                  <span className="muted">Use a different email to sign in</span>
+                </span>
+                <span aria-hidden>›</span>
+              </button>
+              <button type="button" className="legal-row" onClick={() => setView('password')}>
+                <span>
+                  <strong>Change password</strong>
+                  <span className="muted">Needs your current password</span>
+                </span>
+                <span aria-hidden>›</span>
+              </button>
+            </div>
+          </section>
+          <button
+            type="button"
+            className="btn danger btn-block"
+            style={{ marginTop: 12 }}
+            onClick={() => void doSignOut()}
+            disabled={signingOut}
+          >
+            {signingOut ? 'Signing out…' : 'Sign out'}
+          </button>
+          {error !== '' && (
+            <p className="muted" role="alert" style={{ color: '#ff9d9d' }}>
+              {error}
+            </p>
+          )}
+          <p className="muted small" style={{ marginTop: 16 }}>
+            21+ only. Bud-E is a buddy, not a doctor. Start low, go slow. Never drive high.
+          </p>
+        </main>
+      );
+    }
     return (
       <main>
+        <button type="button" className="tool-back" onClick={() => setView('main')}>
+          ← Back to Account
+        </button>
+        <h1 className="page-title" style={{ marginTop: 8 }}>
+          {view === 'profile' ? 'Profile' : view === 'email' ? 'Change email' : 'Change password'}
+        </h1>
+        {view === 'profile' && (
         <section className="card" aria-label="Profile">
           <div className="profile-row">
             <div className="profile-avatar" aria-hidden>
@@ -242,7 +302,9 @@ export default function AuthTab({
             </button>
           )}
         </section>
+        )}
 
+        {view === 'profile' && (
         <section className="card" aria-label="On this phone">
           <p className="eyebrow">On this phone</p>
           <p style={{ margin: '8px 0 0' }}>
@@ -254,20 +316,21 @@ export default function AuthTab({
             Your chat always stays on this device only — it is never synced and never uploaded.
           </p>
         </section>
+        )}
 
-        {syncMessage !== undefined && syncMessage !== '' && (
+        {view === 'profile' && syncMessage !== undefined && syncMessage !== '' && (
           <p className="result-box" role="status">
             {syncMessage}
           </p>
         )}
-        {onSyncNow && (
+        {view === 'profile' && onSyncNow && (
           <button type="button" className="btn btn-block" onClick={onSyncNow}>
             🔄 Sync now
           </button>
         )}
 
-        <section className="card" aria-label="Account settings" style={{ marginTop: 16 }}>
-          <p className="eyebrow">Account settings</p>
+        {view === 'email' && (
+        <section className="card" aria-label="Change email" style={{ marginTop: 16 }}>
           <form onSubmit={(e) => void doChangeEmail(e)}>
             <label htmlFor="account-new-email">
               <span>Change your email</span>
@@ -295,8 +358,12 @@ export default function AuthTab({
               {emailBusy ? 'One sec…' : 'Change email'}
             </button>
           </form>
+        </section>
+        )}
 
-          <form onSubmit={(e) => void doChangePassword(e)} style={{ marginTop: 20 }}>
+        {view === 'password' && (
+        <section className="card" aria-label="Change password" style={{ marginTop: 16 }}>
+          <form onSubmit={(e) => void doChangePassword(e)}>
             <label htmlFor="account-current-password">
               <span>Current password</span>
               <input
@@ -351,24 +418,7 @@ export default function AuthTab({
             Changing your password signs your other devices out.
           </p>
         </section>
-
-        <button
-          type="button"
-          className="btn danger btn-block"
-          style={{ marginTop: 12 }}
-          onClick={() => void doSignOut()}
-          disabled={signingOut}
-        >
-          {signingOut ? 'Signing out…' : 'Sign out'}
-        </button>
-        {error !== '' && (
-          <p className="muted" role="alert" style={{ color: '#ff9d9d' }}>
-            {error}
-          </p>
         )}
-        <p className="muted small" style={{ marginTop: 16 }}>
-          21+ only. Bud-E is a buddy, not a doctor. Start low, go slow. Never drive high.
-        </p>
       </main>
     );
   }

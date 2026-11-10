@@ -2587,6 +2587,8 @@ function PlanTab({
   onGoTonight: () => void;
 }) {
   const [copied, setCopied] = useState(false);
+  // 'main' is the menu. 'plan' is tonight's plan, 'vibe' is the vibe check.
+  const [view, setView] = useState<'main' | 'plan' | 'vibe'>('main');
   const planText = buildPlanText(session, vibe, timerStatus);
   const textRef = useRef<HTMLTextAreaElement>(null);
 
@@ -2621,11 +2623,49 @@ function PlanTab({
           'If it feels like too much: lie down, sip water, breathe slow. It passes.',
         ];
 
+  const vibeLine = `${vibe.setting} · ${vibe.sound} · craving ${vibe.snack} · feeling ${vibe.energy}`;
+  const planSub = amount === '' ? 'No session logged yet' : sessionLine;
+
   return (
     <main>
-      <PageHead title="Plan" sub="Built from what you actually logged. Copy it for the group chat." />
+      {view === 'main' ? (
+        <>
+          <PageHead title="Plan" sub="Built from what you actually logged. Copy it for the group chat." />
+          <section className="card" aria-label="Plan menu">
+            <div className="legal-list">
+              <button type="button" className="legal-row" onClick={() => setView('plan')}>
+                <span>
+                  <strong>Tonight&apos;s plan</strong>
+                  <span className="muted">{planSub}</span>
+                </span>
+                <span aria-hidden>›</span>
+              </button>
+              <button type="button" className="legal-row" onClick={() => setView('vibe')}>
+                <span>
+                  <strong>Vibe check</strong>
+                  <span className="muted">{vibeLine}</span>
+                </span>
+                <span aria-hidden>›</span>
+              </button>
+            </div>
+          </section>
+          <p className="muted small">
+            21+ only. Bud-E is a buddy, not a doctor. Start low, go slow. Never drive high — wait until fully
+            sober, and after edibles, until after a full night&apos;s sleep.
+          </p>
+        </>
+      ) : (
+        <>
+          <button type="button" className="tool-back" onClick={() => setView('main')}>
+            ← Back to Plan
+          </button>
+          <h1 className="page-title" style={{ marginTop: 8 }}>
+            {view === 'plan' ? "Tonight's plan" : 'Vibe check'}
+          </h1>
 
-      {amount === '' ? (
+          {view === 'plan' && (
+            <>
+              {amount === '' ? (
         <section className="card" aria-label="No session logged">
           <p className="eyebrow">No session logged</p>
           <p style={{ margin: '8px 0 0' }}>
@@ -2697,14 +2737,13 @@ function PlanTab({
             tabIndex={-1}
           />
         </section>
+              )}
+            </>
+          )}
+
+          {view === 'vibe' && <VibeEditor vibe={vibe} setVibe={setVibe} />}
+        </>
       )}
-
-      <VibeEditor vibe={vibe} setVibe={setVibe} />
-
-      <p className="muted small">
-        21+ only. Bud-E is a buddy, not a doctor. Start low, go slow. Never drive high — wait until fully
-        sober, and after edibles, until after a full night&apos;s sleep.
-      </p>
     </main>
   );
 }

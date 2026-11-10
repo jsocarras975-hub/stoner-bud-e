@@ -20,6 +20,9 @@ const FORM_LABELS: Record<StashForm, string> = {
 
 type StashUnit = 'g' | 'mg' | 'pieces';
 
+// 'main' is the menu. 'list' is the jars, 'add' is the add-a-jar form.
+type StashView = 'main' | 'list' | 'add';
+
 function round2(n: number): number {
   return Math.round(n * 100) / 100;
 }
@@ -153,6 +156,8 @@ export default function StashTab(props: {
   const [thcPct, setThcPct] = useState('');
   const [lowAtStr, setLowAtStr] = useState('');
   const [error, setError] = useState('');
+  // Open on the add form when the stash is empty — nothing to list yet.
+  const [view, setView] = useState<StashView>(items.length === 0 ? 'add' : 'main');
 
   function addItem(): void {
     const amt = Number(amountStr);
@@ -182,6 +187,8 @@ export default function StashTab(props: {
     setThcPct('');
     setLowAtStr('');
     setError('');
+    // Show the list so the new jar is right there.
+    setView('list');
   }
 
   function updateItem(updated: StashItem): void {
@@ -195,122 +202,164 @@ export default function StashTab(props: {
     onChange(items.filter((i) => i.id !== id));
   }
 
+  const listSub =
+    items.length === 0
+      ? 'Nothing in the stash yet'
+      : `${items.length} ${items.length === 1 ? 'jar' : 'jars'}${
+          lowItems.length > 0
+            ? ` · ${lowItems.length} running low`
+            : ''
+        }`;
+
   return (
     <main>
-      <PageHead title="Stash" sub="What's on hand. Just for you — it stays on this device." />
-      <section className="card" aria-label="Add to stash">
-        <h2>Add to stash</h2>
-
-        {strains.length > 0 && (
-          <div style={{ marginBottom: 16 }}>
-            <Label>Your usuals</Label>
-            <ChipRow>
-              {strains.map((s) => (
-                <Chip key={s} on={name.trim().toLowerCase() === s.toLowerCase()} onClick={() => setName(s)}>
-                  {s}
-                </Chip>
-              ))}
-            </ChipRow>
-          </div>
-        )}
-
-        <label htmlFor="stash-name">Name / strain</label>
-        <input
-          id="stash-name"
-          type="text"
-          placeholder="e.g. Blue Dream"
-          value={name}
-          onChange={(e) => setName(e.target.value)}
-        />
-
-        <div style={{ marginTop: 20 }}>
-          <Label>What kind</Label>
-          <ChipRow>
-            {(Object.keys(FORM_LABELS) as StashForm[]).map((f) => (
-              <Chip key={f} on={form === f} onClick={() => setForm(f)}>
-                {FORM_LABELS[f]}
-              </Chip>
-            ))}
-          </ChipRow>
-        </div>
-
-        <div className="field-row" style={{ marginTop: 20 }}>
-          <div className="grow-2">
-            <label htmlFor="stash-amount">How much</label>
-            <input
-              id="stash-amount"
-              type="text"
-              inputMode="decimal"
-              placeholder="7"
-              value={amountStr}
-              onChange={(e) => setAmountStr(e.target.value)}
-            />
-          </div>
-          <div>
-            <Label>Unit</Label>
-            <div className="unit-toggle">
-              {(['g', 'mg', 'pieces'] as const).map((u) => (
-                <button
-                  key={u}
-                  type="button"
-                  aria-pressed={unit === u}
-                  className={unit === u ? 'on' : ''}
-                  onClick={() => setUnit(u)}
-                >
-                  {u}
-                </button>
-              ))}
+      {view === 'main' ? (
+        <>
+          <PageHead title="Stash" sub="What's on hand. Just for you — it stays on this device." />
+          <section className="card" aria-label="Stash menu">
+            <div className="legal-list">
+              <button type="button" className="legal-row" onClick={() => setView('list')}>
+                <span>
+                  <strong>Your stash</strong>
+                  <span className="muted">{listSub}</span>
+                </span>
+                <span aria-hidden>›</span>
+              </button>
+              <button type="button" className="legal-row" onClick={() => setView('add')}>
+                <span>
+                  <strong>Add to stash</strong>
+                  <span className="muted">Add a jar to the stash</span>
+                </span>
+                <span aria-hidden>›</span>
+              </button>
             </div>
-          </div>
-        </div>
-
-        <label htmlFor="stash-thc" style={{ marginTop: 20 }}>
-          THC % (optional)
-        </label>
-        <input
-          id="stash-thc"
-          type="text"
-          inputMode="decimal"
-          placeholder="e.g. 22"
-          value={thcPct}
-          onChange={(e) => setThcPct(e.target.value)}
-        />
-
-        <label htmlFor="stash-low">Warn me when under… ({unit})</label>
-        <input
-          id="stash-low"
-          type="text"
-          inputMode="decimal"
-          placeholder="e.g. 3.5"
-          value={lowAtStr}
-          onChange={(e) => setLowAtStr(e.target.value)}
-        />
-
-        {error !== '' && <p>{error}</p>}
-
-        <p>
-          <button type="button" className="btn btn-block" onClick={addItem}>
-            Add to stash
+          </section>
+        </>
+      ) : (
+        <>
+          <button type="button" className="tool-back" onClick={() => setView('main')}>
+            ← Back to Stash
           </button>
-        </p>
-      </section>
+          <h1 className="page-title" style={{ marginTop: 8 }}>
+            {view === 'list' ? 'Your stash' : 'Add to stash'}
+          </h1>
 
-      <section aria-label="Your stash">
-        <h2 style={{ marginBottom: 12 }}>Your stash</h2>
-        {lowItems.length > 0 && (
-          <p role="status" style={{ margin: '0 0 12px' }}>
-            ⚠️ Heads up — {lowItems.map((i) => lowNote(i)).join(' ')} Grab more before
-            you&apos;re out.
-          </p>
-        )}
-        {items.length === 0 ? (
-          <p className="muted">Nothing in the stash yet. Add your first item above.</p>
-        ) : (
-          items.map((item) => (
-            <StashRow key={item.id} item={item} onUpdate={updateItem} onDelete={deleteItem} />
-          ))
-        )}
-      </section>
+          {view === 'add' && (
+            <section className="card" aria-label="Add to stash">
+              {strains.length > 0 && (
+                <div style={{ marginBottom: 16 }}>
+                  <Label>Your usuals</Label>
+                  <ChipRow>
+                    {strains.map((s) => (
+                      <Chip key={s} on={name.trim().toLowerCase() === s.toLowerCase()} onClick={() => setName(s)}>
+                        {s}
+                      </Chip>
+                    ))}
+                  </ChipRow>
+                </div>
+              )}
+
+              <label htmlFor="stash-name">Name / strain</label>
+              <input
+                id="stash-name"
+                type="text"
+                placeholder="e.g. Blue Dream"
+                value={name}
+                onChange={(e) => setName(e.target.value)}
+              />
+
+              <div style={{ marginTop: 20 }}>
+                <Label>What kind</Label>
+                <ChipRow>
+                  {(Object.keys(FORM_LABELS) as StashForm[]).map((f) => (
+                    <Chip key={f} on={form === f} onClick={() => setForm(f)}>
+                      {FORM_LABELS[f]}
+                    </Chip>
+                  ))}
+                </ChipRow>
+              </div>
+
+              <div className="field-row" style={{ marginTop: 20 }}>
+                <div className="grow-2">
+                  <label htmlFor="stash-amount">How much</label>
+                  <input
+                    id="stash-amount"
+                    type="text"
+                    inputMode="decimal"
+                    placeholder="7"
+                    value={amountStr}
+                    onChange={(e) => setAmountStr(e.target.value)}
+                  />
+                </div>
+                <div>
+                  <Label>Unit</Label>
+                  <div className="unit-toggle">
+                    {(['g', 'mg', 'pieces'] as const).map((u) => (
+                      <button
+                        key={u}
+                        type="button"
+                        aria-pressed={unit === u}
+                        className={unit === u ? 'on' : ''}
+                        onClick={() => setUnit(u)}
+                      >
+                        {u}
+                      </button>
+                    ))}
+                  </div>
+                </div>
+              </div>
+
+              <label htmlFor="stash-thc" style={{ marginTop: 20 }}>
+                THC % (optional)
+              </label>
+              <input
+                id="stash-thc"
+                type="text"
+                inputMode="decimal"
+                placeholder="e.g. 22"
+                value={thcPct}
+                onChange={(e) => setThcPct(e.target.value)}
+              />
+
+              <label htmlFor="stash-low">Warn me when under… ({unit})</label>
+              <input
+                id="stash-low"
+                type="text"
+                inputMode="decimal"
+                placeholder="e.g. 3.5"
+                value={lowAtStr}
+                onChange={(e) => setLowAtStr(e.target.value)}
+              />
+
+              {error !== '' && <p>{error}</p>}
+
+              <p>
+                <button type="button" className="btn btn-block" onClick={addItem}>
+                  Add to stash
+                </button>
+              </p>
+            </section>
+          )}
+
+          {view === 'list' && (
+            <section aria-label="Your stash">
+              {lowItems.length > 0 && (
+                <p role="status" style={{ margin: '0 0 12px' }}>
+                  ⚠️ Heads up — {lowItems.map((i) => lowNote(i)).join(' ')} Grab more before
+                  you&apos;re out.
+                </p>
+              )}
+              {items.length === 0 ? (
+                <p className="muted">Nothing in the stash yet — add your first jar from the Stash menu.</p>
+              ) : (
+                items.map((item) => (
+                  <StashRow key={item.id} item={item} onUpdate={updateItem} onDelete={deleteItem} />
+                ))
+              )}
+            </section>
+          )}
+        </>
+      )}
     </main>
   );
 }
