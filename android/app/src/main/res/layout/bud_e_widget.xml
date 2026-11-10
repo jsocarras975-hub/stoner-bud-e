@@ -164,5 +164,16 @@
             android:format24Hour="EEEE, MMM d"
             android:textColor="#e8f0e8"
             android:textSize="16sp" />
+
+        <TextView
+            android:id="@+id/widget_strain"
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:layout_marginTop="4dp"
+            android:maxLines="1"
+            android:text="⭐ Today's pick: —"
+            android:textColor="#c6f25c"
+            android:textSize="14sp"
+            android:textStyle="bold" />
     </LinearLayout>
 </LinearLayout>

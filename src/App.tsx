@@ -80,7 +80,8 @@ import type { AuthUser } from './lib/auth-client';
 import { DEFAULT_VOICE_SETTINGS, cleanVoiceSettings } from './voice';
 import type { VoiceSettings } from './voice';
 import { speakVoice, startRecording, stopVoice, transcribeVoice, unlockAudio } from './lib/voice-client';
-import { executeDeviceAction, extractDeviceAction, getBubbleStatus, getLaunchInfo, isAppAction, isImageSearchAction, isNative, localIsoNow, parseAppAction, publishMusicState, publishStashSummary, publishWeather, publishWidgetStash, setBubbleEnabled } from './lib/device-actions';
+import { executeDeviceAction, extractDeviceAction, getBubbleStatus, getLaunchInfo, isAppAction, isImageSearchAction, isNative, localIsoNow, parseAppAction, publishMusicState, publishStashSummary, publishStrainOfTheDay, publishWeather, publishWidgetStash, setBubbleEnabled } from './lib/device-actions';
+import { strainOfTheDay } from './lib/daily';
 import type { AppAction } from './lib/device-actions';
 import type { ActiveRecording } from './lib/voice-client';
 import { TIMER_ALERTS, buzz, planAlerts, type PlannedAlert, type TimerAlert, type TimerAlertId } from './lib/timer-alerts';
@@ -751,6 +752,12 @@ export default function App() {
   // between, so it can go stale if the app is not opened for a while.
   useEffect(() => {
     if (!isNative()) return;
+    // Today's strain pick for the home-screen widget (deterministic by
+    // day-of-year, same pick the Tonight tab shows). Published on open so
+    // the widget stays current; it keeps the last pick until the app is
+    // opened again on a new day.
+    const pick = strainOfTheDay();
+    void publishStrainOfTheDay(`⭐ Today's pick: ${pick.strain.name}`);
     let cancelled = false;
     const fetchWeather = async () => {
       try {

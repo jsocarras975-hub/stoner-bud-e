@@ -170,6 +170,25 @@ public class BudEActionsPlugin extends Plugin {
     }
 
     /**
+     * Publish today's strain pick for the main widget ("⭐ Today's pick:
+     * Blue Dream"). The app computes it (deterministic by day-of-year)
+     * when it opens and publishes it; the widget shows the last published
+     * pick in between, so it can go stale if the app is not opened for a
+     * while. Tapping the line opens the app to the Strains tab.
+     */
+    @PluginMethod
+    public void publishStrainOfTheDay(PluginCall call) {
+        String line = call.getString("line", "⭐ Today's pick: —");
+        Context context = getContext();
+        context.getSharedPreferences(BudEWidgetProvider.PREFS, Context.MODE_PRIVATE)
+                .edit()
+                .putString(BudEWidgetProvider.KEY_STRAIN, line)
+                .apply();
+        BudEWidgetProvider.updateAllWidgets(context);
+        call.resolve(new JSObject().put("ok", true));
+    }
+
+    /**
      * Publish the stash summary the bubble and voice chats send to the
      * server, so Bud-E knows what jars exist when the user asks it to
      * change the stash. The native chat clients read it from here.

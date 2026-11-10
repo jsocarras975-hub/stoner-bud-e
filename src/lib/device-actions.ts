@@ -238,6 +238,7 @@ interface BudEActionsPlugin {
   publishStashSummary(options: { summary: string }): Promise<{ ok?: boolean }>;
   publishMusicState(options: { title: string; artist: string; playing: boolean; hasTrack: boolean }): Promise<{ ok?: boolean }>;
   publishWeather(options: { temp: string }): Promise<{ ok?: boolean }>;
+  publishStrainOfTheDay(options: { line: string }): Promise<{ ok?: boolean }>;
   getBubbleStatus(): Promise<{ enabled?: boolean; canDrawOverlays?: boolean }>;
   setBubbleEnabled(options: { enabled: boolean }): Promise<{ enabled?: boolean }>;
   openOverlaySettings(): Promise<{ ok?: boolean }>;
@@ -357,6 +358,19 @@ export async function publishWeather(temp: string): Promise<void> {
   if (!isNativeApp()) return;
   try {
     await BudEActions.publishWeather({ temp });
+  } catch {
+    // Best effort — the widget just keeps its old line.
+  }
+}
+
+/**
+ * Write today's strain pick for the main widget ("⭐ Today's pick:
+ * Blue Dream"). Best effort — the widget just keeps its old line.
+ */
+export async function publishStrainOfTheDay(line: string): Promise<void> {
+  if (!isNativeApp()) return;
+  try {
+    await BudEActions.publishStrainOfTheDay({ line });
   } catch {
     // Best effort — the widget just keeps its old line.
   }
