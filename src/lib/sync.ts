@@ -79,7 +79,12 @@ export interface BreakState {
   status: 'active' | 'done' | 'ended';
 }
 
-export type PremiumTier = 'lit' | 'cloudnine' | null;
+export type PremiumTier = 'lit' | 'cloudnine' | 'owner' | null;
+
+/** The owner tier — just for Kartoon. Unlocks everything, plus owner-only extras. */
+export function isOwnerTier(tier: PremiumTier): boolean {
+  return tier === 'owner';
+}
 
 export interface Personalization {
   buddyName: string;

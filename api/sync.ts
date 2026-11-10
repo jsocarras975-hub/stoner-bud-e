@@ -197,7 +197,7 @@ function cleanItems(raw: unknown, limit: number): IncomingItem[] | null {
   return items;
 }
 
-const THEMES = new Set(['night', 'day', 'ember', 'moon', 'forest', 'sunset']);
+const THEMES = new Set(['night', 'day', 'ember', 'moon', 'forest', 'sunset', 'kartoon']);
 const EXPERIENCES = new Set(['new', 'some', 'experienced']);
 
 /** Validate an uploaded tombstone list. Returns null when malformed. */
@@ -457,7 +457,7 @@ export default async function handler(req: Req, res: Res): Promise<void> {
           [user.id],
         );
         const stored = existing.rows[0]?.data;
-        if (stored?.premiumTier === 'lit' || stored?.premiumTier === 'cloudnine') {
+        if (stored?.premiumTier === 'lit' || stored?.premiumTier === 'cloudnine' || stored?.premiumTier === 'owner') {
           settings.data.premiumTier = stored.premiumTier;
         }
         if (stored?.customPersona === null || isRecord(stored?.customPersona)) {

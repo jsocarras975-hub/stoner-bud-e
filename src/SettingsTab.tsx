@@ -14,11 +14,11 @@ import type { ThemeId } from './theme';
 import { APP_VERSION, COPYRIGHT, getLegalDoc } from './legal';
 import type { LegalDoc } from './legal';
 import type { AuthUser } from './lib/auth-client';
-import { PERSONAS, personaById, isPremiumPersona } from './voice';
+import { PERSONAS, personaById, isPremiumPersona, isOwnerPersona } from './voice';
 import type { VoiceSettings } from './voice';
 import { speakVoice, stopVoice } from './lib/voice-client';
 import { Chip, ChipRow, Label, PageHead } from './bits';
-import type { Personalization } from './lib/sync';
+import type { Personalization, PremiumTier } from './lib/sync';
 import type { JournalEntry } from './journal';
 import type { SyncedChatConversation } from './lib/sync';
 import { getAssistantStatus, getBubbleStatus, getTalkNotification, isNative, openDefaultAppsSettings, openOverlaySettings, setBubbleEnabled, setTalkNotification } from './lib/device-actions';
@@ -62,7 +62,7 @@ export default function SettingsTab(props: {
   voice: VoiceSettings;
   onVoice: (voice: VoiceSettings) => void;
   apiBase: string;
-  premiumTier?: 'lit' | 'cloudnine' | null;
+  premiumTier?: PremiumTier;
   personalization: Personalization;
   onPersonalization: (p: Personalization) => void;
   onClearChats: () => void;
@@ -242,7 +242,14 @@ export default function SettingsTab(props: {
   // -- Menu, or one section at a time --------------------------------------
   const themeName = THEMES.find((t) => t.id === theme)?.name ?? theme;
   const personaName = personaById(voice.persona).name;
-  const tierName = premiumTier === 'lit' ? 'Lit' : premiumTier === 'cloudnine' ? 'Cloud Nine' : null;
+  const tierName =
+    premiumTier === 'lit'
+      ? 'Lit'
+      : premiumTier === 'cloudnine'
+        ? 'Cloud Nine'
+        : premiumTier === 'owner'
+          ? 'Owner 👑'
+          : null;
 
   return (
     <main>
@@ -329,7 +336,9 @@ export default function SettingsTab(props: {
               <p className="muted">Swap the whole garden. It stays on this phone.</p>
               <div className="theme-grid">
                 {THEMES.map((item) => {
-                  const locked = item.premium && !premiumTier;
+                  const locked =
+                    (item.premium && !premiumTier) ||
+                    (item.ownerOnly && premiumTier !== 'owner');
                   return (
                     <button
                       key={item.id}
@@ -339,7 +348,13 @@ export default function SettingsTab(props: {
                       aria-pressed={theme === item.id}
                       disabled={locked}
                       onClick={() => !locked && onTheme(item.id)}
-                      title={locked ? 'Premium theme — unlock with Lit' : undefined}
+                      title={
+                        item.ownerOnly
+                          ? 'Owner theme — only for Kartoon'
+                          : locked
+                            ? 'Premium theme — unlock with Lit'
+                            : undefined
+                      }
                     >
                       <span>
                         <span className="swatch-dot" aria-hidden />
@@ -566,7 +581,9 @@ export default function SettingsTab(props: {
               <Label>Buddy voice</Label>
               <ChipRow>
                 {PERSONAS.map((p) => {
-                  const locked = isPremiumPersona(p.id) && !premiumTier;
+                  const locked =
+                    (isPremiumPersona(p.id) && !premiumTier) ||
+                    (isOwnerPersona(p.id) && premiumTier !== 'owner');
                   return (
                     <Chip
                       key={p.id}
@@ -637,7 +654,36 @@ export default function SettingsTab(props: {
 
           {view === 'premium' && (
             <section className="card" aria-label="Premium">
-              {premiumTier ? (
+              {premiumTier === 'owner' ? (
+                <>
+                  <p>
+                    👑 I&apos;m the <strong>Owner</strong>. Everything is unlocked — every voice,
+                    every theme, every feature, forever.
+                  </p>
+                  <ul style={{ margin: '8px 0', paddingLeft: 18 }}>
+                    <li>
+                      <strong>Kartoon theme</strong> — the owner cut: deep purple night, lime
+                      accent. Nobody else can pick it.
+                    </li>
+                    <li>
+                      <strong>Kartoon voice</strong> — Bud-E talks like the owner himself.
+                    </li>
+                    <li>
+                      <strong>Everything in Lit and Cloud Nine</strong> — extra voices, extra
+                      themes, session insights, unlimited saved plans, in-app music when it
+                      lands, all future premium free.
+                    </li>
+                    <li>
+                      <strong>Your custom persona and custom theme</strong> — the Kartoon ones
+                      above, made for you.
+                    </li>
+                  </ul>
+                  <p className="muted">
+                    This tier is not for sale and never shows up for anyone else. It lives on
+                    your account only.
+                  </p>
+                </>
+              ) : premiumTier ? (
                 <p>
                   I&apos;m on <strong>{premiumTier === 'lit' ? 'Lit' : 'Cloud Nine'}</strong>. Extra
                   voices, themes, and insights are unlocked.

@@ -4,7 +4,7 @@
 export const THEME_KEY = 'bude-theme-v1';
 export const AGE_GATE_KEY = 'bude-age-gate-v1';
 
-export const THEMES: { id: ThemeId; name: string; detail: string; premium?: boolean }[] = [
+export const THEMES: { id: ThemeId; name: string; detail: string; premium?: boolean; ownerOnly?: boolean }[] = [
   { id: 'night', name: 'Night garden', detail: 'Deep green. The original.' },
   { id: 'day', name: 'Day garden', detail: 'Paper and daylight.' },
   { id: 'ember', name: 'Amber lounge', detail: 'Warm lamp light.' },
@@ -12,12 +12,18 @@ export const THEMES: { id: ThemeId; name: string; detail: string; premium?: bool
   // Premium (Lit+)
   { id: 'forest', name: 'Deep forest', detail: 'Darker greens, quieter.', premium: true },
   { id: 'sunset', name: 'Sunset', detail: 'Warm oranges and pinks.', premium: true },
+  // Owner only — the Kartoon cut, deep purple with the Bud-E lime.
+  { id: 'kartoon', name: 'Kartoon', detail: 'Deep purple night, lime accent.', ownerOnly: true },
 ];
 
-export type ThemeId = 'night' | 'day' | 'ember' | 'moon' | 'forest' | 'sunset';
+export type ThemeId = 'night' | 'day' | 'ember' | 'moon' | 'forest' | 'sunset' | 'kartoon';
 
 export function isPremiumTheme(id: string): boolean {
   return THEMES.some((t) => t.id === id && t.premium);
+}
+
+export function isOwnerTheme(id: string): boolean {
+  return THEMES.some((t) => t.id === id && t.ownerOnly);
 }
 
 export function isThemeId(value: unknown): value is ThemeId {

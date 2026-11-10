@@ -1,6 +1,6 @@
 /* Stoner Bud-E — night-garden theme (tokens from the Grok night-garden app).
    Themes switch via html[data-theme]: night (default), day, ember, moon,
-   plus premium forest and sunset. */
+   plus premium forest and sunset, plus owner-only kartoon. */
 
 * {
   box-sizing: border-box;
@@ -117,6 +117,24 @@ html[data-theme='sunset'] {
   --accent-ink: #1c0c08;
   --danger: #ffb0a4;
   --danger-bg: #3c2428;
+  --warn: #f5c542;
+}
+
+/* Owner only: Kartoon — deep purple night, Bud-E lime accent. */
+html[data-theme='kartoon'] {
+  color-scheme: dark;
+  --bg: #0d0618;
+  --glow: #2a1650;
+  --surface: #140b26;
+  --card: #1e1238;
+  --card-2: #281a4a;
+  --line: #5a3d9e;
+  --text: #f2eefc;
+  --muted: #c3b3e8;
+  --accent: #c6f25c;
+  --accent-ink: #142107;
+  --danger: #ffb0a4;
+  --danger-bg: #3c2420;
   --warn: #f5c542;
 }
 

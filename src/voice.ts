@@ -4,7 +4,7 @@
 // functions (Groq voice id + direction for /api/voice/speak, tone line for
 // /api/chat) — same pattern as src/bude.ts.
 
-export type PersonaId = 'chill' | 'cosmic' | 'giggly' | 'wise' | 'coach' | 'poet';
+export type PersonaId = 'chill' | 'cosmic' | 'giggly' | 'wise' | 'coach' | 'poet' | 'kartoon';
 
 export interface Persona {
   id: PersonaId;
@@ -26,6 +26,8 @@ export interface Persona {
    *  further pitch/rate stray from natural, the more robotic it sounds. */
   pitch: number;
   rate: number;
+  /** Owner-only persona — only the owner tier can pick it. */
+  ownerOnly?: boolean;
 }
 
 export const PERSONAS: Persona[] = [
@@ -96,12 +98,29 @@ export const PERSONAS: Persona[] = [
     pitch: 1.05,
     rate: 0.9,
   },
+  // Owner only — Kartoon himself.
+  {
+    id: 'kartoon',
+    name: 'Kartoon',
+    tagline: 'The owner — straight from the source.',
+    voice: 'troy',
+    gender: 'male',
+    direction: '[direct]',
+    tone: 'Talk like Kartoon himself — straight, warm, a little cosmic, the owner of this app. Plain words, no fluff, and you know this garden better than anyone.',
+    pitch: 1.05,
+    rate: 1.0,
+    ownerOnly: true,
+  },
 ];
 
 export const FREE_PERSONA_IDS = ['chill', 'cosmic', 'giggly', 'wise'] as const;
 
 export function isPremiumPersona(id: string): boolean {
   return !FREE_PERSONA_IDS.includes(id as (typeof FREE_PERSONA_IDS)[number]);
+}
+
+export function isOwnerPersona(id: string): boolean {
+  return PERSONAS.some((p) => p.id === id && p.ownerOnly);
 }
 
 export function isPersonaId(value: unknown): value is PersonaId {
