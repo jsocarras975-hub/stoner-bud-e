@@ -681,6 +681,38 @@ p {
   white-space: nowrap;
 }
 
+/* The song itself inside a track row (the row is a div now, so the + /
+ * remove button can sit beside it without nesting a button in a button). */
+.track-row-main {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  flex: 1;
+  min-width: 0;
+  padding: 0;
+  border: 0;
+  background: none;
+  color: inherit;
+  text-align: left;
+  font: inherit;
+  cursor: pointer;
+}
+
+/* Round + / x button on a track row (add to playlist / remove from it). */
+.track-row-add {
+  flex-shrink: 0;
+  width: 36px;
+  height: 36px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  border: 1px solid var(--line);
+  border-radius: 50%;
+  background: var(--surface);
+  color: var(--accent);
+  cursor: pointer;
+}
+
 /* Music search input */
 
 .music-search {

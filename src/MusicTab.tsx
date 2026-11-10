@@ -3,20 +3,44 @@
 // in App, so the music keeps playing while the user moves around the app;
 // this tab is the browser + the now-playing controls. 21+ tone,
 // night-garden look, same as the rest.
+//
+// Premium members (any paid tier, plus the owner) can also make their own
+// playlists from Audius tracks: create, add a track from any row, play a
+// whole playlist, rename, remove tracks, delete. Playlists sync to the
+// account (src/lib/sync.ts + api/sync.ts), so they follow the member
+// across devices. Free users see a small locked card pointing at Premium.
 import { useEffect, useState } from 'react';
-import { Pause, Play, Search, SkipBack, SkipForward, X } from 'lucide-react';
+import {
+  ChevronLeft,
+  ListMusic,
+  Pause,
+  Pencil,
+  Play,
+  Plus,
+  Search,
+  SkipBack,
+  SkipForward,
+  Trash2,
+  X,
+} from 'lucide-react';
 import { MUSIC_SERVICES, PLAYLISTS } from './data/music';
 import type { MusicService } from './data/music';
 import {
   MUSIC_GENRES,
   formatDuration,
+  newPlaylistId,
   searchTracks,
   trendingTracks,
   type AudiusTrack,
+  type MusicPlaylist,
 } from './lib/audius';
+import { queueDeletion, type PremiumTier } from './lib/sync';
 import { Chip, ChipRow, PageHead } from './bits';
 
 type ServiceFilter = 'all' | MusicService;
+
+const MAX_PLAYLISTS = 20;
+const MAX_TRACKS_PER_PLAYLIST = 100;
 
 export default function MusicTab({
   currentTrack,
@@ -26,6 +50,10 @@ export default function MusicTab({
   onTogglePlay,
   onNext,
   onPrev,
+  playlists,
+  onPlaylistsChange,
+  premiumTier,
+  onGoPremium,
 }: {
   currentTrack: AudiusTrack | null;
   isPlaying: boolean;
@@ -34,6 +62,10 @@ export default function MusicTab({
   onTogglePlay: () => void;
   onNext: () => void;
   onPrev: () => void;
+  playlists: MusicPlaylist[];
+  onPlaylistsChange: (next: MusicPlaylist[]) => void;
+  premiumTier: PremiumTier;
+  onGoPremium: () => void;
 }) {
   const [genre, setGenre] = useState<string | null>('Hip-Hop/Rap');
   const [tracks, setTracks] = useState<AudiusTrack[]>([]);
@@ -43,6 +75,92 @@ export default function MusicTab({
   const [searching, setSearching] = useState(false);
   const [searchResults, setSearchResults] = useState<AudiusTrack[] | null>(null);
   const [service, setService] = useState<ServiceFilter>('all');
+
+  // --- My playlists (premium) ---
+  const isPremium = premiumTier !== null;
+  const [openPlaylistId, setOpenPlaylistId] = useState<string | null>(null);
+  const [showNewForm, setShowNewForm] = useState(false);
+  const [newName, setNewName] = useState('');
+  const [addTarget, setAddTarget] = useState<AudiusTrack | null>(null);
+  const [notice, setNotice] = useState('');
+  const [renameName, setRenameName] = useState('');
+  const [renaming, setRenaming] = useState(false);
+
+  // The "Added to …" line clears itself after a few seconds.
+  useEffect(() => {
+    if (!notice) return;
+    const id = window.setTimeout(() => setNotice(''), 3000);
+    return () => window.clearTimeout(id);
+  }, [notice]);
+
+  const openPlaylist = playlists.find((p) => p.id === openPlaylistId) ?? null;
+
+  function touch(pl: MusicPlaylist, patch: Partial<MusicPlaylist>): MusicPlaylist {
+    return { ...pl, ...patch, updatedAt: new Date().toISOString() };
+  }
+
+  function createPlaylist(firstTrack?: AudiusTrack): void {
+    const name = newName.trim() || 'My playlist';
+    const pl: MusicPlaylist = {
+      id: newPlaylistId(),
+      name,
+      tracks: firstTrack ? [firstTrack] : [],
+      updatedAt: new Date().toISOString(),
+    };
+    onPlaylistsChange([...playlists, pl]);
+    setNewName('');
+    setShowNewForm(false);
+    setAddTarget(null);
+    setNotice(
+      firstTrack ? `Made "${name}" with ${firstTrack.title}.` : `Made "${name}".`,
+    );
+  }
+
+  function addToPlaylist(pl: MusicPlaylist, track: AudiusTrack): void {
+    if (pl.tracks.some((t) => t.id === track.id)) return; // already in — the picker shows a check
+    if (pl.tracks.length >= MAX_TRACKS_PER_PLAYLIST) {
+      setNotice(`"${pl.name}" is full (100 tracks).`);
+      return;
+    }
+    onPlaylistsChange(
+      playlists.map((p) => (p.id === pl.id ? touch(p, { tracks: [...p.tracks, track] }) : p)),
+    );
+    setAddTarget(null);
+    setNotice(`Added ${track.title} to "${pl.name}".`);
+  }
+
+  function removeFromPlaylist(pl: MusicPlaylist, trackId: string): void {
+    onPlaylistsChange(
+      playlists.map((p) =>
+        p.id === pl.id ? touch(p, { tracks: p.tracks.filter((t) => t.id !== trackId) }) : p,
+      ),
+    );
+  }
+
+  function renamePlaylist(pl: MusicPlaylist): void {
+    const name = renameName.trim();
+    if (!name) return;
+    onPlaylistsChange(playlists.map((p) => (p.id === pl.id ? touch(p, { name }) : p)));
+    setRenaming(false);
+    setNotice(`Renamed to "${name}".`);
+  }
+
+  function deletePlaylist(pl: MusicPlaylist): void {
+    onPlaylistsChange(playlists.filter((p) => p.id !== pl.id));
+    queueDeletion('playlist', pl.id);
+    if (openPlaylistId === pl.id) setOpenPlaylistId(null);
+    setNotice(`Deleted "${pl.name}".`);
+  }
+
+  function playPlaylist(pl: MusicPlaylist): void {
+    if (pl.tracks.length === 0) return;
+    onPlayTrack(pl.tracks[0], pl.tracks);
+  }
+
+  function playlistLength(pl: MusicPlaylist): string {
+    const total = pl.tracks.reduce((sum, t) => sum + (t.durationSec || 0), 0);
+    return total > 0 ? formatDuration(total) : '';
+  }
 
   // Trending for the picked genre. Clears an old search when the genre changes.
   useEffect(() => {
@@ -93,7 +211,69 @@ export default function MusicTab({
   const shown = searchResults ?? tracks;
   const showingSearch = searchResults !== null;
 
-  const playlists = service === 'all' ? PLAYLISTS : PLAYLISTS.filter((p) => p.service === service);
+  const externalPlaylists =
+    service === 'all' ? PLAYLISTS : PLAYLISTS.filter((p) => p.service === service);
+
+  // One track row: tap the song to play it, tap + to put it in a playlist.
+  function trackRow(track: AudiusTrack, list: AudiusTrack[], action: 'add' | 'remove' | 'none', playlist?: MusicPlaylist) {
+    const isCurrent = currentTrack?.id === track.id;
+    return (
+      <div key={track.id} className={isCurrent ? 'track-row playing' : 'track-row'}>
+        <button
+          type="button"
+          className="track-row-main"
+          onClick={() => {
+            if (isCurrent) {
+              onTogglePlay();
+            } else {
+              onPlayTrack(track, list);
+            }
+          }}
+          aria-label={`${isCurrent && isPlaying ? 'Pause' : 'Play'} ${track.title} by ${track.artist}`}
+        >
+          {track.artwork ? (
+            <img src={track.artwork} alt="" loading="lazy" />
+          ) : (
+            <span className="track-row-art-fallback" aria-hidden>
+              ♫
+            </span>
+          )}
+          <span className="track-row-text">
+            <strong>{track.title}</strong>
+            <span className="muted">
+              {track.artist}
+              {track.durationSec > 0 ? ` · ${formatDuration(track.durationSec)}` : ''}
+            </span>
+          </span>
+          {isCurrent && isPlaying ? (
+            <Pause size={18} aria-hidden />
+          ) : (
+            <Play size={18} aria-hidden />
+          )}
+        </button>
+        {action === 'add' && isPremium && (
+          <button
+            type="button"
+            className="track-row-add"
+            onClick={() => setAddTarget(track)}
+            aria-label={`Add ${track.title} to a playlist`}
+          >
+            <Plus size={18} aria-hidden />
+          </button>
+        )}
+        {action === 'remove' && playlist && (
+          <button
+            type="button"
+            className="track-row-add"
+            onClick={() => removeFromPlaylist(playlist, track.id)}
+            aria-label={`Remove ${track.title} from ${playlist.name}`}
+          >
+            <X size={18} aria-hidden />
+          </button>
+        )}
+      </div>
+    );
+  }
 
   return (
     <main>
@@ -139,6 +319,269 @@ export default function MusicTab({
         <p className="muted" role="alert" style={{ marginTop: 12 }}>
           {audioError}
         </p>
+      )}
+
+      {/* My playlists — premium members only */}
+      <section aria-label="My playlists" style={{ marginTop: 20 }}>
+        <h2 style={{ marginBottom: 4, display: 'flex', alignItems: 'center', gap: 8 }}>
+          <ListMusic size={20} aria-hidden /> My playlists
+        </h2>
+        {!isPremium ? (
+          <article className="card">
+            <p style={{ marginTop: 0 }}>
+              <strong>Playlists are a premium perk.</strong>
+            </p>
+            <p className="muted">
+              Lit and Cloud Nine members can make their own playlists from any Audius track —
+              and the playlists sync to your account, so they follow you to any device.
+            </p>
+            <p style={{ marginBottom: 0 }}>
+              <button type="button" className="btn btn-block" onClick={onGoPremium}>
+                See premium
+              </button>
+            </p>
+          </article>
+        ) : openPlaylist ? (
+          <>
+            <button
+              type="button"
+              className="btn secondary"
+              onClick={() => {
+                setOpenPlaylistId(null);
+                setRenaming(false);
+              }}
+              style={{ marginBottom: 12 }}
+            >
+              <ChevronLeft size={16} aria-hidden /> Back to playlists
+            </button>
+            {renaming ? (
+              <form
+                onSubmit={(e) => {
+                  e.preventDefault();
+                  renamePlaylist(openPlaylist);
+                }}
+                style={{ display: 'flex', gap: 8, marginBottom: 12 }}
+              >
+                <input
+                  type="text"
+                  className="music-search"
+                  value={renameName}
+                  onChange={(e) => setRenameName(e.target.value)}
+                  placeholder="Playlist name"
+                  aria-label="Playlist name"
+                  autoFocus
+                />
+                <button type="submit" className="btn" disabled={renameName.trim() === ''}>
+                  Save
+                </button>
+                <button type="button" className="btn secondary" onClick={() => setRenaming(false)}>
+                  Cancel
+                </button>
+              </form>
+            ) : (
+              <div style={{ display: 'flex', alignItems: 'baseline', gap: 8, flexWrap: 'wrap' }}>
+                <h3 style={{ margin: 0 }}>{openPlaylist.name}</h3>
+                <span className="muted small">
+                  {openPlaylist.tracks.length} track{openPlaylist.tracks.length === 1 ? '' : 's'}
+                  {playlistLength(openPlaylist) ? ` · ${playlistLength(openPlaylist)}` : ''}
+                </span>
+              </div>
+            )}
+            <div style={{ display: 'flex', gap: 8, marginTop: 12, marginBottom: 12, flexWrap: 'wrap' }}>
+              <button
+                type="button"
+                className="btn"
+                onClick={() => playPlaylist(openPlaylist)}
+                disabled={openPlaylist.tracks.length === 0}
+              >
+                <Play size={16} aria-hidden /> Play all
+              </button>
+              {!renaming && (
+                <button
+                  type="button"
+                  className="btn secondary"
+                  onClick={() => {
+                    setRenameName(openPlaylist.name);
+                    setRenaming(true);
+                  }}
+                >
+                  <Pencil size={16} aria-hidden /> Rename
+                </button>
+              )}
+              <button
+                type="button"
+                className="btn secondary"
+                onClick={() => deletePlaylist(openPlaylist)}
+              >
+                <Trash2 size={16} aria-hidden /> Delete
+              </button>
+            </div>
+            {openPlaylist.tracks.length === 0 ? (
+              <p className="muted">
+                Nothing in here yet — tap the <strong>+</strong> on any song below to add it.
+              </p>
+            ) : (
+              <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
+                {openPlaylist.tracks.map((t) =>
+                  trackRow(t, openPlaylist.tracks, 'remove', openPlaylist),
+                )}
+              </div>
+            )}
+          </>
+        ) : (
+          <>
+            <p className="muted small" style={{ marginTop: 0 }}>
+              {playlists.length === 0
+                ? 'Your own mixes, saved to your account.'
+                : `${playlists.length} of ${MAX_PLAYLISTS} playlists`}
+            </p>
+            {playlists.map((pl) => (
+              <article className="card" key={pl.id} aria-label={pl.name}>
+                <div
+                  style={{ display: 'flex', alignItems: 'center', gap: 10, cursor: 'pointer' }}
+                  onClick={() => setOpenPlaylistId(pl.id)}
+                  role="button"
+                  tabIndex={0}
+                  onKeyDown={(e) => {
+                    if (e.key === 'Enter' || e.key === ' ') setOpenPlaylistId(pl.id);
+                  }}
+                >
+                  <span
+                    aria-hidden
+                    style={{
+                      width: 44,
+                      height: 44,
+                      borderRadius: 10,
+                      background: 'var(--surface)',
+                      color: 'var(--accent)',
+                      display: 'flex',
+                      alignItems: 'center',
+                      justifyContent: 'center',
+                      flexShrink: 0,
+                    }}
+                  >
+                    <ListMusic size={20} />
+                  </span>
+                  <span style={{ flex: 1, minWidth: 0 }}>
+                    <strong style={{ display: 'block', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+                      {pl.name}
+                    </strong>
+                    <span className="muted small">
+                      {pl.tracks.length} track{pl.tracks.length === 1 ? '' : 's'}
+                      {playlistLength(pl) ? ` · ${playlistLength(pl)}` : ''}
+                    </span>
+                  </span>
+                  <button
+                    type="button"
+                    className="btn"
+                    aria-label={`Play ${pl.name}`}
+                    disabled={pl.tracks.length === 0}
+                    onClick={(e) => {
+                      e.stopPropagation();
+                      playPlaylist(pl);
+                    }}
+                  >
+                    <Play size={16} aria-hidden />
+                  </button>
+                </div>
+              </article>
+            ))}
+            {playlists.length < MAX_PLAYLISTS &&
+              (showNewForm ? (
+                <form
+                  onSubmit={(e) => {
+                    e.preventDefault();
+                    createPlaylist();
+                  }}
+                  style={{ display: 'flex', gap: 8, marginTop: 8 }}
+                >
+                  <input
+                    type="text"
+                    className="music-search"
+                    value={newName}
+                    onChange={(e) => setNewName(e.target.value)}
+                    placeholder="Playlist name"
+                    aria-label="Playlist name"
+                    autoFocus
+                  />
+                  <button type="submit" className="btn">
+                    Create
+                  </button>
+                  <button type="button" className="btn secondary" onClick={() => setShowNewForm(false)}>
+                    Cancel
+                  </button>
+                </form>
+              ) : (
+                <button
+                  type="button"
+                  className="btn btn-block"
+                  onClick={() => setShowNewForm(true)}
+                  style={{ marginTop: 8 }}
+                >
+                  <Plus size={16} aria-hidden /> New playlist
+                </button>
+              ))}
+          </>
+        )}
+        {notice && (
+          <p className="muted small" role="status" style={{ marginTop: 8 }}>
+            {notice}
+          </p>
+        )}
+      </section>
+
+      {/* Add to playlist picker */}
+      {addTarget && isPremium && (
+        <section className="card" aria-label="Add to playlist" style={{ marginTop: 16 }}>
+          <p style={{ marginTop: 0 }}>
+            <strong>Add to a playlist</strong>
+          </p>
+          <p className="muted small" style={{ marginTop: 0 }}>
+            {addTarget.title} — {addTarget.artist}
+          </p>
+          {playlists.length === 0 ? (
+            <p className="muted">No playlists yet — make your first one below.</p>
+          ) : (
+            <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
+              {playlists.map((pl) => {
+                const already = pl.tracks.some((t) => t.id === addTarget.id);
+                const full = pl.tracks.length >= MAX_TRACKS_PER_PLAYLIST;
+                return (
+                  <button
+                    key={pl.id}
+                    type="button"
+                    className="btn"
+                    style={{ justifyContent: 'flex-start' }}
+                    disabled={already || full}
+                    onClick={() => addToPlaylist(pl, addTarget)}
+                  >
+                    {already ? '✓ ' : ''}{pl.name}
+                    <span className="muted small" style={{ marginLeft: 'auto' }}>
+                      {already ? 'Already in' : full ? 'Full' : `${pl.tracks.length} tracks`}
+                    </span>
+                  </button>
+                );
+              })}
+            </div>
+          )}
+          <div style={{ display: 'flex', gap: 8, marginTop: 12, flexWrap: 'wrap' }}>
+            {playlists.length < MAX_PLAYLISTS && (
+              <button
+                type="button"
+                className="btn"
+                onClick={() => {
+                  setNewName('');
+                  createPlaylist(addTarget);
+                }}
+              >
+                <Plus size={16} aria-hidden /> New playlist with this song
+              </button>
+            )}
+            <button type="button" className="btn secondary" onClick={() => setAddTarget(null)}>
+              Cancel
+            </button>
+          </div>
+        </section>
       )}
 
       {/* Search */}
@@ -197,44 +640,7 @@ export default function MusicTab({
 
       {loading && shown.length === 0 ? null : (
         <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
-          {shown.map((track) => {
-            const isCurrent = currentTrack?.id === track.id;
-            return (
-              <button
-                key={track.id}
-                type="button"
-                className={isCurrent ? 'track-row playing' : 'track-row'}
-                onClick={() => {
-                  if (isCurrent) {
-                    onTogglePlay();
-                  } else {
-                    onPlayTrack(track, shown);
-                  }
-                }}
-                aria-label={`${isCurrent && isPlaying ? 'Pause' : 'Play'} ${track.title} by ${track.artist}`}
-              >
-                {track.artwork ? (
-                  <img src={track.artwork} alt="" loading="lazy" />
-                ) : (
-                  <span className="track-row-art-fallback" aria-hidden>
-                    ♫
-                  </span>
-                )}
-                <span className="track-row-text">
-                  <strong>{track.title}</strong>
-                  <span className="muted">
-                    {track.artist}
-                    {track.durationSec > 0 ? ` · ${formatDuration(track.durationSec)}` : ''}
-                  </span>
-                </span>
-                {isCurrent && isPlaying ? (
-                  <Pause size={18} aria-hidden />
-                ) : (
-                  <Play size={18} aria-hidden />
-                )}
-              </button>
-            );
-          })}
+          {shown.map((track) => trackRow(track, shown, 'add'))}
         </div>
       )}
 
@@ -266,10 +672,10 @@ export default function MusicTab({
       </ChipRow>
 
       <p className="muted small">
-        Showing {playlists.length} of {PLAYLISTS.length} playlists
+        Showing {externalPlaylists.length} of {PLAYLISTS.length} playlists
       </p>
 
-      {playlists.map((playlist) => (
+      {externalPlaylists.map((playlist) => (
         <article className="card" key={playlist.id} aria-label={playlist.title}>
           <p className="muted small" style={{ marginTop: 0, marginBottom: 6 }}>
             <span style={{ color: 'var(--accent)', fontWeight: 700 }}>{playlist.service}</span>

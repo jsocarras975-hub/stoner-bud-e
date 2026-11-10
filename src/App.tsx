@@ -56,7 +56,7 @@ import type { JournalEntry } from './journal';
 import { STASH_KEY, isRunningLow, lowNote, stashSummary, withAmount } from './stash';
 import type { StashItem } from './stash';
 import AuthTab, { ResetPasswordView } from './AuthTab';
-import { clearLocalSyncState, queueDeletion, uploadLocal, DEFAULT_PERSONALIZATION, cleanPersonalization } from './lib/sync';
+import { clearLocalSyncState, queueDeletion, uploadLocal, mergeLocalWithServer, DEFAULT_PERSONALIZATION, cleanPersonalization } from './lib/sync';
 import type { SyncSettings, SyncedChatConversation, PremiumTier, Personalization } from './lib/sync';
 import { deleteAccount, getSession, signOut } from './lib/auth-client';
 import type { AuthUser } from './lib/auth-client';
@@ -68,7 +68,7 @@ import type { AppAction } from './lib/device-actions';
 import type { ActiveRecording } from './lib/voice-client';
 import { TIMER_ALERTS, buzz, planAlerts, type PlannedAlert, type TimerAlert, type TimerAlertId } from './lib/timer-alerts';
 import { streamUrl } from './lib/audius';
-import type { AudiusTrack } from './lib/audius';
+import type { AudiusTrack, MusicPlaylist } from './lib/audius';
 import {
   cancelNativeAlerts,
   checkAlertPermission,
@@ -82,6 +82,7 @@ import { Chip, ChipRow, Label, PageHead } from './bits';
 
 const TRANSCRIPT_KEY = 'bude-transcript-v1'; // legacy single transcript
 const CHATS_KEY = 'bude-chats-v1';
+const PLAYLISTS_KEY = 'bude-playlists-v1';
 const SESSION_KEY = 'bude-session-v1';
 const VIBE_KEY = 'bude-vibe-v1';
 const VOICE_KEY = 'bude-voice-v1';
@@ -417,6 +418,7 @@ export default function App() {
   });
   const [journal, setJournal] = useState<JournalEntry[]>(() => loadList(JOURNAL_KEY));
   const [stash, setStash] = useState<StashItem[]>(() => loadList(STASH_KEY));
+  const [playlists, setPlaylists] = useState<MusicPlaylist[]>(() => loadList(PLAYLISTS_KEY));
   // Fresh stash for chat actions: the launch-info effect runs with an old
   // closure (it fires on focus), so it reads the ref, not the render's stash.
   const stashRef = useRef(stash);
@@ -626,6 +628,7 @@ export default function App() {
   }, [personalization]);
   useEffect(() => save(JOURNAL_KEY, journal), [journal]);
   useEffect(() => save(STASH_KEY, stash), [stash]);
+  useEffect(() => save(PLAYLISTS_KEY, playlists), [playlists]);
 
   // Home-screen widget stash line (phone app only): the totals, plus
   // the first jar running low — the warning is the line that matters,
@@ -671,7 +674,7 @@ export default function App() {
     }, 2000);
     return () => window.clearTimeout(id);
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [journal, stash, chats, session, vibe, voice, theme, user, isOnline]);
+  }, [journal, stash, chats, playlists, session, vibe, voice, theme, user, isOnline]);
 
   function deductFromStash(stashId: string, amount: number, unit: 'mg' | 'g'): void {
     setStash((items) =>
@@ -821,6 +824,7 @@ export default function App() {
     journal: JournalEntry[];
     stash: StashItem[];
     chats: SyncedChatConversation[];
+    playlists: MusicPlaylist[];
     settings: SyncSettings | null;
   }): void {
     applyingServerState.current = true;
@@ -828,6 +832,10 @@ export default function App() {
     setStash(state.stash);
     // Keep the photos this phone holds — the server copy has none.
     setChats((local) => mergeChatImages(local, state.chats));
+    // Playlists merge by updatedAt, so a playlist edit made on this phone
+    // is never wiped by a server round-trip that started before the edit.
+    // The ?? [] guards a stale deployment that returns no playlists yet.
+    setPlaylists((local) => mergeLocalWithServer(local, state.playlists ?? []));
     if (state.chats.length > 0 && !currentChatId) {
       setCurrentChatId(state.chats[0].id);
     }
@@ -868,7 +876,7 @@ export default function App() {
     setSyncMessage('Syncing…');
     try {
       const state = await uploadLocal(
-        { journal, stash, chats: stripChatImages(chats) },
+        { journal, stash, chats: stripChatImages(chats), playlists },
         currentSettings(),
       );
       applyServerState(state);
@@ -916,6 +924,7 @@ export default function App() {
       localStorage.removeItem(STASH_KEY);
       localStorage.removeItem(TRANSCRIPT_KEY);
       localStorage.removeItem(CHATS_KEY);
+      localStorage.removeItem(PLAYLISTS_KEY);
       localStorage.removeItem(SESSION_KEY);
       localStorage.removeItem(VIBE_KEY);
       localStorage.removeItem(BREAK_KEY);
@@ -925,6 +934,7 @@ export default function App() {
     setJournal([]);
     setStash([]);
     setChats([]);
+    setPlaylists([]);
     setCurrentChatId(null);
     setSession(DEFAULT_SESSION);
     setVibe(DEFAULT_VIBE);
@@ -1174,6 +1184,10 @@ export default function App() {
           onTogglePlay={togglePlay}
           onNext={playNext}
           onPrev={playPrev}
+          playlists={playlists}
+          onPlaylistsChange={setPlaylists}
+          premiumTier={premiumTier}
+          onGoPremium={() => setTab('settings')}
         />
       )}
       {tab === 'journal' && journalView}

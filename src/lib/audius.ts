@@ -16,6 +16,27 @@ export interface AudiusTrack {
   permalink: string;
 }
 
+/** A premium member's playlist: a named, ordered list of Audius tracks.
+ *  Synced to the account (see src/lib/sync.ts + api/sync.ts) so it follows
+ *  the member across devices. updatedAt drives the sync merge. */
+export interface MusicPlaylist {
+  id: string;
+  name: string;
+  tracks: AudiusTrack[];
+  updatedAt?: string;
+}
+
+/** A fresh playlist id (random, URL-safe). */
+export function newPlaylistId(): string {
+  try {
+    const bytes = new Uint8Array(9);
+    crypto.getRandomValues(bytes);
+    return [...bytes].map((b) => b.toString(36)).join('').slice(0, 12) || `pl-${Date.now()}`;
+  } catch {
+    return `pl-${Date.now()}-${Math.floor(Math.random() * 1e6)}`;
+  }
+}
+
 const API = 'https://api.audius.co';
 
 export function streamUrl(id: string): string {

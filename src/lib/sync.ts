@@ -42,6 +42,7 @@ import type { StashItem } from '../stash.ts';
 import type { ChatMessage, Experience, Session } from '../bude.ts';
 import type { ThemeId } from '../theme.ts';
 import type { VoiceSettings } from '../voice.ts';
+import type { MusicPlaylist } from './audius.ts';
 
 export type Synced<T> = T & { updatedAt?: string };
 
@@ -151,7 +152,7 @@ export interface SyncSettings {
 }
 
 export interface Tombstone {
-  kind: 'journal' | 'stash' | 'chat';
+  kind: 'journal' | 'stash' | 'chat' | 'playlist';
   id: string;
   deletedAt: string;
 }
@@ -160,6 +161,7 @@ export interface ServerState {
   journal: SyncedJournalEntry[];
   stash: SyncedStashItem[];
   chats: SyncedChatConversation[];
+  playlists: MusicPlaylist[];
   settings: SyncSettings | null;
   deleted: Tombstone[];
 }
@@ -168,6 +170,7 @@ export interface LocalState {
   journal: SyncedJournalEntry[];
   stash: SyncedStashItem[];
   chats: SyncedChatConversation[];
+  playlists: MusicPlaylist[];
 }
 
 const SNAPSHOT_KEY = 'bude-sync-snapshot-v1';
@@ -187,22 +190,24 @@ interface Snapshot {
   journal: Record<string, string>;
   stash: Record<string, string>;
   chats: Record<string, string>;
+  playlists: Record<string, string>;
   settings: string | null;
 }
 
 function loadSnapshot(): Snapshot {
   try {
     const raw = localStorage.getItem(SNAPSHOT_KEY);
-    if (!raw) return { journal: {}, stash: {}, chats: {}, settings: null };
+    if (!raw) return { journal: {}, stash: {}, chats: {}, playlists: {}, settings: null };
     const parsed = JSON.parse(raw) as Partial<Snapshot>;
     return {
       journal: parsed.journal ?? {},
       stash: parsed.stash ?? {},
       chats: parsed.chats ?? {},
+      playlists: parsed.playlists ?? {},
       settings: parsed.settings ?? null,
     };
   } catch {
-    return { journal: {}, stash: {}, chats: {}, settings: null };
+    return { journal: {}, stash: {}, chats: {}, playlists: {}, settings: null };
   }
 }
 
@@ -212,6 +217,7 @@ function saveSnapshot(state: ServerState): void {
       journal: Object.fromEntries(state.journal.map((e) => [e.id, contentKey(e)])),
       stash: Object.fromEntries(state.stash.map((i) => [i.id, contentKey(i)])),
       chats: Object.fromEntries(state.chats.map((c) => [c.id, contentKey(c)])),
+      playlists: Object.fromEntries(state.playlists.map((p) => [p.id, contentKey(p)])),
       settings: state.settings ? contentKey(state.settings) : null,
     };
     localStorage.setItem(SNAPSHOT_KEY, JSON.stringify(snapshot));
@@ -255,7 +261,8 @@ function loadDeleteQueue(): Tombstone[] {
         typeof t === 'object' &&
         ((t as Tombstone).kind === 'journal' ||
           (t as Tombstone).kind === 'stash' ||
-          (t as Tombstone).kind === 'chat') &&
+          (t as Tombstone).kind === 'chat' ||
+          (t as Tombstone).kind === 'playlist') &&
         typeof (t as Tombstone).id === 'string' &&
         typeof (t as Tombstone).deletedAt === 'string',
     );
@@ -278,7 +285,7 @@ function saveDeleteQueue(queue: Tombstone[]): void {
  * sent on the first sync after sign-in, so a delete made while signed out
  * cannot resurrect from the server. A repeat delete keeps the FIRST time.
  */
-export function queueDeletion(kind: 'journal' | 'stash' | 'chat', id: string): void {
+export function queueDeletion(kind: 'journal' | 'stash' | 'chat' | 'playlist', id: string): void {
   const queue = loadDeleteQueue();
   if (queue.some((t) => t.kind === kind && t.id === id)) return;
   queue.push({ kind, id, deletedAt: new Date().toISOString() });
@@ -306,7 +313,8 @@ function loadTombstoneCache(): Tombstone[] {
         typeof t === 'object' &&
         ((t as Tombstone).kind === 'journal' ||
           (t as Tombstone).kind === 'stash' ||
-          (t as Tombstone).kind === 'chat') &&
+          (t as Tombstone).kind === 'chat' ||
+          (t as Tombstone).kind === 'playlist') &&
         typeof (t as Tombstone).id === 'string' &&
         typeof (t as Tombstone).deletedAt === 'string',
     );
@@ -339,7 +347,7 @@ function saveTombstoneCache(tombstones: Tombstone[]): void {
  */
 export function filterTombstoned<T extends { id: string; updatedAt?: string }>(
   items: T[],
-  kind: 'journal' | 'stash' | 'chat',
+  kind: 'journal' | 'stash' | 'chat' | 'playlist',
   tombstones: Tombstone[],
 ): T[] {
   const byId = new Map(
@@ -416,6 +424,16 @@ async function readState(res: Response): Promise<ServerState> {
   const journal = Array.isArray(state.journal) ? state.journal : [];
   const stash = Array.isArray(state.stash) ? state.stash : [];
   const chats = Array.isArray(state.chats) ? state.chats : [];
+  const playlists = Array.isArray(state.playlists)
+    ? (state.playlists as unknown[]).filter(
+        (p): p is MusicPlaylist =>
+          !!p &&
+          typeof p === 'object' &&
+          typeof (p as MusicPlaylist).id === 'string' &&
+          typeof (p as MusicPlaylist).name === 'string' &&
+          Array.isArray((p as MusicPlaylist).tracks),
+      )
+    : [];
   const settings =
     state.settings && typeof state.settings === 'object' ? state.settings : null;
   const deleted = Array.isArray(state.deleted)
@@ -425,12 +443,13 @@ async function readState(res: Response): Promise<ServerState> {
           typeof t === 'object' &&
           ((t as Tombstone).kind === 'journal' ||
             (t as Tombstone).kind === 'stash' ||
-            (t as Tombstone).kind === 'chat') &&
+            (t as Tombstone).kind === 'chat' ||
+            (t as Tombstone).kind === 'playlist') &&
           typeof (t as Tombstone).id === 'string' &&
           typeof (t as Tombstone).deletedAt === 'string',
       )
     : [];
-  const merged: ServerState = { journal, stash, chats, settings, deleted };
+  const merged: ServerState = { journal, stash, chats, playlists, settings, deleted };
   saveSnapshot(merged);
   saveTombstoneCache(deleted);
   clearConfirmedDeletions(deleted);
@@ -438,12 +457,13 @@ async function readState(res: Response): Promise<ServerState> {
 }
 
 /**
- * Upload the local journal/stash/settings, then return the merged server
- * state (the source of truth — App.tsx should replace its local lists with
- * this). Items changed since the last sync get a fresh updatedAt; unchanged
- * items keep theirs, so an older device cannot clobber a newer server row.
- * Queued deletions go up with the upload, and any local item a known
- * tombstone covers is left out — a tombstoned item is never re-uploaded.
+ * Upload the local journal/stash/chats/playlists/settings, then return the
+ * merged server state (the source of truth — App.tsx should replace its
+ * local lists with this). Items changed since the last sync get a fresh
+ * updatedAt; unchanged items keep theirs, so an older device cannot
+ * clobber a newer server row. Queued deletions go up with the upload, and
+ * any local item a known tombstone covers is left out — a tombstoned item
+ * is never re-uploaded.
  */
 export async function uploadLocal(
   local: LocalState,
@@ -467,6 +487,11 @@ export async function uploadLocal(
     snapshot.chats,
     now,
   );
+  const playlists = stampIfChanged(
+    filterTombstoned(local.playlists, 'playlist', tombstones),
+    snapshot.playlists,
+    now,
+  );
   const stampedSettings =
     settings === null
       ? null
@@ -481,6 +506,7 @@ export async function uploadLocal(
       journal,
       stash,
       chats,
+      playlists,
       settings: stampedSettings,
       deleted: loadDeleteQueue(),
     }),

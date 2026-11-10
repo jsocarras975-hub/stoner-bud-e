@@ -1,10 +1,11 @@
 // Stoner Bud-E — /api/sync (Vercel Node serverless function).
 //
 // GET returns the signed-in user's server state; POST upserts the journal,
-// stash, chats, and settings the client sends and returns the merged server
-// state. Authenticated only: a valid Better Auth session cookie is required,
-// else 401 `sign_in_required`. Returns 503 `auth_not_configured` until
-// DATABASE_URL is set. Same CORS pattern as api/chat.ts, plus credentials.
+// stash, chats, playlists, and settings the client sends and returns the
+// merged server state. Authenticated only: a valid Better Auth session
+// cookie is required, else 401 `sign_in_required`. Returns 503
+// `auth_not_configured` until DATABASE_URL is set. Same CORS pattern as
+// api/chat.ts, plus credentials.
 //
 // Conflict rule (server-wins): a row is only overwritten when the incoming
 // updated_at is NEWER than the stored one; otherwise the stored server copy
@@ -38,7 +39,7 @@ import type { Pool, PoolClient } from 'pg';
 type SyncedRecord = Record<string, unknown> & { updatedAt: string };
 
 interface Tombstone {
-  kind: 'journal' | 'stash' | 'chat';
+  kind: 'journal' | 'stash' | 'chat' | 'playlist';
   id: string;
   deletedAt: string;
 }
@@ -47,6 +48,7 @@ interface ApiServerState {
   journal: SyncedRecord[];
   stash: SyncedRecord[];
   chats: SyncedRecord[];
+  playlists: SyncedRecord[];
   settings: (Record<string, unknown> & { updatedAt: string }) | null;
   deleted: Tombstone[];
 }
@@ -55,6 +57,8 @@ const MAX_JOURNAL = 500;
 const MAX_STASH = 200;
 const MAX_CHATS = 100;
 const MAX_MESSAGES_PER_CHAT = 200;
+const MAX_PLAYLISTS = 20;
+const MAX_TRACKS_PER_PLAYLIST = 100;
 const MAX_DELETED = 500;
 
 // The deleted_items DDL, kept identical to migrations/0003_deleted_items.sql
@@ -63,11 +67,12 @@ const MAX_DELETED = 500;
 // via the Neon SQL Editor / scripts/setup-db.mjs, but sync must not 500
 // when the table is not there yet — and once the migration is applied this
 // is a no-op. Never logs or returns anything sensitive.
-// Kind check is expanded in ensure to allow 'chat' (migration 0004).
+// Kind check is expanded in ensure to allow 'chat' (migration 0004) and
+// 'playlist' (music playlists).
 const DELETED_ITEMS_DDL = `create table if not exists deleted_items (
   id uuid not null primary key default gen_random_uuid(),
   user_id text not null references "user" ("id") on delete cascade,
-  kind text not null check (kind in ('journal', 'stash', 'chat')),
+  kind text not null check (kind in ('journal', 'stash', 'chat', 'playlist')),
   item_id text not null,
   deleted_at timestamptz not null default CURRENT_TIMESTAMP,
   unique (user_id, kind, item_id)
@@ -84,8 +89,22 @@ const CHAT_CONVERSATIONS_DDL = `create table if not exists chat_conversations (
 );
 create index if not exists chat_conversations_user_id_idx on chat_conversations (user_id)`;
 
+// Music playlists table (premium members). Same shape as chat_conversations:
+// one JSONB doc per playlist (id, name, ordered tracks), keyed by
+// (user_id, id). No migration file yet — the ensure below creates it on
+// first use, same as the chat table.
+const USER_PLAYLISTS_DDL = `create table if not exists user_playlists (
+  user_id text not null references "user" ("id") on delete cascade,
+  id text not null,
+  data jsonb not null,
+  updated_at timestamptz not null default CURRENT_TIMESTAMP,
+  primary key (user_id, id)
+);
+create index if not exists user_playlists_user_id_idx on user_playlists (user_id)`;
+
 let deletedItemsEnsured = false;
 let chatTableEnsured = false;
+let playlistsTableEnsured = false;
 
 /** Idempotent: create the tombstone table if the migration has not landed
  *  yet. Best-effort — a failure here leaves the flag unset, and the
@@ -95,7 +114,8 @@ async function ensureDeletedItemsTable(pool: Pool): Promise<void> {
   try {
     await pool.query(DELETED_ITEMS_DDL);
     // Best-effort: expand the kind check for existing tables that still
-    // have the old 'journal','stash' constraint (from 0003).
+    // have the old 'journal','stash' (from 0003) or 'journal','stash','chat'
+    // constraint — the current check also allows 'playlist'.
     await pool.query(`
       DO $$
       BEGIN
@@ -106,7 +126,7 @@ async function ensureDeletedItemsTable(pool: Pool): Promise<void> {
         ) THEN
           ALTER TABLE deleted_items DROP CONSTRAINT deleted_items_kind_check;
           ALTER TABLE deleted_items ADD CONSTRAINT deleted_items_kind_check
-            CHECK (kind in ('journal', 'stash', 'chat'));
+            CHECK (kind in ('journal', 'stash', 'chat', 'playlist'));
         END IF;
       END $$;
     `).catch(() => {});
@@ -127,6 +147,16 @@ async function ensureChatConversationsTable(pool: Pool): Promise<void> {
   }
 }
 
+async function ensurePlaylistsTable(pool: Pool): Promise<void> {
+  if (playlistsTableEnsured) return;
+  try {
+    await pool.query(USER_PLAYLISTS_DDL);
+    playlistsTableEnsured = true;
+  } catch {
+    // Same as above — best-effort.
+  }
+}
+
 type Req = ReqLike & { on?: unknown };
 type Res = ResLike & { headersSent?: boolean };
 
@@ -140,12 +170,13 @@ interface SyncBody {
   journal?: unknown;
   stash?: unknown;
   chats?: unknown;
+  playlists?: unknown;
   settings?: unknown;
   deleted?: unknown;
 }
 
 interface IncomingTombstone {
-  kind: 'journal' | 'stash' | 'chat';
+  kind: 'journal' | 'stash' | 'chat' | 'playlist';
   id: string;
   deletedAt: Date | null;
 }
@@ -182,6 +213,49 @@ function cleanChats(raw: unknown): IncomingItem[] | null {
   return items;
 }
 
+/** Validate one uploaded playlist list. Returns null when malformed.
+ *  A playlist is { id, name, tracks: AudiusTrack[] }. Tracks are kept
+ *  only when they carry the fields the player needs (id, title, artist,
+ *  a numeric duration); a malformed track is dropped, not fatal. Caps
+ *  playlists at MAX_PLAYLISTS and tracks at MAX_TRACKS_PER_PLAYLIST
+ *  (truncates, does not reject). */
+function cleanPlaylists(raw: unknown): IncomingItem[] | null {
+  if (raw === undefined) return [];
+  if (!Array.isArray(raw) || raw.length > MAX_PLAYLISTS) return null;
+  const items: IncomingItem[] = [];
+  for (const entry of raw) {
+    if (!isRecord(entry)) return null;
+    const { updatedAt: _dropped, ...data } = entry;
+    void _dropped;
+    if (typeof data.id !== 'string' || data.id === '' || data.id.length > 128) return null;
+    if (typeof data.name !== 'string' || data.name.trim() === '') data.name = 'Playlist';
+    data.name = String(data.name).slice(0, 100);
+    const rawTracks = Array.isArray(data.tracks) ? (data.tracks as unknown[]) : [];
+    const tracks: Record<string, unknown>[] = [];
+    for (const t of rawTracks) {
+      if (!isRecord(t)) continue;
+      if (typeof t.id !== 'string' || t.id === '') continue;
+      if (typeof t.title !== 'string' || t.title === '') continue;
+      if (typeof t.artist !== 'string') continue;
+      if (typeof t.durationSec !== 'number' || !Number.isFinite(t.durationSec)) continue;
+      tracks.push({
+        id: t.id,
+        title: t.title,
+        artist: t.artist,
+        handle: typeof t.handle === 'string' ? t.handle : '',
+        durationSec: t.durationSec,
+        genre: typeof t.genre === 'string' ? t.genre : '',
+        artwork: typeof t.artwork === 'string' ? t.artwork : '',
+        permalink: typeof t.permalink === 'string' ? t.permalink : '',
+      });
+      if (tracks.length >= MAX_TRACKS_PER_PLAYLIST) break;
+    }
+    data.tracks = tracks;
+    items.push({ id: data.id, updatedAt: parseUpdatedAt(entry.updatedAt), data });
+  }
+  return items;
+}
+
 /** Validate one uploaded list. Returns null when the list is malformed. */
 function cleanItems(raw: unknown, limit: number): IncomingItem[] | null {
   if (raw === undefined) return [];
@@ -208,7 +282,7 @@ function cleanDeleted(raw: unknown): IncomingTombstone[] | null {
   for (const entry of raw) {
     if (!isRecord(entry)) return null;
     const kind = entry.kind;
-    if (kind !== 'journal' && kind !== 'stash' && kind !== 'chat') return null;
+    if (kind !== 'journal' && kind !== 'stash' && kind !== 'chat' && kind !== 'playlist') return null;
     if (typeof entry.id !== 'string' || entry.id === '' || entry.id.length > 128) return null;
     tombstones.push({ kind, id: entry.id, deletedAt: parseUpdatedAt(entry.deletedAt) });
   }
@@ -279,6 +353,10 @@ async function readState(client: Pool | PoolClient, userId: string): Promise<Api
     'select id, data, updated_at from chat_conversations where user_id = $1 order by updated_at desc',
     [userId],
   );
+  const playlistsRes = await client.query<Row>(
+    'select id, data, updated_at from user_playlists where user_id = $1 order by updated_at desc',
+    [userId],
+  );
   const settingsRes = await client.query<Row>(
     'select data, updated_at from user_settings where user_id = $1',
     [userId],
@@ -296,6 +374,9 @@ async function readState(client: Pool | PoolClient, userId: string): Promise<Api
   const chats: SyncedRecord[] = chatsRes.rows.map(
     (r) => ({ ...(r.data as object), updatedAt: toIso(r.updated_at) }) as SyncedRecord,
   );
+  const playlists: SyncedRecord[] = playlistsRes.rows.map(
+    (r) => ({ ...(r.data as object), updatedAt: toIso(r.updated_at) }) as SyncedRecord,
+  );
   const settingsRow = settingsRes.rows[0];
   const settings: ApiServerState['settings'] = settingsRow
     ? ({
@@ -304,11 +385,11 @@ async function readState(client: Pool | PoolClient, userId: string): Promise<Api
       } as ApiServerState['settings'])
     : null;
   const deleted: Tombstone[] = deletedRes.rows.map((r) => ({
-    kind: r.kind as 'journal' | 'stash' | 'chat',
+    kind: r.kind as 'journal' | 'stash' | 'chat' | 'playlist',
     id: String(r.item_id),
     deletedAt: toIso(r.deleted_at as Date | string),
   }));
-  return { journal, stash, chats, settings, deleted };
+  return { journal, stash, chats, playlists, settings, deleted };
 }
 
 export default async function handler(req: Req, res: Res): Promise<void> {
@@ -340,6 +421,7 @@ export default async function handler(req: Req, res: Res): Promise<void> {
     if (req.method === 'GET') {
       await ensureDeletedItemsTable(pool);
       await ensureChatConversationsTable(pool);
+      await ensurePlaylistsTable(pool);
       const state = await readState(pool, user.id);
       res.status(200).json({ ok: true, ...state });
       return;
@@ -350,15 +432,17 @@ export default async function handler(req: Req, res: Res): Promise<void> {
     const journal = cleanItems(body.journal, MAX_JOURNAL);
     const stash = cleanItems(body.stash, MAX_STASH);
     const chats = cleanChats(body.chats);
+    const playlists = cleanPlaylists(body.playlists);
     const settings = cleanSettings(body.settings);
     const deleted = cleanDeleted(body.deleted);
-    if (journal === null || stash === null || chats === null || settings === null || deleted === null) {
+    if (journal === null || stash === null || chats === null || playlists === null || settings === null || deleted === null) {
       res.status(400).json({ ok: false, error: 'bad_sync_body' });
       return;
     }
 
     await ensureDeletedItemsTable(pool);
     await ensureChatConversationsTable(pool);
+    await ensurePlaylistsTable(pool);
     const client = await pool.connect();
     try {
       await client.query('BEGIN');
@@ -372,7 +456,9 @@ export default async function handler(req: Req, res: Res): Promise<void> {
             ? 'journal_entries'
             : tomb.kind === 'stash'
               ? 'stash_items'
-              : 'chat_conversations';
+              : tomb.kind === 'chat'
+                ? 'chat_conversations'
+                : 'user_playlists';
         // Keep the FIRST delete time when the tombstone already exists.
         await client.query(
           `insert into deleted_items (user_id, kind, item_id, deleted_at)
@@ -444,6 +530,22 @@ export default async function handler(req: Req, res: Res): Promise<void> {
            on conflict (user_id, id) do update
              set data = excluded.data, updated_at = excluded.updated_at
              where chat_conversations.updated_at < excluded.updated_at`,
+          [user.id, item.id, item.data, updatedAt],
+        );
+      }
+      for (const item of playlists) {
+        const updatedAt = item.updatedAt ?? new Date();
+        await client.query(
+          `insert into user_playlists (user_id, id, data, updated_at)
+           select $1, $2, $3, $4
+           where not exists (
+             select 1 from deleted_items
+             where user_id = $1 and kind = 'playlist' and item_id = $2
+               and deleted_at >= $4
+           )
+           on conflict (user_id, id) do update
+             set data = excluded.data, updated_at = excluded.updated_at
+             where user_playlists.updated_at < excluded.updated_at`,
           [user.id, item.id, item.data, updatedAt],
         );
       }
