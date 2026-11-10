@@ -1,19 +1,22 @@
 <?xml version="1.0" encoding="utf-8"?>
 <!-- Sleeker widget (4 wide, 2 tall): a leaf-disc header with the stash
      line, one big lime Talk pill, then three slim glass pills (Log /
-     Stash / Tonight), then a big clock + weather block that fills the
-     rest of the card. Tapping the header opens the app; Talk opens the
+     Stash / Tonight), then a big clock + weather + date block that fills
+     the rest of the card. The card background is the app-icon cosmic
+     nebula art (bud_e_widget_bg_img), darkened so the text stays
+     readable. Tapping the header opens the app; Talk opens the
      bubble chat panel. The stash line is filled in by the app whenever
      the stash changes; until then it shows "Stash: —". The time is a
      TextClock (it keeps itself current); the temperature is published by
      the app whenever it fetches the weather, and shows "—°F" until the
-     first fetch. The clock/weather block stretches to fill whatever
+     first fetch; the date line is a TextClock too ("Tuesday, Nov 10").
+     The clock/weather/date block stretches to fill whatever
      space is left, so the card never has a dead empty patch at the
      bottom. -->
 <LinearLayout xmlns:android="http://schemas.android.com/apk/res/android"
     android:layout_width="match_parent"
     android:layout_height="match_parent"
-    android:background="@drawable/bud_e_widget_bg"
+    android:background="@drawable/bud_e_widget_bg_img"
     android:orientation="vertical"
     android:padding="8dp">
 
@@ -115,34 +118,51 @@
         android:layout_marginTop="4dp"
         android:layout_weight="1"
         android:gravity="center"
-        android:orientation="horizontal">
+        android:orientation="vertical">
+
+        <LinearLayout
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:gravity="center_vertical"
+            android:orientation="horizontal">
+
+            <TextClock
+                android:id="@+id/widget_time"
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:format12Hour="h:mm a"
+                android:format24Hour="H:mm"
+                android:textColor="#c6f25c"
+                android:textSize="32sp"
+                android:textStyle="bold" />
+
+            <TextView
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:layout_marginStart="10dp"
+                android:text="🍃"
+                android:textSize="22sp" />
+
+            <TextView
+                android:id="@+id/widget_weather"
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:layout_marginStart="10dp"
+                android:maxLines="1"
+                android:text="—°F"
+                android:textColor="#f2f0eb"
+                android:textSize="24sp"
+                android:textStyle="bold" />
+        </LinearLayout>
 
         <TextClock
-            android:id="@+id/widget_time"
+            android:id="@+id/widget_date"
             android:layout_width="wrap_content"
             android:layout_height="wrap_content"
-            android:format12Hour="h:mm a"
-            android:format24Hour="H:mm"
-            android:textColor="#c6f25c"
-            android:textSize="32sp"
-            android:textStyle="bold" />
-
-        <TextView
-            android:layout_width="wrap_content"
-            android:layout_height="wrap_content"
-            android:layout_marginStart="10dp"
-            android:text="🍃"
-            android:textSize="22sp" />
-
-        <TextView
-            android:id="@+id/widget_weather"
-            android:layout_width="wrap_content"
-            android:layout_height="wrap_content"
-            android:layout_marginStart="10dp"
-            android:maxLines="1"
-            android:text="—°F"
-            android:textColor="#f2f0eb"
-            android:textSize="24sp"
-            android:textStyle="bold" />
+            android:layout_marginTop="4dp"
+            android:format12Hour="EEEE, MMM d"
+            android:format24Hour="EEEE, MMM d"
+            android:textColor="#e8f0e8"
+            android:textSize="16sp" />
     </LinearLayout>
 </LinearLayout>
