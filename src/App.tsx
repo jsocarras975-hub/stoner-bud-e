@@ -43,6 +43,7 @@ import {
   shuffle,
 } from './bude';
 import type { ChatImage, ChatMessage, Method, Session, TriviaQuestion } from './bude';
+import { setKeyboardTheme } from './lib/keyboard';
 import StrainsTab from './StrainsTab';
 import Community from './Community';
 import MusicTab from './MusicTab';
@@ -700,6 +701,8 @@ export default function App() {
     } catch {
       // Storage blocked — the theme still applies for this visit.
     }
+    // Keep the native keyboard on the same theme.
+    void setKeyboardTheme(theme);
   }, [theme]);
 
   useEffect(() => save(SESSION_KEY, session), [session]);

@@ -59,6 +59,18 @@ public class BudEKeyboardPlugin extends Plugin {
         call.resolve();
     }
 
+    /** Remember the app's current theme id so the keyboard can match it.
+     *  The keyboard reads it from SharedPreferences each time it opens. */
+    @PluginMethod
+    public void setTheme(PluginCall call) {
+        String theme = call.getString("theme", "night");
+        getContext().getSharedPreferences("bude-keyboard-prefs", Context.MODE_PRIVATE)
+                .edit()
+                .putString("theme", theme)
+                .apply();
+        call.resolve();
+    }
+
     private boolean isEnabled() {
         InputMethodManager imm = (InputMethodManager) getContext()
                 .getSystemService(Context.INPUT_METHOD_SERVICE);

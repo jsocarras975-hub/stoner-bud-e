@@ -1,14 +1,26 @@
 package com.n3xus.bude;
 
+import android.Manifest;
 import android.content.ClipDescription;
+import android.content.Context;
 import android.content.Intent;
+import android.content.SharedPreferences;
+import android.content.pm.PackageManager;
 import android.content.res.AssetManager;
 import android.graphics.Bitmap;
 import android.graphics.BitmapFactory;
+import android.graphics.drawable.Drawable;
+import android.graphics.drawable.GradientDrawable;
+import android.graphics.drawable.StateListDrawable;
 import android.net.Uri;
 import android.os.Build;
+import android.os.Bundle;
 import android.os.Handler;
 import android.os.Looper;
+import android.speech.RecognitionListener;
+import android.speech.RecognizerIntent;
+import android.speech.SpeechRecognizer;
+import android.inputmethodservice.InputMethodService;
 import android.view.Gravity;
 import android.view.HapticFeedbackConstants;
 import android.view.View;
@@ -16,7 +28,6 @@ import android.view.ViewGroup;
 import android.view.inputmethod.EditorInfo;
 import android.view.inputmethod.InputConnection;
 import android.view.inputmethod.InputContentInfo;
-import android.inputmethodservice.InputMethodService;
 import android.widget.Button;
 import android.widget.FrameLayout;
 import android.widget.GridLayout;
@@ -26,6 +37,7 @@ import android.widget.ScrollView;
 import android.widget.TextView;
 import android.widget.Toast;
 
+import androidx.core.content.ContextCompat;
 import androidx.core.content.FileProvider;
 
 import java.io.File;
@@ -33,37 +45,68 @@ import java.io.FileOutputStream;
 import java.io.InputStream;
 import java.util.ArrayList;
 import java.util.List;
+import java.util.Locale;
 
 /**
- * Bud-E Keyboard — an Android input method (IME) that lives in the same
- * Bud-E app and APK. QWERTY letters + a symbols page + a sticker tab with
- * his 20 stickers, and a leaf key that jumps into the Bud-E app.
+ * Bud-E Keyboard — an Android input method (IME) in the same Bud-E app
+ * and APK. QWERTY letters + a symbols page + a media tab (his 20 stickers
+ * and an emoji picker) + a leaf key that jumps into the Bud-E app, all in
+ * the night-garden look (and it follows the app's theme).
+ *
+ * v2 adds: word predictions + autocorrect (BudEWordEngine, 10k-word
+ * frequency list, learns words the user types twice), a voice-typing mic
+ * key (SpeechRecognizer, inserts what it hears), an emoji tab next to the
+ * stickers, and theme matching (the web app pushes the theme id into
+ * SharedPreferences; the keyboard reads it each time it opens).
  *
  * The user turns it on in Settings (see BudEKeyboardPlugin + the Keyboard
  * row in the app's Settings tab): Android makes the user pick the keyboard
- * — an app can never set itself as the default. Stickers go out with
+ * — an app can never set itself. Stickers go out with
  * InputConnection.commitContent (API 25+), so they only land in apps that
  * accept image input (messaging apps mostly do); anywhere else the keyboard
- * says so instead of failing quietly. No autocorrect or predictions in v1 —
- * that is the actually hard part, and it is parked on purpose.
+ * says so instead of failing quietly. No swipe typing — that is a whole
+ * other project, and it is parked on purpose.
  */
 public class BudEKeyboardService extends InputMethodService {
 
     private static final int STICKER_COUNT = 20;
     private static final String STICKER_ASSET_PREFIX = "public/stickers/match-";
+    private static final String THEME_PREFS = "bude-keyboard-prefs";
+    private static final String THEME_KEY = "theme";
     private static final long BACKSPACE_REPEAT_DELAY_MS = 350;
     private static final long BACKSPACE_REPEAT_INTERVAL_MS = 60;
 
-    private enum Mode { LETTERS, SYMBOLS, STICKERS }
+    private static final String[] EMOJIS = {
+            "😀", "😁", "😂", "🤣", "😊", "😍", "😘", "😎", "🤔", "😴",
+            "😭", "😡", "🤯", "🥴", "😇", "😜", "🙃", "😢", "😅", "😌",
+            "❤️", "🧡", "💛", "💚", "💙", "💜", "🖤", "💔", "💯", "🔥",
+            "👍", "👎", "🙏", "👏", "✌️", "🤞", "👀", "🙌", "💪", "🤙",
+            "🍃", "🌿", "🌱", "🍀", "🌵", "🌸", "🌙", "⭐", "☀️", "🌧️",
+            "🍕", "🍔", "🍟", "🍩", "🍪", "🍦", "☕", "🍺", "🥤", "🍓",
+            "🎵", "🎧", "🎬", "📸", "⚽", "🏀", "🎮", "🚗", "✈️", "🏠",
+            "💤", "💨", "💡", "🎉", "🎁", "💎", "👑", "🚀", "🌈", "🍾",
+    };
+
+    private enum Mode { LETTERS, SYMBOLS, MEDIA }
+    private enum MediaTab { STICKERS, EMOJI }
 
     private Mode mode = Mode.LETTERS;
+    private MediaTab mediaTab = MediaTab.STICKERS;
     private boolean shifted = false;   // one-shot shift: next letter only
     private boolean capsLock = false;  // double-tap shift locks caps
 
+    private BudEKeyboardTheme theme = BudEKeyboardTheme.forId("night");
+    private BudEWordEngine wordEngine;
+
     private FrameLayout modeContainer;
+    private LinearLayout suggestionBar;
+    private final List<TextView> suggestionViews = new ArrayList<>();
     private final List<Button> letterKeys = new ArrayList<>();
     private Button shiftKey;
     private Button enterKey;
+    private Button micKey;
+    private boolean listening = false;
+    private SpeechRecognizer speechRecognizer;
 
     private final Handler backspaceHandler = new Handler(Looper.getMainLooper());
     private final Runnable backspaceRepeater = new Runnable() {
@@ -80,9 +123,14 @@ public class BudEKeyboardService extends InputMethodService {
 
     @Override
     public View onCreateInputView() {
+        loadTheme();
+        wordEngine = BudEWordEngine.get(this);
+        // Warm the dictionary off the main thread so the first open is fast.
+        new Thread(() -> wordEngine.ensureLoaded()).start();
+
         LinearLayout root = new LinearLayout(this);
         root.setOrientation(LinearLayout.VERTICAL);
-        root.setBackgroundColor(0xFF07110C);
+        root.setBackgroundColor(theme.bg);
         final int pad = dp(4);
         root.setPadding(pad, pad, pad, pad);
 
@@ -105,18 +153,23 @@ public class BudEKeyboardService extends InputMethodService {
             return insets;
         });
 
-        // A thin top strip: the leaf + "Bud-E" on the left, a hide key on
-        // the right (the system back button also hides it).
+        // Top strip: the leaf + "Bud-E" on the left, mic + hide on the right.
         LinearLayout top = new LinearLayout(this);
         top.setOrientation(LinearLayout.HORIZONTAL);
         top.setGravity(Gravity.CENTER_VERTICAL);
         TextView title = new TextView(this);
         title.setText("\uD83C\uDF43 Bud-E");
-        title.setTextColor(0xFFC6F25C);
+        title.setTextColor(theme.accent);
         title.setTextSize(14);
         LinearLayout.LayoutParams titleParams = new LinearLayout.LayoutParams(
                 0, ViewGroup.LayoutParams.WRAP_CONTENT, 1f);
         top.addView(title, titleParams);
+        micKey = makeKey("\uD83C\uDFA4", 1f);
+        micKey.setOnClickListener(v -> {
+            v.performHapticFeedback(HapticFeedbackConstants.KEYBOARD_TAP);
+            toggleVoice();
+        });
+        top.addView(micKey);
         Button hide = makeKey("\u25BC", 1f);
         hide.setOnClickListener(v -> {
             v.performHapticFeedback(HapticFeedbackConstants.KEYBOARD_TAP);
@@ -124,6 +177,27 @@ public class BudEKeyboardService extends InputMethodService {
         });
         top.addView(hide);
         root.addView(top);
+
+        // Suggestion bar: three word completions, above the keys.
+        suggestionBar = new LinearLayout(this);
+        suggestionBar.setOrientation(LinearLayout.HORIZONTAL);
+        for (int i = 0; i < 3; i++) {
+            TextView suggestion = new TextView(this);
+            suggestion.setGravity(Gravity.CENTER);
+            suggestion.setTextSize(16);
+            suggestion.setTextColor(theme.text);
+            suggestion.setPadding(dp(4), dp(6), dp(4), dp(6));
+            final int index = i;
+            suggestion.setOnClickListener(v -> {
+                v.performHapticFeedback(HapticFeedbackConstants.KEYBOARD_TAP);
+                acceptSuggestion(index);
+            });
+            LinearLayout.LayoutParams params = new LinearLayout.LayoutParams(
+                    0, ViewGroup.LayoutParams.WRAP_CONTENT, 1f);
+            suggestionBar.addView(suggestion, params);
+            suggestionViews.add(suggestion);
+        }
+        root.addView(suggestionBar);
 
         modeContainer = new FrameLayout(this);
         root.addView(modeContainer, new LinearLayout.LayoutParams(
@@ -136,41 +210,53 @@ public class BudEKeyboardService extends InputMethodService {
     @Override
     public void onStartInputView(EditorInfo info, boolean restarting) {
         super.onStartInputView(info, restarting);
+        loadTheme();
         // Fresh open = back to letters, shift off.
         mode = Mode.LETTERS;
         shifted = false;
         capsLock = false;
         showMode(mode);
         updateEnterLabel(info);
+        updateSuggestions();
         hideNavigationBar();
     }
 
-    /** Hide the Android nav bar while the keyboard is up, so it never
-     *  covers the bottom row. Swipe up from the bottom edge brings it back
-     *  for a moment (transient), then it hides again. On Android 10+ this
-     *  uses WindowInsetsController; older phones use the sticky-immersive
-     *  flags. The insets listener above is the safety net: if the bar is
-     *  visible anyway, the keyboard pads up above it. */
-    private void hideNavigationBar() {
-        try {
-            View decor = getWindow().getWindow().getDecorView();
-            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.R) {
-                android.view.WindowInsetsController controller = decor.getWindowInsetsController();
-                if (controller != null) {
-                    controller.hide(android.view.WindowInsets.Type.navigationBars());
-                    controller.setSystemBarsBehavior(
-                            android.view.WindowInsetsController.BEHAVIOR_SHOW_TRANSIENT_BARS_BY_SWIPE);
-                }
-            } else {
-                decor.setSystemUiVisibility(
-                        View.SYSTEM_UI_FLAG_HIDE_NAVIGATION
-                                | View.SYSTEM_UI_FLAG_IMMERSIVE_STICKY
-                                | View.SYSTEM_UI_FLAG_LAYOUT_HIDE_NAVIGATION);
-            }
-        } catch (Exception ignored) {
-            // Hiding is best-effort — the insets padding still keeps the
-            // bottom row clear when the bar stays visible.
-        }
+    @Override
+    public void onDestroy() {
+        stopVoice();
+        super.onDestroy();
+    }
+
+    // ------------------------------------------------------------------
+    // Theme
+    // ------------------------------------------------------------------
+
+    private void loadTheme() {
+        SharedPreferences prefs = getSharedPreferences(THEME_PREFS, Context.MODE_PRIVATE);
+        theme = BudEKeyboardTheme.forId(prefs.getString(THEME_KEY, "night"));
+    }
+
+    /** A rounded key background in the current theme (normal + pressed). */
+    private Drawable keyBackground(boolean accent) {
+        int normal = accent ? theme.accent : theme.key;
+        int pressed = accent ? lighten(theme.accent, 0.25f) : theme.keyPressed;
+        GradientDrawable normalDrawable = new GradientDrawable();
+        normalDrawable.setColor(normal);
+        normalDrawable.setCornerRadius(dp(10));
+        GradientDrawable pressedDrawable = new GradientDrawable();
+        pressedDrawable.setColor(pressed);
+        pressedDrawable.setCornerRadius(dp(10));
+        StateListDrawable states = new StateListDrawable();
+        states.addState(new int[]{android.R.attr.state_pressed}, pressedDrawable);
+        states.addState(new int[]{}, normalDrawable);
+        return states;
+    }
+
+    private static int lighten(int color, float amount) {
+        int r = Math.min(255, (int) (android.graphics.Color.red(color) + (255 - android.graphics.Color.red(color)) * amount));
+        int g = Math.min(255, (int) (android.graphics.Color.green(color) + (255 - android.graphics.Color.green(color)) * amount));
+        int b = Math.min(255, (int) (android.graphics.Color.blue(color) + (255 - android.graphics.Color.blue(color)) * amount));
+        return android.graphics.Color.rgb(r, g, b);
     }
 
     // ------------------------------------------------------------------
@@ -184,8 +270,8 @@ public class BudEKeyboardService extends InputMethodService {
         View view;
         if (next == Mode.SYMBOLS) {
             view = buildSymbolsView();
-        } else if (next == Mode.STICKERS) {
-            view = buildStickersView();
+        } else if (next == Mode.MEDIA) {
+            view = buildMediaView();
         } else {
             view = buildLettersView();
         }
@@ -210,23 +296,7 @@ public class BudEKeyboardService extends InputMethodService {
         for (String letter : new String[]{"z", "x", "c", "v", "b", "n", "m"}) {
             row3.addView(makeLetterKey(letter));
         }
-        Button backspace = makeKey("\u232B", 1.4f);
-        backspace.setOnClickListener(v -> {
-            v.performHapticFeedback(HapticFeedbackConstants.KEYBOARD_TAP);
-            deleteChar();
-        });
-        backspace.setOnLongClickListener(v -> {
-            backspaceHandler.postDelayed(backspaceRepeater, BACKSPACE_REPEAT_DELAY_MS);
-            return true;
-        });
-        backspace.setOnTouchListener((v, event) -> {
-            if (event.getAction() == android.view.MotionEvent.ACTION_UP
-                    || event.getAction() == android.view.MotionEvent.ACTION_CANCEL) {
-                backspaceHandler.removeCallbacks(backspaceRepeater);
-            }
-            return false;
-        });
-        row3.addView(backspace);
+        row3.addView(makeBackspaceKey(1.4f));
         col.addView(row3);
         col.addView(makeBottomRow(false));
         return col;
@@ -240,54 +310,94 @@ public class BudEKeyboardService extends InputMethodService {
         LinearLayout row3 = new LinearLayout(this);
         row3.setOrientation(LinearLayout.HORIZONTAL);
         for (String s : new String[]{"!", "?", "\"", "'", ":", ";", ",", ".", "/"}) {
-            row3.addView(makeTextKey(s));
+            row3.addView(makePunctuationKey(s));
         }
-        Button backspace = makeKey("\u232B", 1.2f);
-        backspace.setOnClickListener(v -> {
-            v.performHapticFeedback(HapticFeedbackConstants.KEYBOARD_TAP);
-            deleteChar();
-        });
-        row3.addView(backspace);
+        row3.addView(makeBackspaceKey(1.2f));
         col.addView(row3);
         col.addView(makeBottomRow(true));
         return col;
     }
 
-    /** The sticker grid: his 20 stickers, 4 across, scrollable. */
-    private View buildStickersView() {
+    /** Media: a tab row (Stickers | Emoji) over a scrollable grid, then the
+     *  bottom row. Stickers send as images; emoji insert as text. */
+    private View buildMediaView() {
         LinearLayout col = new LinearLayout(this);
         col.setOrientation(LinearLayout.VERTICAL);
+
+        LinearLayout tabs = new LinearLayout(this);
+        tabs.setOrientation(LinearLayout.HORIZONTAL);
+        Button stickersTab = makeKey("Stickers", 1f);
+        Button emojiTab = makeKey("Emoji", 1f);
+        stickersTab.setOnClickListener(v -> {
+            v.performHapticFeedback(HapticFeedbackConstants.KEYBOARD_TAP);
+            mediaTab = MediaTab.STICKERS;
+            showMode(Mode.MEDIA);
+        });
+        emojiTab.setOnClickListener(v -> {
+            v.performHapticFeedback(HapticFeedbackConstants.KEYBOARD_TAP);
+            mediaTab = MediaTab.EMOJI;
+            showMode(Mode.MEDIA);
+        });
+        if (mediaTab == MediaTab.STICKERS) {
+            stickersTab.setBackground(keyBackground(true));
+            stickersTab.setTextColor(theme.accentInk);
+        } else {
+            emojiTab.setBackground(keyBackground(true));
+            emojiTab.setTextColor(theme.accentInk);
+        }
+        tabs.addView(stickersTab);
+        tabs.addView(emojiTab);
+        col.addView(tabs);
+
         ScrollView scroll = new ScrollView(this);
         GridLayout grid = new GridLayout(this);
         grid.setColumnCount(4);
         grid.setUseDefaultMargins(false);
         int gap = dp(6);
         grid.setPadding(gap, gap, gap, gap);
-        AssetManager assets = getAssets();
-        for (int i = 1; i <= STICKER_COUNT; i++) {
-            String assetName = STICKER_ASSET_PREFIX + String.format("%02d", i) + ".png";
-            ImageButton btn = new ImageButton(this);
-            btn.setBackgroundResource(R.drawable.bude_key_bg);
-            btn.setScaleType(android.widget.ImageView.ScaleType.FIT_CENTER);
-            int pad = dp(6);
-            btn.setPadding(pad, pad, pad, pad);
-            try (InputStream in = assets.open(assetName)) {
-                Bitmap bmp = BitmapFactory.decodeStream(in);
-                btn.setImageBitmap(bmp);
-            } catch (Exception ignored) {
-                btn.setImageResource(R.drawable.ic_bud_leaf);
+        if (mediaTab == MediaTab.STICKERS) {
+            AssetManager assets = getAssets();
+            for (int i = 1; i <= STICKER_COUNT; i++) {
+                String assetName = STICKER_ASSET_PREFIX + String.format(Locale.US, "%02d", i) + ".png";
+                ImageButton btn = new ImageButton(this);
+                btn.setBackground(keyBackground(false));
+                btn.setScaleType(android.widget.ImageView.ScaleType.FIT_CENTER);
+                int pad = dp(6);
+                btn.setPadding(pad, pad, pad, pad);
+                try (InputStream in = assets.open(assetName)) {
+                    Bitmap bmp = BitmapFactory.decodeStream(in);
+                    btn.setImageBitmap(bmp);
+                } catch (Exception ignored) {
+                    btn.setImageResource(R.drawable.ic_bud_leaf);
+                }
+                final String name = assetName;
+                btn.setOnClickListener(v -> {
+                    v.performHapticFeedback(HapticFeedbackConstants.KEYBOARD_TAP);
+                    sendSticker(name);
+                });
+                GridLayout.LayoutParams params = new GridLayout.LayoutParams();
+                params.width = 0;
+                params.height = dp(64);
+                params.columnSpec = GridLayout.spec(GridLayout.UNDEFINED, 1f);
+                params.setMargins(gap / 2, gap / 2, gap / 2, gap / 2);
+                grid.addView(btn, params);
             }
-            final String name = assetName;
-            btn.setOnClickListener(v -> {
-                v.performHapticFeedback(HapticFeedbackConstants.KEYBOARD_TAP);
-                sendSticker(name);
-            });
-            GridLayout.LayoutParams params = new GridLayout.LayoutParams();
-            params.width = 0;
-            params.height = dp(64);
-            params.columnSpec = GridLayout.spec(GridLayout.UNDEFINED, 1f);
-            params.setMargins(gap / 2, gap / 2, gap / 2, gap / 2);
-            grid.addView(btn, params);
+        } else {
+            for (String emoji : EMOJIS) {
+                Button btn = makeKey(emoji, 1f);
+                btn.setTextSize(22);
+                final String e = emoji;
+                btn.setOnClickListener(v -> {
+                    v.performHapticFeedback(HapticFeedbackConstants.KEYBOARD_TAP);
+                    commitText(e);
+                });
+                GridLayout.LayoutParams params = new GridLayout.LayoutParams();
+                params.width = 0;
+                params.height = dp(56);
+                params.columnSpec = GridLayout.spec(GridLayout.UNDEFINED, 1f);
+                params.setMargins(gap / 2, gap / 2, gap / 2, gap / 2);
+                grid.addView(btn, params);
+            }
         }
         scroll.addView(grid);
         LinearLayout.LayoutParams scrollParams = new LinearLayout.LayoutParams(
@@ -297,7 +407,7 @@ public class BudEKeyboardService extends InputMethodService {
         return col;
     }
 
-    /** Bottom row: [?123 / ABC] [sticker] [space] [Bud-E leaf] [enter]. */
+    /** Bottom row: [?123 / ABC] [media] [space] [Bud-E leaf] [enter]. */
     private LinearLayout makeBottomRow(boolean onSymbols) {
         LinearLayout row = new LinearLayout(this);
         row.setOrientation(LinearLayout.HORIZONTAL);
@@ -307,29 +417,29 @@ public class BudEKeyboardService extends InputMethodService {
             showMode(onSymbols ? Mode.LETTERS : Mode.SYMBOLS);
         });
         row.addView(modeKey);
-        Button stickerKey = makeKey("\uD83C\uDF43", 1f);
-        stickerKey.setOnClickListener(v -> {
+        Button mediaKey = makeKey("\uD83D\uDE00", 1f);
+        mediaKey.setOnClickListener(v -> {
             v.performHapticFeedback(HapticFeedbackConstants.KEYBOARD_TAP);
-            showMode(mode == Mode.STICKERS ? Mode.LETTERS : Mode.STICKERS);
+            showMode(mode == Mode.MEDIA ? Mode.LETTERS : Mode.MEDIA);
         });
-        row.addView(stickerKey);
+        row.addView(mediaKey);
         Button space = makeKey("space", 3.4f);
         space.setOnClickListener(v -> {
             v.performHapticFeedback(HapticFeedbackConstants.KEYBOARD_TAP);
-            commitText(" ");
+            onSpace();
         });
         row.addView(space);
         Button bude = makeKey("\uD83C\uDF43", 1f);
-        bude.setBackgroundResource(R.drawable.bude_key_accent_bg);
-        bude.setTextColor(0xFF07110C);
+        bude.setBackground(keyBackground(true));
+        bude.setTextColor(theme.accentInk);
         bude.setOnClickListener(v -> {
             v.performHapticFeedback(HapticFeedbackConstants.KEYBOARD_TAP);
             openBudEApp();
         });
         row.addView(bude);
         enterKey = makeKey("\u23CE", 1.4f);
-        enterKey.setBackgroundResource(R.drawable.bude_key_accent_bg);
-        enterKey.setTextColor(0xFF07110C);
+        enterKey.setBackground(keyBackground(true));
+        enterKey.setTextColor(theme.accentInk);
         enterKey.setOnClickListener(v -> {
             v.performHapticFeedback(HapticFeedbackConstants.KEYBOARD_TAP);
             onEnter();
@@ -364,6 +474,7 @@ public class BudEKeyboardService extends InputMethodService {
                 shifted = false;
                 refreshLetterLabels();
             }
+            updateSuggestions();
         });
         return key;
     }
@@ -373,16 +484,51 @@ public class BudEKeyboardService extends InputMethodService {
         key.setOnClickListener(v -> {
             v.performHapticFeedback(HapticFeedbackConstants.KEYBOARD_TAP);
             commitText(text);
+            updateSuggestions();
         });
         return key;
+    }
+
+    /** A punctuation key: autocorrect the word it ends before committing. */
+    private Button makePunctuationKey(String text) {
+        Button key = makeKey(text, 1f);
+        key.setOnClickListener(v -> {
+            v.performHapticFeedback(HapticFeedbackConstants.KEYBOARD_TAP);
+            autocorrectCurrentWord();
+            commitText(text);
+            updateSuggestions();
+        });
+        return key;
+    }
+
+    private Button makeBackspaceKey(float weight) {
+        Button backspace = makeKey("\u232B", weight);
+        backspace.setOnClickListener(v -> {
+            v.performHapticFeedback(HapticFeedbackConstants.KEYBOARD_TAP);
+            deleteChar();
+            updateSuggestions();
+        });
+        backspace.setOnLongClickListener(v -> {
+            backspaceHandler.postDelayed(backspaceRepeater, BACKSPACE_REPEAT_DELAY_MS);
+            return true;
+        });
+        backspace.setOnTouchListener((v, event) -> {
+            if (event.getAction() == android.view.MotionEvent.ACTION_UP
+                    || event.getAction() == android.view.MotionEvent.ACTION_CANCEL) {
+                backspaceHandler.removeCallbacks(backspaceRepeater);
+                updateSuggestions();
+            }
+            return false;
+        });
+        return backspace;
     }
 
     private Button makeKey(String label, float weight) {
         Button key = new Button(this);
         key.setText(label);
         key.setTextSize(18);
-        key.setTextColor(0xFFF2F0EB);
-        key.setBackgroundResource(R.drawable.bude_key_bg);
+        key.setTextColor(theme.text);
+        key.setBackground(keyBackground(false));
         key.setAllCaps(false);
         LinearLayout.LayoutParams params = new LinearLayout.LayoutParams(
                 0, dp(56), weight);
@@ -401,9 +547,9 @@ public class BudEKeyboardService extends InputMethodService {
             }
         }
         if (shiftKey != null) {
-            shiftKey.setBackgroundResource(
-                    (shifted || capsLock) ? R.drawable.bude_key_accent_bg : R.drawable.bude_key_bg);
-            shiftKey.setTextColor((shifted || capsLock) ? 0xFF07110C : 0xFFF2F0EB);
+            boolean active = shifted || capsLock;
+            shiftKey.setBackground(keyBackground(active));
+            shiftKey.setTextColor(active ? theme.accentInk : theme.text);
         }
     }
 
@@ -421,9 +567,90 @@ public class BudEKeyboardService extends InputMethodService {
         refreshLetterLabels();
     }
 
+    // ------------------------------------------------------------------
+    // Words: suggestions, autocorrect, learning
+    // ------------------------------------------------------------------
+
+    /** The word being typed right now (letters before the cursor). */
+    private String currentWord() {
+        InputConnection ic = getCurrentInputConnection();
+        if (ic == null) return "";
+        CharSequence before = ic.getTextBeforeCursor(50, 0);
+        if (before == null) return "";
+        String text = before.toString();
+        int i = text.length();
+        while (i > 0) {
+            char c = text.charAt(i - 1);
+            if ((c >= 'a' && c <= 'z') || (c >= 'A' && c <= 'Z') || c == '\'') i--;
+            else break;
+        }
+        return text.substring(i);
+    }
+
+    private void updateSuggestions() {
+        if (suggestionBar == null) return;
+        String word = currentWord();
+        List<String> suggestions = word.length() >= 2
+                ? wordEngine.suggest(word)
+                : new ArrayList<>();
+        for (int i = 0; i < suggestionViews.size(); i++) {
+            TextView view = suggestionViews.get(i);
+            if (i < suggestions.size()) {
+                view.setText(suggestions.get(i));
+                view.setVisibility(View.VISIBLE);
+            } else {
+                view.setText("");
+                view.setVisibility(View.INVISIBLE);
+            }
+        }
+    }
+
+    private void acceptSuggestion(int index) {
+        String word = currentWord();
+        List<String> suggestions = word.length() >= 2
+                ? wordEngine.suggest(word)
+                : new ArrayList<>();
+        if (index >= suggestions.size() || word.isEmpty()) return;
+        String picked = suggestions.get(index);
+        InputConnection ic = getCurrentInputConnection();
+        if (ic == null) return;
+        ic.deleteSurroundingText(word.length(), 0);
+        ic.commitText(picked + " ", 1);
+        wordEngine.noteCommittedWord(picked);
+        updateSuggestions();
+    }
+
+    /** Fix the word being typed when it is a clear typo (a dictionary word
+     *  one edit away). Returns true when a correction was made. */
+    private boolean autocorrectCurrentWord() {
+        String word = currentWord();
+        if (word.length() < 3) return false;
+        String fix = wordEngine.correct(word);
+        if (fix == null || fix.equalsIgnoreCase(word)) return false;
+        InputConnection ic = getCurrentInputConnection();
+        if (ic == null) return false;
+        // Keep the user's capitalisation (a leading capital stays capital).
+        if (Character.isUpperCase(word.charAt(0))) {
+            fix = Character.toUpperCase(fix.charAt(0)) + fix.substring(1);
+        }
+        ic.deleteSurroundingText(word.length(), 0);
+        ic.commitText(fix, 1);
+        return true;
+    }
+
+    /** Space ends a word: autocorrect it, note it (learning), then the space. */
+    private void onSpace() {
+        String word = currentWord();
+        autocorrectCurrentWord();
+        if (!word.isEmpty()) wordEngine.noteCommittedWord(word);
+        commitText(" ");
+        updateSuggestions();
+    }
+
     /** Enter does the editor's action (Go / Search / Send / Done) when one
-     *  is set, otherwise it is a plain newline. */
+     *  is set, otherwise it is a plain newline. Autocorrects first. */
     private void onEnter() {
+        autocorrectCurrentWord();
         EditorInfo info = getCurrentInputEditorInfo();
         InputConnection ic = getCurrentInputConnection();
         if (ic == null) return;
@@ -437,6 +664,7 @@ public class BudEKeyboardService extends InputMethodService {
         } else {
             ic.commitText("\n", 1);
         }
+        updateSuggestions();
     }
 
     private void updateEnterLabel(EditorInfo info) {
@@ -466,6 +694,94 @@ public class BudEKeyboardService extends InputMethodService {
         if (intent == null) return;
         intent.addFlags(Intent.FLAG_ACTIVITY_NEW_TASK);
         startActivity(intent);
+    }
+
+    // ------------------------------------------------------------------
+    // Voice typing (SpeechRecognizer)
+    // ------------------------------------------------------------------
+
+    private void toggleVoice() {
+        if (listening) {
+            stopVoice();
+            return;
+        }
+        if (ContextCompat.checkSelfPermission(this, Manifest.permission.RECORD_AUDIO)
+                != PackageManager.PERMISSION_GRANTED) {
+            Toast.makeText(this, "Allow the microphone for Bud-E first — open the app and try voice chat once.", Toast.LENGTH_LONG).show();
+            return;
+        }
+        if (!SpeechRecognizer.isRecognitionAvailable(this)) {
+            Toast.makeText(this, "Voice typing isn't available on this phone.", Toast.LENGTH_SHORT).show();
+            return;
+        }
+        Intent intent = new Intent(RecognizerIntent.ACTION_RECOGNIZE_SPEECH);
+        intent.putExtra(RecognizerIntent.EXTRA_LANGUAGE_MODEL, RecognizerIntent.LANGUAGE_MODEL_FREE_FORM);
+        intent.putExtra(RecognizerIntent.EXTRA_LANGUAGE, Locale.getDefault());
+        intent.putExtra(RecognizerIntent.EXTRA_PARTIAL_RESULTS, true);
+        intent.putExtra(RecognizerIntent.EXTRA_MAX_RESULTS, 1);
+        speechRecognizer = SpeechRecognizer.createSpeechRecognizer(this);
+        speechRecognizer.setRecognitionListener(new RecognitionListener() {
+            @Override public void onReadyForSpeech(Bundle params) {}
+            @Override public void onBeginningOfSpeech() {}
+            @Override public void onRmsChanged(float rmsdB) {}
+            @Override public void onBufferReceived(byte[] buffer) {}
+            @Override public void onEndOfSpeech() {}
+            @Override public void onEvent(int eventType, Bundle params) {}
+
+            @Override
+            public void onResults(Bundle results) {
+                ArrayList<String> heard = results.getStringArrayList(SpeechRecognizer.RESULTS_RECOGNITION);
+                if (heard != null && !heard.isEmpty()) {
+                    String text = heard.get(0);
+                    if (text != null && !text.isEmpty()) {
+                        commitText(text + " ");
+                        updateSuggestions();
+                    }
+                }
+                stopVoice();
+            }
+
+            @Override
+            public void onPartialResults(Bundle partialResults) {
+                // Partials change as you talk — only final results get typed.
+            }
+
+            @Override
+            public void onError(int error) {
+                if (error != SpeechRecognizer.ERROR_NO_MATCH
+                        && error != SpeechRecognizer.ERROR_SPEECH_TIMEOUT) {
+                    Toast.makeText(BudEKeyboardService.this, "Didn't catch that — try again.", Toast.LENGTH_SHORT).show();
+                }
+                stopVoice();
+            }
+        });
+        try {
+            speechRecognizer.startListening(intent);
+            listening = true;
+            setMicListening(true);
+        } catch (Exception e) {
+            stopVoice();
+            Toast.makeText(this, "Voice typing didn't start — try again.", Toast.LENGTH_SHORT).show();
+        }
+    }
+
+    private void stopVoice() {
+        listening = false;
+        setMicListening(false);
+        if (speechRecognizer != null) {
+            try {
+                speechRecognizer.cancel();
+                speechRecognizer.destroy();
+            } catch (Exception ignored) {
+            }
+            speechRecognizer = null;
+        }
+    }
+
+    private void setMicListening(boolean on) {
+        if (micKey == null) return;
+        micKey.setBackground(keyBackground(on));
+        micKey.setTextColor(on ? theme.accentInk : theme.text);
     }
 
     // ------------------------------------------------------------------
@@ -517,6 +833,38 @@ public class BudEKeyboardService extends InputMethodService {
         } catch (Exception e) {
             Toast.makeText(this, "That sticker didn't send — try again.", Toast.LENGTH_SHORT).show();
             return false;
+        }
+    }
+
+    // ------------------------------------------------------------------
+    // Nav bar
+    // ------------------------------------------------------------------
+
+    /** Hide the Android nav bar while the keyboard is up, so it never
+     *  covers the bottom row. Swipe up from the bottom edge brings it back
+     *  for a moment (transient), then it hides again. On Android 10+ this
+     *  uses WindowInsetsController; older phones use the sticky-immersive
+     *  flags. The insets listener above is the safety net: if the bar is
+     *  visible anyway, the keyboard pads up above it. */
+    private void hideNavigationBar() {
+        try {
+            View decor = getWindow().getWindow().getDecorView();
+            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.R) {
+                android.view.WindowInsetsController controller = decor.getWindowInsetsController();
+                if (controller != null) {
+                    controller.hide(android.view.WindowInsets.Type.navigationBars());
+                    controller.setSystemBarsBehavior(
+                            android.view.WindowInsetsController.BEHAVIOR_SHOW_TRANSIENT_BARS_BY_SWIPE);
+                }
+            } else {
+                decor.setSystemUiVisibility(
+                        View.SYSTEM_UI_FLAG_HIDE_NAVIGATION
+                                | View.SYSTEM_UI_FLAG_IMMERSIVE_STICKY
+                                | View.SYSTEM_UI_FLAG_LAYOUT_HIDE_NAVIGATION);
+            }
+        } catch (Exception ignored) {
+            // Hiding is best-effort — the insets padding still keeps the
+            // bottom row clear when the bar stays visible.
         }
     }
 

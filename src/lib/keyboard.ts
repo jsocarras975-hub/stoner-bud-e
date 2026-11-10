@@ -16,6 +16,7 @@ interface BudEKeyboardPlugin {
   isKeyboardActive(): Promise<{ active: boolean }>;
   openKeyboardSettings(): Promise<void>;
   showKeyboardPicker(): Promise<void>;
+  setTheme(options: { theme: string }): Promise<void>;
 }
 
 const BudEKeyboard = registerPlugin<BudEKeyboardPlugin>('BudEKeyboard');
@@ -57,5 +58,16 @@ export async function showKeyboardPicker(): Promise<void> {
     await BudEKeyboard.showKeyboardPicker();
   } catch {
     // Best-effort.
+  }
+}
+
+/** Tell the native keyboard which theme the app is using, so it can match.
+ *  Stored in SharedPreferences; the keyboard reads it each time it opens. */
+export async function setKeyboardTheme(theme: string): Promise<void> {
+  if (!isNativeApp()) return;
+  try {
+    await BudEKeyboard.setTheme({ theme });
+  } catch {
+    // Best-effort — the keyboard falls back to night garden.
   }
 }
