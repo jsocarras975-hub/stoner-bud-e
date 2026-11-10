@@ -146,9 +146,19 @@ const COMMUNITY_COMMENTS_DDL = `create table if not exists community_comments (
   user_id text not null references "user" ("id") on delete cascade,
   display_name text not null,
   body text not null,
+  like_count int not null default 0,
   created_at timestamptz not null default CURRENT_TIMESTAMP
 );
 create index if not exists community_comments_post_id_idx on community_comments (post_id, created_at)`;
+
+// One row per (comment, user) — a user can like a comment only once, so
+// counts cannot be gamed (same as post likes).
+const COMMUNITY_COMMENT_LIKES_DDL = `create table if not exists community_comment_likes (
+  comment_id uuid not null references community_comments (id) on delete cascade,
+  user_id text not null references "user" ("id") on delete cascade,
+  created_at timestamptz not null default CURRENT_TIMESTAMP,
+  primary key (comment_id, user_id)
+)`;
 
 const STRAIN_REVIEWS_DDL = `create table if not exists strain_reviews (
   user_id text not null references "user" ("id") on delete cascade,
@@ -223,12 +233,18 @@ async function ensureCommunityTables(pool: Pool): Promise<void> {
     await pool.query(COMMUNITY_LIKES_DDL);
     await pool.query(COMMUNITY_REPORTS_DDL);
     await pool.query(COMMUNITY_COMMENTS_DDL);
+    await pool.query(COMMUNITY_COMMENT_LIKES_DDL);
     await pool.query(STRAIN_REVIEWS_DDL);
     // The posts table predates comment_count (added with comments) — add
     // the column to tables created before it existed. No-op when present.
     await pool.query(
       `alter table community_posts
        add column if not exists comment_count int not null default 0`,
+    ).catch(() => {});
+    // The comments table predates like_count (added with comment likes).
+    await pool.query(
+      `alter table community_comments
+       add column if not exists like_count int not null default 0`,
     ).catch(() => {});
     communityTablesEnsured = true;
   } catch {
@@ -489,14 +505,17 @@ async function handleCommunity(
       user_id: string;
       display_name: string;
       body: string;
+      like_count: number;
       created_at: string;
+      liked: boolean;
     }>(
-      `select id, user_id, display_name, body, created_at
-       from community_comments
-       where post_id = $1
-       order by created_at asc
-       limit $2`,
-      [postId, COMMENTS_LIMIT],
+      `select c.id, c.user_id, c.display_name, c.body, c.like_count, c.created_at,
+              exists (select 1 from community_comment_likes l where l.comment_id = c.id and l.user_id = $2) as liked
+       from community_comments c
+       where c.post_id = $1
+       order by c.created_at asc
+       limit $3`,
+      [postId, user.id, COMMENTS_LIMIT],
     );
     res.status(200).json({
       ok: true,
@@ -506,8 +525,10 @@ async function handleCommunity(
         userId: r.user_id,
         displayName: r.display_name,
         body: r.body,
+        likeCount: r.like_count,
         createdAt: r.created_at,
         mine: r.user_id === user.id,
+        liked: r.liked,
       })),
     });
     return;
@@ -558,10 +579,66 @@ async function handleCommunity(
         userId: user.id,
         displayName,
         body: text,
+        likeCount: 0,
         createdAt: row.created_at,
         mine: true,
+        liked: false,
       },
     });
+    return;
+  }
+
+  if (action === 'community_comment_like') {
+    const commentId = typeof body.commentId === 'string' ? body.commentId : '';
+    if (commentId === '') {
+      res.status(400).json({ ok: false, error: 'bad_community_body' });
+      return;
+    }
+    const client = await pool.connect();
+    try {
+      await client.query('BEGIN');
+      const existing = await client.query(
+        'select 1 from community_comment_likes where comment_id = $1 and user_id = $2',
+        [commentId, user.id],
+      );
+      let liked: boolean;
+      if ((existing.rowCount ?? 0) > 0) {
+        await client.query(
+          'delete from community_comment_likes where comment_id = $1 and user_id = $2',
+          [commentId, user.id],
+        );
+        await client.query(
+          'update community_comments set like_count = greatest(like_count - 1, 0) where id = $1',
+          [commentId],
+        );
+        liked = false;
+      } else {
+        await client.query(
+          'insert into community_comment_likes (comment_id, user_id) values ($1, $2)',
+          [commentId, user.id],
+        );
+        await client.query(
+          'update community_comments set like_count = like_count + 1 where id = $1',
+          [commentId],
+        );
+        liked = true;
+      }
+      const count = await client.query<{ like_count: number }>(
+        'select like_count from community_comments where id = $1',
+        [commentId],
+      );
+      await client.query('COMMIT');
+      res.status(200).json({ ok: true, liked, likeCount: count.rows[0]?.like_count ?? 0 });
+    } catch {
+      try {
+        await client.query('ROLLBACK');
+      } catch {
+        // Already gone.
+      }
+      res.status(500).json({ ok: false, error: 'sync_failed' });
+    } finally {
+      client.release();
+    }
     return;
   }
 

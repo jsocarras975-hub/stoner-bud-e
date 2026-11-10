@@ -19,6 +19,7 @@ import {
   postToCommunity,
   reportCommunityPost,
   setDisplayName,
+  toggleCommentLike,
   toggleCommunityLike,
 } from './lib/community';
 import type { CommunityComment, CommunityPost } from './lib/community';
@@ -340,6 +341,19 @@ function PostCard({
     }
   }
 
+  async function likeComment(comment: CommunityComment) {
+    try {
+      const result = await toggleCommentLike(comment.id);
+      setComments((prev) =>
+        (prev ?? []).map((c) =>
+          c.id === comment.id ? { ...c, liked: result.liked, likeCount: result.likeCount } : c,
+        ),
+      );
+    } catch {
+      // A failed like is quiet — the count just stays where it was.
+    }
+  }
+
   return (
     <article className="card" aria-label={`Post by ${post.displayName}`}>
       <p style={{ margin: '0 0 4px' }}>
@@ -393,16 +407,32 @@ function PostCard({
                 <p style={{ margin: '0 0 4px', whiteSpace: 'pre-wrap', wordBreak: 'break-word' }}>
                   {comment.body}
                 </p>
-                {(comment.mine || isOwner) && (
+                <div style={{ display: 'flex', gap: 8, alignItems: 'center' }}>
                   <button
                     className="btn"
-                    onClick={() => void removeComment(comment)}
-                    aria-label="Delete this reply"
-                    style={{ padding: '2px 8px', fontSize: '0.85rem' }}
+                    onClick={() => void likeComment(comment)}
+                    aria-label={comment.liked ? 'Unlike this reply' : 'Like this reply'}
+                    style={{
+                      padding: '2px 8px',
+                      fontSize: '0.85rem',
+                      ...(comment.liked
+                        ? { borderColor: 'var(--accent)', color: 'var(--accent)' }
+                        : {}),
+                    }}
                   >
-                    {confirmCommentDelete === comment.id ? 'Sure? Tap again' : '🗑️ Delete'}
+                    🍃 {comment.likeCount}
                   </button>
-                )}
+                  {(comment.mine || isOwner) && (
+                    <button
+                      className="btn"
+                      onClick={() => void removeComment(comment)}
+                      aria-label="Delete this reply"
+                      style={{ padding: '2px 8px', fontSize: '0.85rem' }}
+                    >
+                      {confirmCommentDelete === comment.id ? 'Sure? Tap again' : '🗑️ Delete'}
+                    </button>
+                  )}
+                </div>
               </div>
             ))
           )}

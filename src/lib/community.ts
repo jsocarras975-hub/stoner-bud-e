@@ -31,8 +31,10 @@ export interface CommunityComment {
   userId: string;
   displayName: string;
   body: string;
+  likeCount: number;
   createdAt: string;
   mine: boolean;
+  liked: boolean;
 }
 
 export interface StrainRating {
@@ -129,6 +131,7 @@ function isComment(value: unknown): value is CommunityComment {
     typeof (value as CommunityComment).postId === 'string' &&
     typeof (value as CommunityComment).displayName === 'string' &&
     typeof (value as CommunityComment).body === 'string' &&
+    typeof (value as CommunityComment).likeCount === 'number' &&
     typeof (value as CommunityComment).createdAt === 'string'
   );
 }
@@ -190,6 +193,15 @@ export async function addComment(
 /** Delete a comment — yours, or any comment if you are the owner. */
 export async function deleteComment(commentId: string): Promise<void> {
   await communityCall('community_comment_delete', { commentId });
+}
+
+/** Tap the leaf on a comment: like it, or unlike it if you already did. */
+export async function toggleCommentLike(commentId: string): Promise<{ liked: boolean; likeCount: number }> {
+  const body = await communityCall('community_comment_like', { commentId });
+  return {
+    liked: body.liked === true,
+    likeCount: typeof body.likeCount === 'number' ? body.likeCount : 0,
+  };
 }
 
 /** Community averages per strain + your own reviews. */
