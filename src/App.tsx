@@ -73,7 +73,7 @@ import type { AuthUser } from './lib/auth-client';
 import { DEFAULT_VOICE_SETTINGS, cleanVoiceSettings } from './voice';
 import type { VoiceSettings } from './voice';
 import { speakVoice, startRecording, stopVoice, transcribeVoice, unlockAudio } from './lib/voice-client';
-import { executeDeviceAction, extractDeviceAction, getBubbleStatus, getLaunchInfo, isAppAction, isImageSearchAction, isNative, localIsoNow, parseAppAction, publishStashSummary, publishWidgetStash, setBubbleEnabled } from './lib/device-actions';
+import { executeDeviceAction, extractDeviceAction, getBubbleStatus, getLaunchInfo, isAppAction, isImageSearchAction, isNative, localIsoNow, parseAppAction, publishMusicState, publishStashSummary, publishWidgetStash, setBubbleEnabled } from './lib/device-actions';
 import type { AppAction } from './lib/device-actions';
 import type { ActiveRecording } from './lib/voice-client';
 import { TIMER_ALERTS, buzz, planAlerts, type PlannedAlert, type TimerAlert, type TimerAlertId } from './lib/timer-alerts';
@@ -93,6 +93,7 @@ import { Chip, ChipRow, Label, PageHead } from './bits';
 const TRANSCRIPT_KEY = 'bude-transcript-v1'; // legacy single transcript
 const CHATS_KEY = 'bude-chats-v1';
 const PLAYLISTS_KEY = 'bude-playlists-v1';
+const MUSIC_STATE_KEY = 'bude-music-state-v1';
 const SESSION_KEY = 'bude-session-v1';
 const VIBE_KEY = 'bude-vibe-v1';
 const VOICE_KEY = 'bude-voice-v1';
@@ -366,6 +367,33 @@ function loadList<T>(key: string): T[] {
   }
 }
 
+// The music queue + the last track, so the app can resume after it was
+// killed and the widget's play button has something to resume. A track
+// only counts when it has the fields the player needs.
+function loadMusicState(): { track: AudiusTrack | null; queue: AudiusTrack[] } {
+  try {
+    const raw = localStorage.getItem(MUSIC_STATE_KEY);
+    if (!raw) return { track: null, queue: [] };
+    const parsed: unknown = JSON.parse(raw);
+    if (typeof parsed !== 'object' || parsed === null) return { track: null, queue: [] };
+    const queueRaw = (parsed as { queue?: unknown }).queue;
+    const queue = Array.isArray(queueRaw)
+      ? (queueRaw as unknown[]).filter(
+          (t): t is AudiusTrack =>
+            typeof t === 'object' && t !== null &&
+            typeof (t as { id?: unknown }).id === 'string' &&
+            typeof (t as { title?: unknown }).title === 'string' &&
+            typeof (t as { artist?: unknown }).artist === 'string',
+        )
+      : [];
+    const currentId = (parsed as { currentId?: unknown }).currentId;
+    const track = typeof currentId === 'string' ? queue.find((t) => t.id === currentId) ?? null : null;
+    return { track, queue };
+  } catch {
+    return { track: null, queue: [] };
+  }
+}
+
 function save(key: string, value: unknown): void {
   try {
     localStorage.setItem(key, JSON.stringify(value));
@@ -469,12 +497,21 @@ export default function App() {
 
   // In-app music (Audius) — the <audio> element and the queue live here so
   // the music keeps playing while the user moves around the app. The Music
-  // tab is just the browser + now-playing controls.
+  // tab is just the browser + now-playing controls. The queue + last track
+  // are restored from the phone on launch, so the widget's play button can
+  // resume after the app was killed — but restoring must not auto-play.
   const audioRef = useRef<HTMLAudioElement | null>(null);
-  const [currentTrack, setCurrentTrack] = useState<AudiusTrack | null>(null);
-  const [musicQueue, setMusicQueue] = useState<AudiusTrack[]>([]);
+  const [initialMusic] = useState(() => loadMusicState());
+  const [currentTrack, setCurrentTrack] = useState<AudiusTrack | null>(initialMusic.track);
+  const [musicQueue, setMusicQueue] = useState<AudiusTrack[]>(initialMusic.queue);
   const [isPlaying, setIsPlaying] = useState(false);
   const [audioError, setAudioError] = useState<string | null>(null);
+  // Set on mount when a track was restored, before the track-change effect
+  // below runs — it makes the restore load the audio silently, not play it.
+  const restoringMusic = useRef(false);
+  useEffect(() => {
+    if (currentTrack) restoringMusic.current = true;
+  }, []);
 
   // When the track changes, load it and play. (The play() call can be
   // refused if the browser still wants a tap — then the paused state shows
@@ -483,6 +520,10 @@ export default function App() {
     const audio = audioRef.current;
     if (!audio || !currentTrack) return;
     audio.src = streamUrl(currentTrack.id);
+    if (restoringMusic.current) {
+      restoringMusic.current = false;
+      return; // restored on launch — loaded, not playing
+    }
     audio.play().catch(() => setIsPlaying(false));
   }, [currentTrack]);
 
@@ -586,6 +627,21 @@ export default function App() {
   // the app is already open). Shared text lands in the chat box through
   // the same prefill the strain pages use. One-shot — the native side
   // clears it.
+  // The launch-info poll below runs once (empty deps), so it would capture
+  // stale music state — the music-action handler lives in a ref that is
+  // refreshed every render, so it always sees the current track + queue.
+  const applyMusicActionRef = useRef((_action: string) => {});
+  useEffect(() => {
+    applyMusicActionRef.current = (action: string) => {
+      if (action === 'toggle') {
+        if (currentTrack) togglePlay();
+        else if (musicQueue.length > 0) playTrack(musicQueue[0], musicQueue);
+        else setTab('music');
+      } else if (action === 'next') playNext();
+      else if (action === 'prev') playPrev();
+    };
+  });
+
   // Launch info from the native side (a shortcut's tab, text shared in
   // from another app, an app action the bubble or voice chat relayed in).
   // Read on load, when the window gains focus, AND every 2 seconds: the
@@ -613,6 +669,10 @@ export default function App() {
       if (info.appAction !== '') {
         const appAction = parseAppAction(info.appAction);
         if (appAction) void applyAppAction(appAction);
+      }
+      // A music action from the music widget (play/pause, next, previous).
+      if (info.musicAction !== '') {
+        applyMusicActionRef.current(info.musicAction);
       }
     };
     void applyLaunchInfo();
@@ -653,6 +713,26 @@ export default function App() {
   useEffect(() => save(JOURNAL_KEY, journal), [journal]);
   useEffect(() => save(STASH_KEY, stash), [stash]);
   useEffect(() => save(PLAYLISTS_KEY, playlists), [playlists]);
+  // Remember the queue + last track, so the app can resume after it was
+  // killed and the music widget has something to show and resume.
+  useEffect(() => {
+    save(MUSIC_STATE_KEY, { queue: musicQueue, currentId: currentTrack?.id ?? null });
+  }, [musicQueue, currentTrack]);
+  // Music widget now-playing line (phone app only): the track, the
+  // artist, whether it is playing. Only publishes when it changes.
+  const lastMusicState = useRef('');
+  useEffect(() => {
+    if (!isNative()) return;
+    const key = `${currentTrack?.id ?? ''}|${isPlaying ? '1' : '0'}`;
+    if (key === lastMusicState.current) return;
+    lastMusicState.current = key;
+    void publishMusicState(
+      currentTrack?.title ?? '',
+      currentTrack?.artist ?? '',
+      isPlaying,
+      currentTrack !== null,
+    );
+  }, [currentTrack, isPlaying]);
 
   // Home-screen widget stash line (phone app only): the totals, plus
   // the first jar running low — the warning is the line that matters,

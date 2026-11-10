@@ -19,12 +19,16 @@ public final class BudELaunchInfo {
     private static final String TAB_KEY = "tab";
     private static final String SHARED_TEXT_KEY = "shared_text";
     private static final String APP_ACTION_KEY = "app_action";
+    private static final String MUSIC_ACTION_KEY = "music_action";
 
     /** Extra carrying the tab id a shortcut asked for. */
     public static final String EXTRA_TAB = "bude_tab";
 
     /** Extra carrying an app-action JSON block from the bubble/voice chat. */
     public static final String EXTRA_APP_ACTION = "bude_app_action";
+
+    /** Extra carrying a music action from the music widget ("toggle", "next", "prev"). */
+    public static final String EXTRA_MUSIC_ACTION = "bude_music_action";
 
     private BudELaunchInfo() {
     }
@@ -43,6 +47,11 @@ public final class BudELaunchInfo {
         String appAction = intent.getStringExtra(EXTRA_APP_ACTION);
         if (appAction != null && !appAction.isEmpty()) {
             editor.putString(APP_ACTION_KEY, appAction);
+            changed = true;
+        }
+        String musicAction = intent.getStringExtra(EXTRA_MUSIC_ACTION);
+        if (musicAction != null && !musicAction.isEmpty()) {
+            editor.putString(MUSIC_ACTION_KEY, musicAction);
             changed = true;
         }
         if (Intent.ACTION_SEND.equals(intent.getAction())) {
@@ -71,6 +80,7 @@ public final class BudELaunchInfo {
             out.put("tab", prefs.getString(TAB_KEY, ""));
             out.put("sharedText", prefs.getString(SHARED_TEXT_KEY, ""));
             out.put("appAction", prefs.getString(APP_ACTION_KEY, ""));
+            out.put("musicAction", prefs.getString(MUSIC_ACTION_KEY, ""));
         } catch (Exception ignored) {
             // A broken store reads as empty.
         }

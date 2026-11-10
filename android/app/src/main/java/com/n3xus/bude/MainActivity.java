@@ -15,6 +15,20 @@ public class MainActivity extends BridgeActivity {
         registerPlugin(BudEActionsPlugin.class);
         registerPlugin(BudEBiometricPlugin.class);
         super.onCreate(savedInstanceState);
+        // The music widget's play button resumes playback by launching the
+        // app — that play() call comes from the launch flow, not from a tap
+        // inside the WebView, so the WebView must not demand a user gesture
+        // for media. The app only plays audio through the music player
+        // (voice replies use Android TTS, not the WebView), so this only
+        // affects the music controls.
+        try {
+            if (getBridge() != null && getBridge().getWebView() != null) {
+                getBridge().getWebView().getSettings().setMediaPlaybackRequiresUserGesture(false);
+            }
+        } catch (Exception ignored) {
+            // The WebView setting is best-effort — the play button in the
+            // app still works, and the widget falls back to opening Music.
+        }
         // Shortcuts, the widget, and shares from other apps arrive as the
         // launch intent — stash what they asked for so the web app can
         // pick it up, and keep the Talk notification showing.

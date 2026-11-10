@@ -1,0 +1,84 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- Bud-E music widget (4 wide, 1 tall): a slim now-playing bar. The
+     app-icon leaf, the track title + artist, then previous / play-pause /
+     next. Tapping the track opens the Music tab; the three buttons send a
+     music action to the app (it opens, since the player lives in the
+     app's WebView). The title/artist/play state are filled in by the app
+     whenever the music changes; until then it shows "Nothing playing". -->
+<LinearLayout xmlns:android="http://schemas.android.com/apk/res/android"
+    android:layout_width="match_parent"
+    android:layout_height="match_parent"
+    android:background="@drawable/bud_e_music_widget_bg"
+    android:gravity="center_vertical"
+    android:orientation="horizontal"
+    android:padding="8dp">
+
+    <ImageView
+        android:id="@+id/music_leaf"
+        android:layout_width="40dp"
+        android:layout_height="40dp"
+        android:contentDescription="Bud-E"
+        android:scaleType="fitCenter"
+        android:src="@drawable/bud_e_bubble_icon" />
+
+    <LinearLayout
+        android:id="@+id/music_open"
+        android:layout_width="0dp"
+        android:layout_height="wrap_content"
+        android:layout_marginStart="10dp"
+        android:layout_weight="1"
+        android:orientation="vertical">
+
+        <TextView
+            android:id="@+id/music_title"
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:ellipsize="end"
+            android:maxLines="1"
+            android:text="Nothing playing"
+            android:textColor="#f2f0eb"
+            android:textSize="14sp"
+            android:textStyle="bold" />
+
+        <TextView
+            android:id="@+id/music_artist"
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:ellipsize="end"
+            android:maxLines="1"
+            android:text="Tap to pick a song"
+            android:textColor="#a9bfae"
+            android:textSize="12sp" />
+    </LinearLayout>
+
+    <Button
+        android:id="@+id/music_prev"
+        android:layout_width="40dp"
+        android:layout_height="44dp"
+        android:background="@android:color/transparent"
+        android:minHeight="0dp"
+        android:text="⏮"
+        android:textColor="#e8f0e8"
+        android:textSize="16sp" />
+
+    <Button
+        android:id="@+id/music_play"
+        android:layout_width="44dp"
+        android:layout_height="44dp"
+        android:background="@drawable/bud_e_bubble_bg"
+        android:minHeight="0dp"
+        android:text="▶"
+        android:textColor="#07110c"
+        android:textSize="16sp"
+        android:textStyle="bold" />
+
+    <Button
+        android:id="@+id/music_next"
+        android:layout_width="40dp"
+        android:layout_height="44dp"
+        android:background="@android:color/transparent"
+        android:minHeight="0dp"
+        android:text="⏭"
+        android:textColor="#e8f0e8"
+        android:textSize="16sp" />
+</LinearLayout>

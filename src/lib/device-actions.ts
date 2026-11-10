@@ -229,13 +229,14 @@ export function localIsoNow(): string {
 
 interface BudEActionsPlugin {
   execute(options: { action: DeviceAction }): Promise<{ ok: boolean; message: string }>;
-  getLaunchInfo(): Promise<{ tab?: string; sharedText?: string; appAction?: string }>;
+  getLaunchInfo(): Promise<{ tab?: string; sharedText?: string; appAction?: string; musicAction?: string }>;
   getTalkNotification(): Promise<{ enabled?: boolean }>;
   setTalkNotification(options: { enabled: boolean }): Promise<{ enabled?: boolean }>;
   getAssistantStatus(): Promise<{ isAssistant?: boolean }>;
   openDefaultAppsSettings(): Promise<{ ok?: boolean }>;
   publishWidgetStash(options: { stashLine: string; lowLine: string }): Promise<{ ok?: boolean }>;
   publishStashSummary(options: { summary: string }): Promise<{ ok?: boolean }>;
+  publishMusicState(options: { title: string; artist: string; playing: boolean; hasTrack: boolean }): Promise<{ ok?: boolean }>;
   getBubbleStatus(): Promise<{ enabled?: boolean; canDrawOverlays?: boolean }>;
   setBubbleEnabled(options: { enabled: boolean }): Promise<{ enabled?: boolean }>;
   openOverlaySettings(): Promise<{ ok?: boolean }>;
@@ -248,17 +249,18 @@ const BudEActions = registerPlugin<BudEActionsPlugin>('BudEActions');
  * app, or an app action the bubble/voice chat asked for). The native side
  * clears it on read, so it never fires twice. Empty on the plain web.
  */
-export async function getLaunchInfo(): Promise<{ tab: string; sharedText: string; appAction: string }> {
-  if (!isNativeApp()) return { tab: '', sharedText: '', appAction: '' };
+export async function getLaunchInfo(): Promise<{ tab: string; sharedText: string; appAction: string; musicAction: string }> {
+  if (!isNativeApp()) return { tab: '', sharedText: '', appAction: '', musicAction: '' };
   try {
     const res = await BudEActions.getLaunchInfo();
     return {
       tab: typeof res?.tab === 'string' ? res.tab : '',
       sharedText: typeof res?.sharedText === 'string' ? res.sharedText : '',
       appAction: typeof res?.appAction === 'string' ? res.appAction : '',
+      musicAction: typeof res?.musicAction === 'string' ? res.musicAction : '',
     };
   } catch {
-    return { tab: '', sharedText: '', appAction: '' };
+    return { tab: '', sharedText: '', appAction: '', musicAction: '' };
   }
 }
 
@@ -329,6 +331,20 @@ export async function publishStashSummary(summary: string): Promise<void> {
     await BudEActions.publishStashSummary({ summary });
   } catch {
     // Best effort — Bud-E just asks which jar.
+  }
+}
+
+/**
+ * Write the now-playing state for the music widget (title, artist,
+ * whether it is playing, whether a track is loaded at all). Best effort
+ * — the widget just keeps its old line.
+ */
+export async function publishMusicState(title: string, artist: string, playing: boolean, hasTrack: boolean): Promise<void> {
+  if (!isNativeApp()) return;
+  try {
+    await BudEActions.publishMusicState({ title, artist, playing, hasTrack });
+  } catch {
+    // Best effort — the widget just keeps its old line.
   }
 }
 
