@@ -102,9 +102,55 @@ const USER_PLAYLISTS_DDL = `create table if not exists user_playlists (
 );
 create index if not exists user_playlists_user_id_idx on user_playlists (user_id)`;
 
+// Community board + shared strain reviews. Same self-applying pattern as
+// the chat/playlists tables: the DDL runs as CREATE TABLE IF NOT EXISTS on
+// first use, so the feature works without a manual migration.
+// - community_posts: one row per board post (shared by all users).
+//   report_count >= 3 hides a post from the feed (moderation safety net).
+// - community_likes / community_reports: one row per (post, user) — a user
+//   can like or report a post only once, so counts cannot be gamed.
+// - strain_reviews: one row per (user, strain) — a user rates each strain
+//   once and can change it later (upsert). The community average is
+//   computed on read, so there is no counter to drift.
+const COMMUNITY_POSTS_DDL = `create table if not exists community_posts (
+  id uuid not null primary key default gen_random_uuid(),
+  user_id text not null references "user" ("id") on delete cascade,
+  display_name text not null,
+  body text not null,
+  like_count int not null default 0,
+  report_count int not null default 0,
+  created_at timestamptz not null default CURRENT_TIMESTAMP
+);
+create index if not exists community_posts_created_at_idx on community_posts (created_at desc)`;
+
+const COMMUNITY_LIKES_DDL = `create table if not exists community_likes (
+  post_id uuid not null references community_posts (id) on delete cascade,
+  user_id text not null references "user" ("id") on delete cascade,
+  created_at timestamptz not null default CURRENT_TIMESTAMP,
+  primary key (post_id, user_id)
+)`;
+
+const COMMUNITY_REPORTS_DDL = `create table if not exists community_reports (
+  post_id uuid not null references community_posts (id) on delete cascade,
+  user_id text not null references "user" ("id") on delete cascade,
+  created_at timestamptz not null default CURRENT_TIMESTAMP,
+  primary key (post_id, user_id)
+)`;
+
+const STRAIN_REVIEWS_DDL = `create table if not exists strain_reviews (
+  user_id text not null references "user" ("id") on delete cascade,
+  strain_id text not null,
+  rating int not null check (rating between 1 and 5),
+  review text not null default '',
+  updated_at timestamptz not null default CURRENT_TIMESTAMP,
+  primary key (user_id, strain_id)
+);
+create index if not exists strain_reviews_strain_id_idx on strain_reviews (strain_id)`;
+
 let deletedItemsEnsured = false;
 let chatTableEnsured = false;
 let playlistsTableEnsured = false;
+let communityTablesEnsured = false;
 
 /** Idempotent: create the tombstone table if the migration has not landed
  *  yet. Best-effort — a failure here leaves the flag unset, and the
@@ -157,6 +203,304 @@ async function ensurePlaylistsTable(pool: Pool): Promise<void> {
   }
 }
 
+async function ensureCommunityTables(pool: Pool): Promise<void> {
+  if (communityTablesEnsured) return;
+  try {
+    await pool.query(COMMUNITY_POSTS_DDL);
+    await pool.query(COMMUNITY_LIKES_DDL);
+    await pool.query(COMMUNITY_REPORTS_DDL);
+    await pool.query(STRAIN_REVIEWS_DDL);
+    communityTablesEnsured = true;
+  } catch {
+    // Same as above — best-effort.
+  }
+}
+
+/** The owner (premiumTier 'owner' in user_settings) can delete any board
+ *  post. Everyone else can only delete their own. */
+async function isOwner(pool: Pool, userId: string): Promise<boolean> {
+  try {
+    const r = await pool.query<{ data: Record<string, unknown> | null }>(
+      'select data from user_settings where user_id = $1',
+      [userId],
+    );
+    return r.rows[0]?.data?.premiumTier === 'owner';
+  } catch {
+    return false;
+  }
+}
+
+const STRAIN_IDS = new Set([
+  'granddaddy-purple',
+  'blue-dream',
+  'sour-diesel',
+  'og-kush',
+  'gsc',
+  'northern-lights',
+  'jack-herer',
+  'pineapple-express',
+  'wedding-cake',
+  'zkittlez',
+  'durban-poison',
+  'gelato',
+]);
+
+const MAX_POST_CHARS = 280;
+const MAX_DISPLAY_NAME_CHARS = 30;
+const MAX_REVIEW_CHARS = 200;
+const MAX_POSTS_PER_HOUR = 10;
+const REPORT_HIDE_THRESHOLD = 3;
+const FEED_LIMIT = 50;
+
+/** One community action, dispatched from the POST handler below. The body
+ *  carries `action` plus that action's fields; anything malformed answers
+ *  400 `bad_community_body`, a post the caller may not delete answers 403
+ *  `not_yours`, and a flood of posts answers 429 `too_many_posts`. */
+async function handleCommunity(
+  pool: Pool,
+  user: { id: string },
+  body: Record<string, unknown>,
+  res: Res,
+): Promise<void> {
+  const action = body.action;
+  if (typeof action !== 'string') {
+    res.status(400).json({ ok: false, error: 'bad_community_body' });
+    return;
+  }
+
+  if (action === 'community_feed') {
+    const owner = await isOwner(pool, user.id);
+    const rows = await pool.query<{
+      id: string;
+      user_id: string;
+      display_name: string;
+      body: string;
+      like_count: number;
+      created_at: string;
+      mine: boolean;
+      liked: boolean;
+    }>(
+      `select p.id, p.user_id, p.display_name, p.body, p.like_count, p.created_at,
+              (p.user_id = $1) as mine,
+              exists (select 1 from community_likes l where l.post_id = p.id and l.user_id = $1) as liked
+       from community_posts p
+       where p.report_count < $2
+       order by p.created_at desc
+       limit $3`,
+      [user.id, REPORT_HIDE_THRESHOLD, FEED_LIMIT],
+    );
+    res.status(200).json({
+      ok: true,
+      isOwner: owner,
+      posts: rows.rows.map((r) => ({
+        id: r.id,
+        userId: r.user_id,
+        displayName: r.display_name,
+        body: r.body,
+        likeCount: r.like_count,
+        createdAt: r.created_at,
+        mine: r.mine,
+        liked: r.liked,
+      })),
+    });
+    return;
+  }
+
+  if (action === 'community_post') {
+    const displayName =
+      typeof body.displayName === 'string' ? body.displayName.trim().slice(0, MAX_DISPLAY_NAME_CHARS) : '';
+    const text = typeof body.body === 'string' ? body.body.trim() : '';
+    if (displayName === '' || text === '' || text.length > MAX_POST_CHARS) {
+      res.status(400).json({ ok: false, error: 'bad_community_body' });
+      return;
+    }
+    const recent = await pool.query<{ n: string }>(
+      `select count(*) as n from community_posts
+       where user_id = $1 and created_at > now() - interval '1 hour'`,
+      [user.id],
+    );
+    if (Number(recent.rows[0]?.n ?? 0) >= MAX_POSTS_PER_HOUR) {
+      res.status(429).json({ ok: false, error: 'too_many_posts' });
+      return;
+    }
+    const inserted = await pool.query<{
+      id: string;
+      created_at: string;
+    }>(
+      `insert into community_posts (user_id, display_name, body)
+       values ($1, $2, $3) returning id, created_at`,
+      [user.id, displayName, text],
+    );
+    const row = inserted.rows[0];
+    if (!row) {
+      res.status(500).json({ ok: false, error: 'sync_failed' });
+      return;
+    }
+    res.status(200).json({
+      ok: true,
+      post: {
+        id: row.id,
+        userId: user.id,
+        displayName,
+        body: text,
+        likeCount: 0,
+        createdAt: row.created_at,
+        mine: true,
+        liked: false,
+      },
+    });
+    return;
+  }
+
+  if (action === 'community_like') {
+    const postId = typeof body.postId === 'string' ? body.postId : '';
+    if (postId === '') {
+      res.status(400).json({ ok: false, error: 'bad_community_body' });
+      return;
+    }
+    const client = await pool.connect();
+    try {
+      await client.query('BEGIN');
+      const existing = await client.query(
+        'select 1 from community_likes where post_id = $1 and user_id = $2',
+        [postId, user.id],
+      );
+      let liked: boolean;
+      if ((existing.rowCount ?? 0) > 0) {
+        await client.query(
+          'delete from community_likes where post_id = $1 and user_id = $2',
+          [postId, user.id],
+        );
+        await client.query(
+          'update community_posts set like_count = greatest(like_count - 1, 0) where id = $1',
+          [postId],
+        );
+        liked = false;
+      } else {
+        await client.query(
+          'insert into community_likes (post_id, user_id) values ($1, $2)',
+          [postId, user.id],
+        );
+        await client.query(
+          'update community_posts set like_count = like_count + 1 where id = $1',
+          [postId],
+        );
+        liked = true;
+      }
+      const count = await client.query<{ like_count: number }>(
+        'select like_count from community_posts where id = $1',
+        [postId],
+      );
+      await client.query('COMMIT');
+      res.status(200).json({ ok: true, liked, likeCount: count.rows[0]?.like_count ?? 0 });
+    } catch {
+      try {
+        await client.query('ROLLBACK');
+      } catch {
+        // Already gone.
+      }
+      res.status(500).json({ ok: false, error: 'sync_failed' });
+    } finally {
+      client.release();
+    }
+    return;
+  }
+
+  if (action === 'community_delete') {
+    const postId = typeof body.postId === 'string' ? body.postId : '';
+    if (postId === '') {
+      res.status(400).json({ ok: false, error: 'bad_community_body' });
+      return;
+    }
+    const found = await pool.query<{ user_id: string }>(
+      'select user_id from community_posts where id = $1',
+      [postId],
+    );
+    const row = found.rows[0];
+    if (!row) {
+      res.status(404).json({ ok: false, error: 'not_found' });
+      return;
+    }
+    const owner = row.user_id !== user.id ? await isOwner(pool, user.id) : true;
+    if (row.user_id !== user.id && !owner) {
+      res.status(403).json({ ok: false, error: 'not_yours' });
+      return;
+    }
+    await pool.query('delete from community_posts where id = $1', [postId]);
+    res.status(200).json({ ok: true });
+    return;
+  }
+
+  if (action === 'community_report') {
+    const postId = typeof body.postId === 'string' ? body.postId : '';
+    if (postId === '') {
+      res.status(400).json({ ok: false, error: 'bad_community_body' });
+      return;
+    }
+    const inserted = await pool.query(
+      `insert into community_reports (post_id, user_id) values ($1, $2)
+       on conflict (post_id, user_id) do nothing returning post_id`,
+      [postId, user.id],
+    );
+    if ((inserted.rowCount ?? 0) > 0) {
+      await pool.query(
+        'update community_posts set report_count = report_count + 1 where id = $1',
+        [postId],
+      );
+    }
+    res.status(200).json({ ok: true });
+    return;
+  }
+
+  if (action === 'strain_ratings') {
+    const agg = await pool.query<{ strain_id: string; avg: string; count: string }>(
+      `select strain_id, round(avg(rating)::numeric, 1) as avg, count(*) as count
+       from strain_reviews group by strain_id`,
+    );
+    const mine = await pool.query<{ strain_id: string; rating: number; review: string }>(
+      'select strain_id, rating, review from strain_reviews where user_id = $1',
+      [user.id],
+    );
+    const ratings: Record<string, { avg: number; count: number }> = {};
+    for (const r of agg.rows) ratings[r.strain_id] = { avg: Number(r.avg), count: Number(r.count) };
+    const myReviews: Record<string, { rating: number; review: string }> = {};
+    for (const r of mine.rows) myReviews[r.strain_id] = { rating: r.rating, review: r.review };
+    res.status(200).json({ ok: true, ratings, myReviews });
+    return;
+  }
+
+  if (action === 'strain_review') {
+    const strainId = typeof body.strainId === 'string' ? body.strainId : '';
+    const rating = typeof body.rating === 'number' ? body.rating : 0;
+    const review =
+      typeof body.review === 'string' ? body.review.trim().slice(0, MAX_REVIEW_CHARS) : '';
+    if (!STRAIN_IDS.has(strainId) || !Number.isInteger(rating) || rating < 1 || rating > 5) {
+      res.status(400).json({ ok: false, error: 'bad_community_body' });
+      return;
+    }
+    await pool.query(
+      `insert into strain_reviews (user_id, strain_id, rating, review)
+       values ($1, $2, $3, $4)
+       on conflict (user_id, strain_id) do update
+         set rating = excluded.rating, review = excluded.review, updated_at = now()`,
+      [user.id, strainId, rating, review],
+    );
+    const agg = await pool.query<{ avg: string; count: string }>(
+      `select round(avg(rating)::numeric, 1) as avg, count(*) as count
+       from strain_reviews where strain_id = $1`,
+      [strainId],
+    );
+    res.status(200).json({
+      ok: true,
+      strainId,
+      rating: { avg: Number(agg.rows[0]?.avg ?? 0), count: Number(agg.rows[0]?.count ?? 0) },
+    });
+    return;
+  }
+
+  res.status(400).json({ ok: false, error: 'bad_community_body' });
+}
+
 type Req = ReqLike & { on?: unknown };
 type Res = ResLike & { headersSent?: boolean };
 
@@ -173,6 +517,15 @@ interface SyncBody {
   playlists?: unknown;
   settings?: unknown;
   deleted?: unknown;
+  /** Community / strain-review actions (see handleCommunity). When set,
+   *  the body is a community request, not a sync upload. */
+  action?: unknown;
+  displayName?: unknown;
+  body?: unknown;
+  postId?: unknown;
+  strainId?: unknown;
+  rating?: unknown;
+  review?: unknown;
 }
 
 interface IncomingTombstone {
@@ -429,6 +782,17 @@ export default async function handler(req: Req, res: Res): Promise<void> {
 
     // POST — validate first, then upsert in one transaction.
     const body = await readJsonBody<SyncBody>(req);
+
+    // Community board + shared strain reviews live in this same function
+    // (the Vercel Hobby plan caps at 12 serverless functions and this
+    // project already has 12). A body with an `action` is a community
+    // request, not a sync upload — route it and return.
+    if (typeof body.action === 'string') {
+      await ensureCommunityTables(pool);
+      await handleCommunity(pool, user, body as Record<string, unknown>, res);
+      return;
+    }
+
     const journal = cleanItems(body.journal, MAX_JOURNAL);
     const stash = cleanItems(body.stash, MAX_STASH);
     const chats = cleanChats(body.chats);

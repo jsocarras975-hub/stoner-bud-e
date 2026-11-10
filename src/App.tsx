@@ -24,6 +24,7 @@ import {
   SkipForward,
   Timer,
   UserRound,
+  Users,
   Volume2,
   Wind,
   X,
@@ -43,6 +44,7 @@ import {
 } from './bude';
 import type { ChatImage, ChatMessage, Method, Session, TriviaQuestion } from './bude';
 import StrainsTab from './StrainsTab';
+import Community from './Community';
 import MusicTab from './MusicTab';
 import TonightTab from './TonightTab';
 import SettingsTab from './SettingsTab';
@@ -156,7 +158,7 @@ function isTab(value: string): value is Tab {
 /** Which tool is open inside the Tools tab (Grok drill-in). Null = the tool grid.
  *  Log and Plan live here too now — they are full sections, not little helpers,
  *  but they open the same way, with "All tools" to go back. */
-type ToolId = 'timer' | 'breathe' | 'munchies' | 'thoughts' | 'trivia' | 'journal' | 'plan' | 'would-you-rather' | 'guess-strain' | 'memory';
+type ToolId = 'timer' | 'breathe' | 'munchies' | 'thoughts' | 'trivia' | 'journal' | 'plan' | 'would-you-rather' | 'guess-strain' | 'memory' | 'community';
 
 /** Live state of the edible timer, lifted to App so the header pill can show it. */
 interface TimerState {
@@ -1397,6 +1399,7 @@ export default function App() {
       {tab === 'tools' && (
         <ToolsTab
           session={session}
+          user={user}
           timerStatus={timerStatus}
           setTimerStatus={setTimerStatus}
           onTimerState={setTimerState}
@@ -2595,6 +2598,12 @@ const TOOL_DEFS: { id: ToolId; name: string; detail: string; icon: React.ReactNo
     icon: <Leaf size={20} aria-hidden />,
   },
   {
+    id: 'community',
+    name: 'Community',
+    detail: 'One board, every Bud-E user',
+    icon: <Users size={20} aria-hidden />,
+  },
+  {
     id: 'trivia',
     name: 'Bud-E trivia',
     detail: '10 questions, easy to expert',
@@ -2622,6 +2631,7 @@ const TOOL_DEFS: { id: ToolId; name: string; detail: string; icon: React.ReactNo
 
 function ToolsTab({
   session,
+  user,
   timerStatus,
   setTimerStatus,
   onTimerState,
@@ -2634,6 +2644,7 @@ function ToolsTab({
   planDetail,
 }: {
   session: Session;
+  user: AuthUser | null;
   timerStatus: string;
   setTimerStatus: (s: string) => void;
   onTimerState: (s: TimerState) => void;
@@ -2694,6 +2705,7 @@ function ToolsTab({
       {activeTool === 'munchies' && <MunchiesMaker />}
       {activeTool === 'thoughts' && <HighThoughts />}
       {activeTool === 'trivia' && <TriviaGame />}
+      {activeTool === 'community' && <Community user={user} />}
       {activeTool === 'would-you-rather' && <WouldYouRather />}
       {activeTool === 'guess-strain' && <GuessTheStrain />}
       {activeTool === 'memory' && <MemoryMatch />}

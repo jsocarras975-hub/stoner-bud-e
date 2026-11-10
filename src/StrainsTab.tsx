@@ -1,11 +1,18 @@
 // Strain Guide tab — browse, search, filter, favorite, and compare strains.
 // 21+ educational info only: no medical claims, no selling, start low go slow.
-import { useEffect, useMemo, useState } from 'react';
+import { useEffect, useMemo, useRef, useState } from 'react';
 import { EFFECT_NAMES, STRAINS, TERPENE_NAMES } from './data/strains';
 import type { Strain, StrainType } from './data/strains';
 import { Chip, ChipRow, Label, PageHead } from './bits';
 import { tasteRecommendations } from './lib/taste';
 import { strainOfTheDay } from './lib/daily';
+import {
+  CommunityError,
+  MAX_REVIEW_CHARS,
+  fetchStrainRatings,
+  submitStrainReview,
+} from './lib/community';
+import type { MyStrainReview, StrainRating } from './lib/community';
 import type { JournalEntry } from './journal';
 
 const FAVS_KEY = 'bude-strain-favs-v1';
@@ -67,6 +74,10 @@ function StrainCard({
   onToggleCompare,
   onAskAbout,
   isDailyPick,
+  communityRating,
+  myReview,
+  signedIn,
+  onRated,
 }: {
   strain: Strain;
   isFav: boolean;
@@ -76,6 +87,10 @@ function StrainCard({
   onToggleCompare: () => void;
   onAskAbout: (name: string) => void;
   isDailyPick?: boolean;
+  communityRating?: StrainRating;
+  myReview?: MyStrainReview;
+  signedIn: boolean;
+  onRated: (strainId: string, rating: StrainRating, mine: MyStrainReview) => void;
 }) {
   return (
     <article className="card" aria-label={strain.name}>
@@ -158,7 +173,133 @@ function StrainCard({
           💬 Ask Bud-E about {strain.name}
         </button>
       </p>
+      <StrainReview
+        strainId={strain.id}
+        rating={communityRating}
+        myReview={myReview}
+        signedIn={signedIn}
+        onRated={onRated}
+      />
     </article>
+  );
+}
+
+// ---------------------------------------------------------------------------
+// Shared strain reviews — what the community thinks, and your own rating.
+// One review per person per strain (tap stars + a short note, Save updates
+// it). The average is computed on the server, so it never drifts.
+// ---------------------------------------------------------------------------
+
+function StrainReview({
+  strainId,
+  rating,
+  myReview,
+  signedIn,
+  onRated,
+}: {
+  strainId: string;
+  rating?: StrainRating;
+  myReview?: MyStrainReview;
+  signedIn: boolean;
+  onRated: (strainId: string, rating: StrainRating, mine: MyStrainReview) => void;
+}) {
+  const [stars, setStars] = useState(0);
+  const [note, setNote] = useState('');
+  const [saving, setSaving] = useState(false);
+  const [saved, setSaved] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+  const syncedRef = useRef(false);
+
+  // The community data loads after the cards mount — pick up your own
+  // review once it arrives (once only, so it never clobbers your typing).
+  useEffect(() => {
+    if (myReview && !syncedRef.current) {
+      syncedRef.current = true;
+      setStars(myReview.rating);
+      setNote(myReview.review);
+    }
+  }, [myReview]);
+
+  async function save() {
+    if (stars < 1 || stars > 5 || saving) return;
+    setSaving(true);
+    setError(null);
+    try {
+      const fresh = await submitStrainReview(strainId, stars, note.trim());
+      onRated(strainId, fresh, { rating: stars, review: note.trim() });
+      setSaved(true);
+      window.setTimeout(() => setSaved(false), 2000);
+    } catch (e) {
+      setError(
+        e instanceof CommunityError
+          ? e.message
+          : 'That did not save — try again.',
+      );
+    } finally {
+      setSaving(false);
+    }
+  }
+
+  return (
+    <div style={{ marginTop: 14, borderTop: '1px solid var(--line)', paddingTop: 12 }}>
+      <p className="small" style={{ margin: '0 0 6px' }}>
+        <strong>Community:</strong>{' '}
+        {rating && rating.count > 0
+          ? `★ ${rating.avg.toFixed(1)} · ${rating.count} review${rating.count === 1 ? '' : 's'}`
+          : 'No reviews yet — be the first.'}
+      </p>
+      {signedIn ? (
+        <>
+          <div style={{ display: 'flex', gap: 4, alignItems: 'center' }} aria-label="Your rating">
+            {[1, 2, 3, 4, 5].map((n) => (
+              <button
+                key={n}
+                type="button"
+                onClick={() => setStars(n)}
+                aria-label={`${n} star${n === 1 ? '' : 's'}`}
+                style={{
+                  background: 'none',
+                  border: 'none',
+                  fontSize: 26,
+                  lineHeight: 1,
+                  padding: 2,
+                  cursor: 'pointer',
+                  color: n <= stars ? 'var(--accent)' : 'var(--muted)',
+                }}
+              >
+                {n <= stars ? '★' : '☆'}
+              </button>
+            ))}
+            <span className="small muted" style={{ marginLeft: 6 }}>
+              {myReview ? 'Your rating' : 'Rate it'}
+            </span>
+          </div>
+          <input
+            value={note}
+            maxLength={MAX_REVIEW_CHARS}
+            onChange={(e) => setNote(e.target.value)}
+            placeholder="A short note (optional)"
+            style={{ width: '100%', marginTop: 8 }}
+            aria-label="A short note about this strain"
+          />
+          <div style={{ display: 'flex', gap: 8, alignItems: 'center', marginTop: 8 }}>
+            <button className="btn" onClick={save} disabled={stars < 1 || saving}>
+              {saving ? 'Saving…' : 'Save my rating'}
+            </button>
+            {saved && <span className="small muted">Saved ✓</span>}
+          </div>
+          {error && (
+            <p className="small" role="alert" style={{ margin: '6px 0 0', color: 'var(--danger, #e07856)' }}>
+              {error}
+            </p>
+          )}
+        </>
+      ) : (
+        <p className="small muted" style={{ margin: '0' }}>
+          Sign in to rate this strain and see what the community thinks.
+        </p>
+      )}
+    </div>
   );
 }
 
@@ -178,6 +319,37 @@ export default function StrainsTab({
   const [favs, setFavs] = useState<string[]>(loadFavs);
   const [favsOnly, setFavsOnly] = useState(false);
   const [compareIds, setCompareIds] = useState<string[]>([]);
+
+  // Shared strain reviews: community averages + your own ratings. Loads
+  // once when the tab opens; sign-in is required, so a signed-out visitor
+  // just sees the "sign in to rate" note instead of an error.
+  const [ratings, setRatings] = useState<Record<string, StrainRating>>({});
+  const [myReviews, setMyReviews] = useState<Record<string, MyStrainReview>>({});
+  const [signedIn, setSignedIn] = useState(false);
+
+  useEffect(() => {
+    let cancelled = false;
+    (async () => {
+      try {
+        const data = await fetchStrainRatings();
+        if (cancelled) return;
+        setRatings(data.ratings);
+        setMyReviews(data.myReviews);
+        setSignedIn(true);
+      } catch {
+        // Not signed in (or offline) — the review boxes say so themselves.
+        if (!cancelled) setSignedIn(false);
+      }
+    })();
+    return () => {
+      cancelled = true;
+    };
+  }, []);
+
+  function handleRated(strainId: string, rating: StrainRating, mine: MyStrainReview) {
+    setRatings((prev) => ({ ...prev, [strainId]: rating }));
+    setMyReviews((prev) => ({ ...prev, [strainId]: mine }));
+  }
 
   // What Bud-E learned from your recaps — strains that match your taste.
   const picks = useMemo(() => tasteRecommendations(journal), [journal]);
@@ -458,6 +630,10 @@ export default function StrainsTab({
             onToggleCompare={() => toggleCompare(strain.id)}
             onAskAbout={onAskAbout}
             isDailyPick={strain.id === daily.strain.id}
+            communityRating={ratings[strain.id]}
+            myReview={myReviews[strain.id]}
+            signedIn={signedIn}
+            onRated={handleRated}
           />
         ))
       )}
