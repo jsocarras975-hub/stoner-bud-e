@@ -539,7 +539,12 @@ export default async function handler(req: ReqLike, res: ResLike): Promise<void>
     }
 
     const body = parseBody(req.body);
-    const messages = Array.isArray(body.messages) ? body.messages.slice(-12) : [];
+    // Last 6 messages only (3 exchanges) — enough context to follow the
+    // conversation, and half the tokens of 12. Long histories kept tripping
+    // the free tiers' per-minute token limits, so the phone's full history
+    // would fail while a short one worked. The client still sends more;
+    // the server just uses the tail.
+    const messages = Array.isArray(body.messages) ? body.messages.slice(-6) : [];
     if (messages.length === 0) {
       fallback(res);
       return;
