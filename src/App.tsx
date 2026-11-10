@@ -1332,11 +1332,18 @@ function ChatTab({
     }, 60000);
   }
 
-  /** Web image search (Openverse, via /api/images/search). Empty list on
+  /** Web image search (Openverse, called directly — no key needed).
+   *  Direct, not through a /api proxy: the project is on Vercel's Hobby
+   *  plan, which caps at 12 serverless functions per deploy, and the
+   *  project already has 12 — a 13th function broke the deploy
+   *  (exceeded_serverless_functions_per_deployment, 2026-11-09). Openverse
+   *  answers CORS * so the app can call it from any origin. Empty list on
    *  any failure — the caller turns that into a plain-words note. */
   async function searchImages(query: string): Promise<ChatImage[]> {
     try {
-      const res = await fetch(`${apiBase()}/images/search?q=${encodeURIComponent(query)}`);
+      const res = await fetch(
+        `https://api.openverse.org/v1/images/?q=${encodeURIComponent(query)}&page_size=8`,
+      );
       if (!res.ok) return [];
       const data: unknown = await res.json();
       const results =
@@ -1346,19 +1353,41 @@ function ChatTab({
       if (!Array.isArray(results)) return [];
       return results
         .filter(
-          (r): r is ChatImage =>
+          (r): r is {
+            title?: unknown;
+            thumbnail?: unknown;
+            url?: unknown;
+            foreign_landing_url?: unknown;
+            creator?: unknown;
+          } =>
             !!r &&
             typeof r === 'object' &&
-            typeof (r as { thumb?: unknown }).thumb === 'string' &&
-            typeof (r as { page?: unknown }).page === 'string',
+            (typeof (r as { thumbnail?: unknown }).thumbnail === 'string' ||
+              typeof (r as { url?: unknown }).url === 'string') &&
+            typeof (r as { foreign_landing_url?: unknown }).foreign_landing_url ===
+              'string',
         )
-        .map((r) => ({
-          title: typeof r.title === 'string' ? r.title : query,
-          thumb: r.thumb,
-          url: typeof r.url === 'string' ? r.url : r.thumb,
-          page: r.page,
-          creator: typeof r.creator === 'string' ? r.creator : '',
-        }))
+        .map((r) => {
+          const thumb =
+            typeof r.thumbnail === 'string' && r.thumbnail !== ''
+              ? r.thumbnail
+              : typeof r.url === 'string'
+                ? r.url
+                : '';
+          const url =
+            typeof r.url === 'string' && r.url !== '' ? r.url : thumb;
+          return {
+            title:
+              typeof r.title === 'string' && r.title.trim() !== ''
+                ? r.title
+                : query,
+            thumb,
+            url,
+            page: r.foreign_landing_url as string,
+            creator: typeof r.creator === 'string' ? r.creator : '',
+          };
+        })
+        .filter((img) => img.thumb !== '' && img.page !== '')
         .slice(0, 8);
     } catch {
       return [];

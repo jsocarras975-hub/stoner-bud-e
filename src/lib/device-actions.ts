@@ -5,10 +5,10 @@
 // search). On the plain web there is no phone to act on, so the block is
 // stripped and the user gets a plain note instead. Everything is guarded —
 // a bad action, a missing plugin, or a refused phone call never breaks the
-// chat. Image search is async (it fetches /api/images/search), so App.tsx
-// handles it directly instead of through the sync onAppAction path — it is
-// deliberately NOT in AppAction, so the bubble/voice relay never picks it
-// up (those screens cannot show pictures).
+// chat. Image search is async (it calls Openverse directly from the app),
+// so App.tsx handles it directly instead of through the sync onAppAction
+// path — it is deliberately NOT in AppAction, so the bubble/voice relay
+// never picks it up (those screens cannot show pictures).
 
 import { Capacitor, registerPlugin } from '@capacitor/core';
 import { isNativeApp } from './timer-notifications';
