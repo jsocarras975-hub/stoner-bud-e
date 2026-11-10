@@ -415,6 +415,59 @@ async function callGeminiText(
   }
 }
 
+// OpenRouter — a third free brain, used when both Groq and Gemini are
+// out. OpenAI-compatible API, so the Groq-shaped messages go straight in.
+// Free models (no card, separate rate limits from Groq/Gemini). The key
+// lives in Vercel as OPENROUTER_API_KEY; when it is missing this just
+// returns null and the chat falls back as before.
+async function callOpenRouter(
+  apiKey: string,
+  messages: GroqChatMessage[],
+): Promise<string | null> {
+  const openAiMessages = messages
+    .filter((m) => typeof m.content === 'string' && m.content.trim() !== '')
+    .map((m) => ({ role: m.role, content: m.content as string }));
+  if (openAiMessages.length === 0) return null;
+  for (const model of [
+    'meta-llama/llama-3.1-8b-instruct:free',
+    'google/gemma-2-9b-it:free',
+  ]) {
+    try {
+      const res = await fetch('https://openrouter.ai/api/v1/chat/completions', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          Authorization: `Bearer ${apiKey}`,
+          'HTTP-Referer': 'https://stoner-bud-e.vercel.app/',
+          'X-Title': 'Stoner Bud-E',
+        },
+        body: JSON.stringify({
+          model,
+          messages: openAiMessages,
+          temperature: 0.9,
+          max_tokens: 600,
+        }),
+      });
+      if (!res.ok) {
+        console.error('[chat] openrouter error', model, res.status);
+        continue;
+      }
+      const json = (await res.json()) as {
+        choices?: Array<{ message?: { content?: string } }>;
+      };
+      const text = json.choices?.[0]?.message?.content?.trim() ?? '';
+      if (text !== '') return text;
+    } catch (err) {
+      console.error(
+        '[chat] openrouter exception',
+        model,
+        err instanceof Error ? err.message : 'unknown',
+      );
+    }
+  }
+  return null;
+}
+
 async function callGroq(
   apiKey: string,
   model: string,
@@ -635,6 +688,18 @@ export default async function handler(req: ReqLike, res: ResLike): Promise<void>
         const geminiReply = await callGeminiText(geminiKey, groqMessages);
         if (geminiReply) {
           res.status(200).json({ ok: true, source: 'live', reply: geminiReply });
+          return;
+        }
+      }
+    }
+    // Gemini said no too (overloaded / rate-limited). Third free brain:
+    // OpenRouter, so the chat still has somewhere to go.
+    if (!result) {
+      const openRouterKey = process.env.OPENROUTER_API_KEY;
+      if (openRouterKey) {
+        const openRouterReply = await callOpenRouter(openRouterKey, groqMessages);
+        if (openRouterReply) {
+          res.status(200).json({ ok: true, source: 'live', reply: openRouterReply });
           return;
         }
       }
