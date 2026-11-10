@@ -7,6 +7,7 @@ import android.app.PendingIntent;
 import android.app.Service;
 import android.content.Context;
 import android.content.Intent;
+import android.graphics.Outline;
 import android.graphics.Typeface;
 import android.os.Build;
 import android.os.Handler;
@@ -18,6 +19,7 @@ import android.util.DisplayMetrics;
 import android.view.Gravity;
 import android.view.MotionEvent;
 import android.view.View;
+import android.view.ViewOutlineProvider;
 import android.view.WindowManager;
 import android.view.inputmethod.EditorInfo;
 import android.view.inputmethod.InputMethodManager;
@@ -150,10 +152,22 @@ public class BudEBubbleService extends Service {
         }
         windowManager = (WindowManager) getSystemService(WINDOW_SERVICE);
         bubble = new ImageView(this);
-        bubble.setImageResource(R.drawable.ic_bud_leaf);
+        // The app icon itself (the leaf character with sunglasses on the
+        // cosmic background), cut to a circle — not the old geometric leaf
+        // vector, which did not read as a marijuana leaf. No lime disc
+        // behind it; the icon art fills the circle on its own.
+        bubble.setImageResource(R.drawable.bud_e_bubble_icon);
         bubble.setScaleType(ImageView.ScaleType.FIT_CENTER);
-        bubble.setPadding(dp(12), dp(12), dp(12), dp(12));
-        bubble.setBackgroundResource(R.drawable.bud_e_bubble_bg);
+        bubble.setPadding(0, 0, 0, 0);
+        // Circular outline so the drop shadow follows the round icon
+        // instead of the square view bounds.
+        bubble.setOutlineProvider(new ViewOutlineProvider() {
+            @Override
+            public void getOutline(View view, Outline outline) {
+                outline.setOval(0, 0, view.getWidth(), view.getHeight());
+            }
+        });
+        bubble.setClipToOutline(true);
         bubble.setElevation(8f);
         int size = dp(64);
         params = new WindowManager.LayoutParams(
