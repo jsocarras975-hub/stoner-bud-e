@@ -244,7 +244,16 @@ function capChatImages(chats: SyncedChatConversation[]): SyncedChatConversation[
 /** Re-attach the photos this phone holds onto a chat list that came back
  *  from the server (the server copy has no photos — see stripChatImages).
  *  Without this, a photo would vanish from the chat the moment a sync
- *  round-trip landed. Matched by conversation, message position, and text. */
+ *  round-trip landed. Matched by conversation, message position, and text.
+ *
+ *  It ALSO never drops a message the server hasn't seen yet. There is a
+ *  race: the app auto-syncs 2s after a message is sent, and a photo answer
+ *  can take longer than that to come back. If the sync upload (which only
+ *  has the user's message) is still in flight when the reply lands, the
+ *  server state that comes back is STALE — it has no reply — and returning
+ *  it wholesale would wipe the reply the user just saw. So when the local
+ *  copy is a strict superset of the server copy (same messages, plus more
+ *  at the end), the local copy wins — it is newer. */
 function mergeChatImages(
   local: SyncedChatConversation[],
   server: SyncedChatConversation[],
@@ -253,6 +262,20 @@ function mergeChatImages(
   return server.map((sc) => {
     const lc = byId.get(sc.id);
     if (!lc) return sc;
+    // Local is newer: it holds everything the server has, plus messages
+    // that arrived after the upload started (e.g. a just-arrived reply).
+    // Keep the whole local conversation so those messages are not wiped
+    // by the stale server state. Photos ride along — they live on the
+    // local messages already.
+    if (
+      lc.messages.length > sc.messages.length &&
+      sc.messages.every(
+        (m, i) =>
+          lc.messages[i] && lc.messages[i].text === m.text && lc.messages[i].role === m.role,
+      )
+    ) {
+      return lc;
+    }
     return {
       ...sc,
       messages: sc.messages.map((m, i) => {
