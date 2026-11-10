@@ -350,6 +350,13 @@ export default function App() {
   // the app is already open). Shared text lands in the chat box through
   // the same prefill the strain pages use. One-shot — the native side
   // clears it.
+  // Launch info from the native side (a shortcut's tab, text shared in
+  // from another app, an app action the bubble or voice chat relayed in).
+  // Read on load, when the window gains focus, AND every 2 seconds: the
+  // relay can arrive while the app is already in the foreground behind
+  // the bubble, and then no focus event fires at all — without the poll
+  // the action would sit unread until the user left the app and came
+  // back. Reading clears it, so it never fires twice.
   useEffect(() => {
     let cancelled = false;
     const applyLaunchInfo = async () => {
@@ -374,9 +381,11 @@ export default function App() {
     };
     void applyLaunchInfo();
     window.addEventListener('focus', applyLaunchInfo);
+    const id = window.setInterval(applyLaunchInfo, 2000);
     return () => {
       cancelled = true;
       window.removeEventListener('focus', applyLaunchInfo);
+      window.clearInterval(id);
     };
   }, []);
 
