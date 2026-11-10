@@ -530,58 +530,69 @@ export default function MusicTab({
         )}
       </section>
 
-      {/* Add to playlist picker */}
+      {/* Add to playlist picker — a bottom sheet that floats over the
+          track list, so it is always where the user is looking. (It used
+          to render in the page flow above the search bar, so tapping +
+          while scrolled down at the tracks looked like nothing happened.) */}
       {addTarget && isPremium && (
-        <section className="card" aria-label="Add to playlist" style={{ marginTop: 16 }}>
-          <p style={{ marginTop: 0 }}>
-            <strong>Add to a playlist</strong>
-          </p>
-          <p className="muted small" style={{ marginTop: 0 }}>
-            {addTarget.title} — {addTarget.artist}
-          </p>
-          {playlists.length === 0 ? (
-            <p className="muted">No playlists yet — make your first one below.</p>
-          ) : (
-            <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
-              {playlists.map((pl) => {
-                const already = pl.tracks.some((t) => t.id === addTarget.id);
-                const full = pl.tracks.length >= MAX_TRACKS_PER_PLAYLIST;
-                return (
-                  <button
-                    key={pl.id}
-                    type="button"
-                    className="btn"
-                    style={{ justifyContent: 'flex-start' }}
-                    disabled={already || full}
-                    onClick={() => addToPlaylist(pl, addTarget)}
-                  >
-                    {already ? '✓ ' : ''}{pl.name}
-                    <span className="muted small" style={{ marginLeft: 'auto' }}>
-                      {already ? 'Already in' : full ? 'Full' : `${pl.tracks.length} tracks`}
-                    </span>
-                  </button>
-                );
-              })}
-            </div>
-          )}
-          <div style={{ display: 'flex', gap: 8, marginTop: 12, flexWrap: 'wrap' }}>
-            {playlists.length < MAX_PLAYLISTS && (
-              <button
-                type="button"
-                className="btn"
-                onClick={() => {
-                  setNewName('');
-                  createPlaylist(addTarget);
-                }}
-              >
-                <Plus size={16} aria-hidden /> New playlist with this song
-              </button>
+        <div
+          className="sheet-backdrop"
+          role="dialog"
+          aria-modal="true"
+          aria-label="Add to playlist"
+          onClick={() => setAddTarget(null)}
+        >
+          <section className="card sheet-card" onClick={(e) => e.stopPropagation()}>
+            <p style={{ marginTop: 0 }}>
+              <strong>Add to a playlist</strong>
+            </p>
+            <p className="muted small" style={{ marginTop: 0 }}>
+              {addTarget.title} — {addTarget.artist}
+            </p>
+            {playlists.length === 0 ? (
+              <p className="muted">No playlists yet — make your first one below.</p>
+            ) : (
+              <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
+                {playlists.map((pl) => {
+                  const already = pl.tracks.some((t) => t.id === addTarget.id);
+                  const full = pl.tracks.length >= MAX_TRACKS_PER_PLAYLIST;
+                  return (
+                    <button
+                      key={pl.id}
+                      type="button"
+                      className="btn"
+                      style={{ justifyContent: 'flex-start' }}
+                      disabled={already || full}
+                      onClick={() => addToPlaylist(pl, addTarget)}
+                    >
+                      {already ? '✓ ' : ''}{pl.name}
+                      <span className="muted small" style={{ marginLeft: 'auto' }}>
+                        {already ? 'Already in' : full ? 'Full' : `${pl.tracks.length} tracks`}
+                      </span>
+                    </button>
+                  );
+                })}
+              </div>
             )}
-            <button type="button" className="btn secondary" onClick={() => setAddTarget(null)}>
-              Cancel
-            </button>
-          </div>
-        </section>
+            <div style={{ display: 'flex', gap: 8, marginTop: 12, flexWrap: 'wrap' }}>
+              {playlists.length < MAX_PLAYLISTS && (
+                <button
+                  type="button"
+                  className="btn"
+                  onClick={() => {
+                    setNewName('');
+                    createPlaylist(addTarget);
+                  }}
+                >
+                  <Plus size={16} aria-hidden /> New playlist with this song
+                </button>
+              )}
+              <button type="button" className="btn secondary" onClick={() => setAddTarget(null)}>
+                Cancel
+              </button>
+            </div>
+          </section>
+        </div>
       )}
 
       {/* Search */}

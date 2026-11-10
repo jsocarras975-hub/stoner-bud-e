@@ -790,6 +790,27 @@ p {
   font-size: 1.2rem;
 }
 
+/* Bottom sheet (add-to-playlist picker): a dim backdrop with a card
+   docked at the bottom, so the picker is always where the user is
+   looking instead of buried up the page. */
+.sheet-backdrop {
+  position: fixed;
+  inset: 0;
+  z-index: 1000;
+  background: rgba(0, 0, 0, 0.55);
+  display: flex;
+  align-items: flex-end;
+  justify-content: center;
+  padding: 16px;
+}
+
+.sheet-card {
+  width: 100%;
+  max-width: 480px;
+  max-height: 70dvh;
+  overflow-y: auto;
+}
+
 /* Music search input */
 
 .music-search {
