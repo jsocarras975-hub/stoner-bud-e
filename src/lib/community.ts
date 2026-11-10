@@ -19,9 +19,20 @@ export interface CommunityPost {
   displayName: string;
   body: string;
   likeCount: number;
+  commentCount: number;
   createdAt: string;
   mine: boolean;
   liked: boolean;
+}
+
+export interface CommunityComment {
+  id: string;
+  postId: string;
+  userId: string;
+  displayName: string;
+  body: string;
+  createdAt: string;
+  mine: boolean;
 }
 
 export interface StrainRating {
@@ -44,6 +55,7 @@ export class CommunityError extends Error {
 
 const DISPLAY_NAME_KEY = 'bude-display-name';
 export const MAX_POST_CHARS = 280;
+export const MAX_COMMENT_CHARS = 200;
 export const MAX_REVIEW_CHARS = 200;
 
 export function getDisplayName(fallback: string): string {
@@ -104,7 +116,20 @@ function isPost(value: unknown): value is CommunityPost {
     typeof (value as CommunityPost).displayName === 'string' &&
     typeof (value as CommunityPost).body === 'string' &&
     typeof (value as CommunityPost).likeCount === 'number' &&
+    typeof (value as CommunityPost).commentCount === 'number' &&
     typeof (value as CommunityPost).createdAt === 'string'
+  );
+}
+
+function isComment(value: unknown): value is CommunityComment {
+  return (
+    !!value &&
+    typeof value === 'object' &&
+    typeof (value as CommunityComment).id === 'string' &&
+    typeof (value as CommunityComment).postId === 'string' &&
+    typeof (value as CommunityComment).displayName === 'string' &&
+    typeof (value as CommunityComment).body === 'string' &&
+    typeof (value as CommunityComment).createdAt === 'string'
   );
 }
 
@@ -141,6 +166,30 @@ export async function deleteCommunityPost(postId: string): Promise<void> {
 /** Flag a post for the owner. One report per person per post. */
 export async function reportCommunityPost(postId: string): Promise<void> {
   await communityCall('community_report', { postId });
+}
+
+/** The replies on one post, oldest first (so a conversation reads top to bottom). */
+export async function fetchComments(postId: string): Promise<CommunityComment[]> {
+  const body = await communityCall('community_comments', { postId });
+  return Array.isArray(body.comments)
+    ? (body.comments as unknown[]).filter(isComment)
+    : [];
+}
+
+/** Reply to a post. Returns the new comment (with its server id + time). */
+export async function addComment(
+  postId: string,
+  displayName: string,
+  text: string,
+): Promise<CommunityComment> {
+  const body = await communityCall('community_comment', { postId, displayName, body: text });
+  if (!isComment(body.comment)) throw new CommunityError('other', 'That did not post — try again.');
+  return body.comment;
+}
+
+/** Delete a comment — yours, or any comment if you are the owner. */
+export async function deleteComment(commentId: string): Promise<void> {
+  await communityCall('community_comment_delete', { commentId });
 }
 
 /** Community averages per strain + your own reviews. */

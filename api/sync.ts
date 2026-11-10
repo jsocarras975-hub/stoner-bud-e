@@ -109,6 +109,8 @@ create index if not exists user_playlists_user_id_idx on user_playlists (user_id
 //   report_count >= 3 hides a post from the feed (moderation safety net).
 // - community_likes / community_reports: one row per (post, user) — a user
 //   can like or report a post only once, so counts cannot be gamed.
+// - community_comments: one row per reply on a post. comment_count on the
+//   post is kept in step by the add/delete actions (same as like_count).
 // - strain_reviews: one row per (user, strain) — a user rates each strain
 //   once and can change it later (upsert). The community average is
 //   computed on read, so there is no counter to drift.
@@ -119,6 +121,7 @@ const COMMUNITY_POSTS_DDL = `create table if not exists community_posts (
   body text not null,
   like_count int not null default 0,
   report_count int not null default 0,
+  comment_count int not null default 0,
   created_at timestamptz not null default CURRENT_TIMESTAMP
 );
 create index if not exists community_posts_created_at_idx on community_posts (created_at desc)`;
@@ -136,6 +139,16 @@ const COMMUNITY_REPORTS_DDL = `create table if not exists community_reports (
   created_at timestamptz not null default CURRENT_TIMESTAMP,
   primary key (post_id, user_id)
 )`;
+
+const COMMUNITY_COMMENTS_DDL = `create table if not exists community_comments (
+  id uuid not null primary key default gen_random_uuid(),
+  post_id uuid not null references community_posts (id) on delete cascade,
+  user_id text not null references "user" ("id") on delete cascade,
+  display_name text not null,
+  body text not null,
+  created_at timestamptz not null default CURRENT_TIMESTAMP
+);
+create index if not exists community_comments_post_id_idx on community_comments (post_id, created_at)`;
 
 const STRAIN_REVIEWS_DDL = `create table if not exists strain_reviews (
   user_id text not null references "user" ("id") on delete cascade,
@@ -209,7 +222,14 @@ async function ensureCommunityTables(pool: Pool): Promise<void> {
     await pool.query(COMMUNITY_POSTS_DDL);
     await pool.query(COMMUNITY_LIKES_DDL);
     await pool.query(COMMUNITY_REPORTS_DDL);
+    await pool.query(COMMUNITY_COMMENTS_DDL);
     await pool.query(STRAIN_REVIEWS_DDL);
+    // The posts table predates comment_count (added with comments) — add
+    // the column to tables created before it existed. No-op when present.
+    await pool.query(
+      `alter table community_posts
+       add column if not exists comment_count int not null default 0`,
+    ).catch(() => {});
     communityTablesEnsured = true;
   } catch {
     // Same as above — best-effort.
@@ -246,11 +266,14 @@ const STRAIN_IDS = new Set([
 ]);
 
 const MAX_POST_CHARS = 280;
+const MAX_COMMENT_CHARS = 200;
 const MAX_DISPLAY_NAME_CHARS = 30;
 const MAX_REVIEW_CHARS = 200;
 const MAX_POSTS_PER_HOUR = 10;
+const MAX_COMMENTS_PER_HOUR = 20;
 const REPORT_HIDE_THRESHOLD = 3;
 const FEED_LIMIT = 50;
+const COMMENTS_LIMIT = 50;
 
 /** One community action, dispatched from the POST handler below. The body
  *  carries `action` plus that action's fields; anything malformed answers
@@ -276,11 +299,12 @@ async function handleCommunity(
       display_name: string;
       body: string;
       like_count: number;
+      comment_count: number;
       created_at: string;
       mine: boolean;
       liked: boolean;
     }>(
-      `select p.id, p.user_id, p.display_name, p.body, p.like_count, p.created_at,
+      `select p.id, p.user_id, p.display_name, p.body, p.like_count, p.comment_count, p.created_at,
               (p.user_id = $1) as mine,
               exists (select 1 from community_likes l where l.post_id = p.id and l.user_id = $1) as liked
        from community_posts p
@@ -298,6 +322,7 @@ async function handleCommunity(
         displayName: r.display_name,
         body: r.body,
         likeCount: r.like_count,
+        commentCount: r.comment_count,
         createdAt: r.created_at,
         mine: r.mine,
         liked: r.liked,
@@ -344,6 +369,7 @@ async function handleCommunity(
         displayName,
         body: text,
         likeCount: 0,
+        commentCount: 0,
         createdAt: row.created_at,
         mine: true,
         liked: false,
@@ -452,6 +478,122 @@ async function handleCommunity(
     return;
   }
 
+  if (action === 'community_comments') {
+    const postId = typeof body.postId === 'string' ? body.postId : '';
+    if (postId === '') {
+      res.status(400).json({ ok: false, error: 'bad_community_body' });
+      return;
+    }
+    const rows = await pool.query<{
+      id: string;
+      user_id: string;
+      display_name: string;
+      body: string;
+      created_at: string;
+    }>(
+      `select id, user_id, display_name, body, created_at
+       from community_comments
+       where post_id = $1
+       order by created_at asc
+       limit $2`,
+      [postId, COMMENTS_LIMIT],
+    );
+    res.status(200).json({
+      ok: true,
+      comments: rows.rows.map((r) => ({
+        id: r.id,
+        postId,
+        userId: r.user_id,
+        displayName: r.display_name,
+        body: r.body,
+        createdAt: r.created_at,
+        mine: r.user_id === user.id,
+      })),
+    });
+    return;
+  }
+
+  if (action === 'community_comment') {
+    const postId = typeof body.postId === 'string' ? body.postId : '';
+    const displayName =
+      typeof body.displayName === 'string' ? body.displayName.trim().slice(0, MAX_DISPLAY_NAME_CHARS) : '';
+    const text = typeof body.body === 'string' ? body.body.trim() : '';
+    if (postId === '' || displayName === '' || text === '' || text.length > MAX_COMMENT_CHARS) {
+      res.status(400).json({ ok: false, error: 'bad_community_body' });
+      return;
+    }
+    const post = await pool.query('select 1 from community_posts where id = $1', [postId]);
+    if (post.rowCount === 0) {
+      res.status(404).json({ ok: false, error: 'not_found' });
+      return;
+    }
+    const recent = await pool.query<{ n: string }>(
+      `select count(*) as n from community_comments
+       where user_id = $1 and created_at > now() - interval '1 hour'`,
+      [user.id],
+    );
+    if (Number(recent.rows[0]?.n ?? 0) >= MAX_COMMENTS_PER_HOUR) {
+      res.status(429).json({ ok: false, error: 'too_many_posts' });
+      return;
+    }
+    const inserted = await pool.query<{ id: string; created_at: string }>(
+      `insert into community_comments (post_id, user_id, display_name, body)
+       values ($1, $2, $3, $4) returning id, created_at`,
+      [postId, user.id, displayName, text],
+    );
+    const row = inserted.rows[0];
+    if (!row) {
+      res.status(500).json({ ok: false, error: 'sync_failed' });
+      return;
+    }
+    await pool.query(
+      'update community_posts set comment_count = comment_count + 1 where id = $1',
+      [postId],
+    );
+    res.status(200).json({
+      ok: true,
+      comment: {
+        id: row.id,
+        postId,
+        userId: user.id,
+        displayName,
+        body: text,
+        createdAt: row.created_at,
+        mine: true,
+      },
+    });
+    return;
+  }
+
+  if (action === 'community_comment_delete') {
+    const commentId = typeof body.commentId === 'string' ? body.commentId : '';
+    if (commentId === '') {
+      res.status(400).json({ ok: false, error: 'bad_community_body' });
+      return;
+    }
+    const found = await pool.query<{ user_id: string; post_id: string }>(
+      'select user_id, post_id from community_comments where id = $1',
+      [commentId],
+    );
+    const row = found.rows[0];
+    if (!row) {
+      res.status(404).json({ ok: false, error: 'not_found' });
+      return;
+    }
+    const owner = row.user_id !== user.id ? await isOwner(pool, user.id) : true;
+    if (row.user_id !== user.id && !owner) {
+      res.status(403).json({ ok: false, error: 'not_yours' });
+      return;
+    }
+    await pool.query('delete from community_comments where id = $1', [commentId]);
+    await pool.query(
+      'update community_posts set comment_count = greatest(comment_count - 1, 0) where id = $1',
+      [row.post_id],
+    );
+    res.status(200).json({ ok: true });
+    return;
+  }
+
   if (action === 'strain_ratings') {
     const agg = await pool.query<{ strain_id: string; avg: string; count: string }>(
       `select strain_id, round(avg(rating)::numeric, 1) as avg, count(*) as count
@@ -523,6 +665,7 @@ interface SyncBody {
   displayName?: unknown;
   body?: unknown;
   postId?: unknown;
+  commentId?: unknown;
   strainId?: unknown;
   rating?: unknown;
   review?: unknown;

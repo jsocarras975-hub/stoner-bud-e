@@ -8,8 +8,12 @@ import { useCallback, useEffect, useState } from 'react';
 import { PageHead } from './bits';
 import {
   CommunityError,
+  MAX_COMMENT_CHARS,
   MAX_POST_CHARS,
+  addComment,
+  deleteComment,
   deleteCommunityPost,
+  fetchComments,
   fetchCommunityFeed,
   getDisplayName,
   postToCommunity,
@@ -17,7 +21,7 @@ import {
   setDisplayName,
   toggleCommunityLike,
 } from './lib/community';
-import type { CommunityPost } from './lib/community';
+import type { CommunityComment, CommunityPost } from './lib/community';
 import type { AuthUser } from './lib/auth-client';
 
 function timeAgo(iso: string): string {
@@ -225,45 +229,206 @@ export default function Community({ user }: { user: AuthUser | null }) {
         </section>
       ) : (
         posts.map((post) => (
-          <article key={post.id} className="card" aria-label={`Post by ${post.displayName}`}>
-            <p style={{ margin: '0 0 4px' }}>
-              <strong>{post.displayName}</strong>{' '}
-              <span className="muted small">· {timeAgo(post.createdAt)}</span>
-              {post.mine && <span className="muted small"> · you</span>}
-            </p>
-            <p style={{ margin: '0 0 10px', whiteSpace: 'pre-wrap', wordBreak: 'break-word' }}>
-              {post.body}
-            </p>
-            <div style={{ display: 'flex', gap: 8, alignItems: 'center', flexWrap: 'wrap' }}>
-              <button
-                className="btn"
-                onClick={() => void like(post)}
-                aria-label={post.liked ? 'Unlike this post' : 'Like this post'}
-                style={post.liked ? { borderColor: 'var(--accent)', color: 'var(--accent)' } : undefined}
-              >
-                🍃 {post.likeCount}
-              </button>
-              <button
-                className="btn"
-                onClick={() => void report(post)}
-                disabled={reported.has(post.id)}
-                aria-label="Report this post"
-              >
-                {reported.has(post.id) ? '✓ Reported' : '🚩 Report'}
-              </button>
-              {(post.mine || isOwner) && (
-                <button
-                  className="btn"
-                  onClick={() => void remove(post)}
-                  aria-label="Delete this post"
-                >
-                  {confirmDelete === post.id ? 'Sure? Tap again' : '🗑️ Delete'}
-                </button>
-              )}
-            </div>
-          </article>
+          <PostCard
+            key={post.id}
+            post={post}
+            isOwner={isOwner}
+            displayName={name.trim() || 'Bud-E friend'}
+            onLike={() => void like(post)}
+            onReport={() => void report(post)}
+            reported={reported.has(post.id)}
+            onDelete={() => void remove(post)}
+            confirmDelete={confirmDelete === post.id}
+            onCommentCountChange={(delta) =>
+              setPosts((prev) =>
+                prev.map((p) =>
+                  p.id === post.id
+                    ? { ...p, commentCount: Math.max(0, p.commentCount + delta) }
+                    : p,
+                ),
+              )
+            }
+          />
         ))
       )}
     </div>
+  );
+}
+
+// ---------------------------------------------------------------------------
+// One post + its comment thread. The thread loads only when opened, so the
+// feed stays light. Replies read oldest-first, like a conversation.
+// ---------------------------------------------------------------------------
+
+function PostCard({
+  post,
+  isOwner,
+  displayName,
+  onLike,
+  onReport,
+  reported,
+  onDelete,
+  confirmDelete,
+  onCommentCountChange,
+}: {
+  post: CommunityPost;
+  isOwner: boolean;
+  displayName: string;
+  onLike: () => void;
+  onReport: () => void;
+  reported: boolean;
+  onDelete: () => void;
+  confirmDelete: boolean;
+  onCommentCountChange: (delta: number) => void;
+}) {
+  const [open, setOpen] = useState(false);
+  const [comments, setComments] = useState<CommunityComment[] | null>(null);
+  const [loadingComments, setLoadingComments] = useState(false);
+  const [draft, setDraft] = useState('');
+  const [posting, setPosting] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+  const [confirmCommentDelete, setConfirmCommentDelete] = useState<string | null>(null);
+
+  async function toggleOpen() {
+    if (open) {
+      setOpen(false);
+      return;
+    }
+    setOpen(true);
+    if (comments !== null) return;
+    setLoadingComments(true);
+    try {
+      setComments(await fetchComments(post.id));
+    } catch {
+      setComments([]);
+    } finally {
+      setLoadingComments(false);
+    }
+  }
+
+  async function reply() {
+    const text = draft.trim();
+    if (text === '' || posting) return;
+    setPosting(true);
+    setError(null);
+    try {
+      const created = await addComment(post.id, displayName, text);
+      setComments((prev) => [...(prev ?? []), created]);
+      setDraft('');
+      onCommentCountChange(1);
+    } catch (e) {
+      setError(
+        e instanceof CommunityError ? e.message : 'That did not post — try again.',
+      );
+    } finally {
+      setPosting(false);
+    }
+  }
+
+  async function removeComment(comment: CommunityComment) {
+    if (confirmCommentDelete !== comment.id) {
+      setConfirmCommentDelete(comment.id);
+      return;
+    }
+    setConfirmCommentDelete(null);
+    try {
+      await deleteComment(comment.id);
+      setComments((prev) => (prev ?? []).filter((c) => c.id !== comment.id));
+      onCommentCountChange(-1);
+    } catch {
+      // A failed delete is quiet — the comment stays.
+    }
+  }
+
+  return (
+    <article className="card" aria-label={`Post by ${post.displayName}`}>
+      <p style={{ margin: '0 0 4px' }}>
+        <strong>{post.displayName}</strong>{' '}
+        <span className="muted small">· {timeAgo(post.createdAt)}</span>
+        {post.mine && <span className="muted small"> · you</span>}
+      </p>
+      <p style={{ margin: '0 0 10px', whiteSpace: 'pre-wrap', wordBreak: 'break-word' }}>
+        {post.body}
+      </p>
+      <div style={{ display: 'flex', gap: 8, alignItems: 'center', flexWrap: 'wrap' }}>
+        <button
+          className="btn"
+          onClick={onLike}
+          aria-label={post.liked ? 'Unlike this post' : 'Like this post'}
+          style={post.liked ? { borderColor: 'var(--accent)', color: 'var(--accent)' } : undefined}
+        >
+          🍃 {post.likeCount}
+        </button>
+        <button className="btn" onClick={() => void toggleOpen()} aria-label="Show comments">
+          💬 {post.commentCount}
+        </button>
+        <button
+          className="btn"
+          onClick={onReport}
+          disabled={reported}
+          aria-label="Report this post"
+        >
+          {reported ? '✓ Reported' : '🚩 Report'}
+        </button>
+        {(post.mine || isOwner) && (
+          <button className="btn" onClick={onDelete} aria-label="Delete this post">
+            {confirmDelete ? 'Sure? Tap again' : '🗑️ Delete'}
+          </button>
+        )}
+      </div>
+      {open && (
+        <div style={{ marginTop: 12, borderTop: '1px solid var(--line)', paddingTop: 12 }}>
+          {loadingComments ? (
+            <p className="muted small">Loading replies…</p>
+          ) : (comments ?? []).length === 0 ? (
+            <p className="muted small">No replies yet — start the thread.</p>
+          ) : (
+            (comments ?? []).map((comment) => (
+              <div key={comment.id} style={{ marginBottom: 10 }}>
+                <p style={{ margin: '0 0 2px' }}>
+                  <strong>{comment.displayName}</strong>{' '}
+                  <span className="muted small">· {timeAgo(comment.createdAt)}</span>
+                  {comment.mine && <span className="muted small"> · you</span>}
+                </p>
+                <p style={{ margin: '0 0 4px', whiteSpace: 'pre-wrap', wordBreak: 'break-word' }}>
+                  {comment.body}
+                </p>
+                {(comment.mine || isOwner) && (
+                  <button
+                    className="btn"
+                    onClick={() => void removeComment(comment)}
+                    aria-label="Delete this reply"
+                    style={{ padding: '2px 8px', fontSize: '0.85rem' }}
+                  >
+                    {confirmCommentDelete === comment.id ? 'Sure? Tap again' : '🗑️ Delete'}
+                  </button>
+                )}
+              </div>
+            ))
+          )}
+          <div style={{ display: 'flex', gap: 8, marginTop: 8 }}>
+            <input
+              value={draft}
+              maxLength={MAX_COMMENT_CHARS}
+              onChange={(e) => setDraft(e.target.value)}
+              onKeyDown={(e) => {
+                if (e.key === 'Enter') void reply();
+              }}
+              placeholder="Reply…"
+              aria-label="Write a reply"
+              style={{ flex: 1, minWidth: 0 }}
+            />
+            <button className="btn" onClick={() => void reply()} disabled={draft.trim() === '' || posting}>
+              {posting ? '…' : 'Reply'}
+            </button>
+          </div>
+          {error && (
+            <p className="small" role="alert" style={{ margin: '6px 0 0' }}>
+              {error}
+            </p>
+          )}
+        </div>
+      )}
+    </article>
   );
 }
