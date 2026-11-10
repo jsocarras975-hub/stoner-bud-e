@@ -23,6 +23,19 @@ export interface ChatMessage {
    *  never stored on the device or in the account — it is sent to the AI
    *  once, for analysis, and then it is gone. */
   image?: string;
+  /** Web image search results attached to a Bud-E reply (Openverse).
+   *  These are plain URLs, so they stay in the saved chat like sources. */
+  images?: ChatImage[];
+}
+
+/** One web image search result (Openverse). thumb is the small preview,
+ *  url the full image, page the source page (creator + license live there). */
+export interface ChatImage {
+  title: string;
+  thumb: string;
+  url: string;
+  page: string;
+  creator: string;
 }
 
 export const DEFAULT_SESSION: Session = {

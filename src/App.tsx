@@ -37,7 +37,7 @@ import {
   parseClock,
   pickRandom,
 } from './bude';
-import type { ChatMessage, Method, Session } from './bude';
+import type { ChatImage, ChatMessage, Method, Session } from './bude';
 import StrainsTab from './StrainsTab';
 import MusicTab from './MusicTab';
 import TonightTab from './TonightTab';
@@ -60,7 +60,7 @@ import type { AuthUser } from './lib/auth-client';
 import { DEFAULT_VOICE_SETTINGS, cleanVoiceSettings } from './voice';
 import type { VoiceSettings } from './voice';
 import { speakVoice, startRecording, stopVoice, transcribeVoice, unlockAudio } from './lib/voice-client';
-import { executeDeviceAction, extractDeviceAction, getBubbleStatus, getLaunchInfo, isAppAction, isNative, localIsoNow, parseAppAction, publishStashSummary, publishWidgetStash, setBubbleEnabled } from './lib/device-actions';
+import { executeDeviceAction, extractDeviceAction, getBubbleStatus, getLaunchInfo, isAppAction, isImageSearchAction, isNative, localIsoNow, parseAppAction, publishStashSummary, publishWidgetStash, setBubbleEnabled } from './lib/device-actions';
 import type { AppAction } from './lib/device-actions';
 import type { ActiveRecording } from './lib/voice-client';
 import { TIMER_ALERTS, buzz, planAlerts, type PlannedAlert, type TimerAlert, type TimerAlertId } from './lib/timer-alerts';
@@ -1332,6 +1332,39 @@ function ChatTab({
     }, 60000);
   }
 
+  /** Web image search (Openverse, via /api/images/search). Empty list on
+   *  any failure — the caller turns that into a plain-words note. */
+  async function searchImages(query: string): Promise<ChatImage[]> {
+    try {
+      const res = await fetch(`${apiBase()}/images/search?q=${encodeURIComponent(query)}`);
+      if (!res.ok) return [];
+      const data: unknown = await res.json();
+      const results =
+        data && typeof data === 'object' && 'results' in data
+          ? (data as { results?: unknown }).results
+          : undefined;
+      if (!Array.isArray(results)) return [];
+      return results
+        .filter(
+          (r): r is ChatImage =>
+            !!r &&
+            typeof r === 'object' &&
+            typeof (r as { thumb?: unknown }).thumb === 'string' &&
+            typeof (r as { page?: unknown }).page === 'string',
+        )
+        .map((r) => ({
+          title: typeof r.title === 'string' ? r.title : query,
+          thumb: r.thumb,
+          url: typeof r.url === 'string' ? r.url : r.thumb,
+          page: r.page,
+          creator: typeof r.creator === 'string' ? r.creator : '',
+        }))
+        .slice(0, 8);
+    } catch {
+      return [];
+    }
+  }
+
   /** Pick a photo (camera or gallery on the phone) and shrink it for sending. */
   async function pickPhoto(file: File | undefined): Promise<void> {
     if (!file) return;
@@ -1449,11 +1482,18 @@ function ChatTab({
         // (see api/chat.ts). Strip it, run it, and show the user only the
         // spoken sentence plus what actually happened. App actions (stash,
         // journal, navigation) run in the app itself; phone actions run
-        // through the native plugin.
+        // through the native plugin. Image search runs here too — it fetches
+        // /api/images/search and the pictures ride on the reply.
         const { text: cleanText, action } = extractDeviceAction(reply);
         let finalText = cleanText;
+        let foundImages: ChatImage[] = [];
         if (action) {
-          if (isAppAction(action)) {
+          if (isImageSearchAction(action)) {
+            foundImages = await searchImages(action.query);
+            if (foundImages.length === 0) {
+              finalText = `${cleanText}\n\nCouldn't find pictures of that — try different words.`;
+            }
+          } else if (isAppAction(action)) {
             const note = onAppAction(action);
             if (note) finalText = `${cleanText}\n\n${note}`;
           } else if (isNative()) {
@@ -1466,6 +1506,7 @@ function ChatTab({
           }
         }
         const budMsg: ChatMessage = { role: 'bud', text: finalText };
+        if (foundImages.length > 0) budMsg.images = foundImages;
         if (Array.isArray(sources)) {
           const clean = sources
             .filter(
@@ -1656,6 +1697,21 @@ function ChatTab({
               <img src={m.image} alt="Photo you sent" className="chat-photo" />
             )}
             {m.text}
+            {m.role === 'bud' && m.images && m.images.length > 0 && (
+              <span className="chat-images">
+                {m.images.map((img, j) => (
+                  <a
+                    key={j}
+                    href={img.page}
+                    target="_blank"
+                    rel="noreferrer"
+                    title={`${img.title}${img.creator ? ` — ${img.creator}` : ''}`}
+                  >
+                    <img src={img.thumb} alt={img.title} loading="lazy" />
+                  </a>
+                ))}
+              </span>
+            )}
             {m.role === 'bud' && m.sources && m.sources.length > 0 && (
               <span className="chat-sources">
                 Sources:{' '}

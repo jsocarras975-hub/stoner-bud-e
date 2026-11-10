@@ -1,10 +1,14 @@
 // Stoner Bud-E — device actions: read the JSON action block out of a chat
 // reply and run it on the phone. The server only ever emits one of the
-// eleven actions (see api/chat.ts ACTIONS_GUIDE): seven phone actions and
-// four app actions (stash add/subtract, log a session, open a tab). On the
-// plain web there is no phone to act on, so the block is stripped and the
-// user gets a plain note instead. Everything is guarded — a bad action, a
-// missing plugin, or a refused phone call never breaks the chat.
+// twelve actions (see api/chat.ts ACTIONS_GUIDE): seven phone actions and
+// five app actions (stash add/subtract, log a session, open a tab, image
+// search). On the plain web there is no phone to act on, so the block is
+// stripped and the user gets a plain note instead. Everything is guarded —
+// a bad action, a missing plugin, or a refused phone call never breaks the
+// chat. Image search is async (it fetches /api/images/search), so App.tsx
+// handles it directly instead of through the sync onAppAction path — it is
+// deliberately NOT in AppAction, so the bubble/voice relay never picks it
+// up (those screens cannot show pictures).
 
 import { Capacitor, registerPlugin } from '@capacitor/core';
 import { isNativeApp } from './timer-notifications';
@@ -25,7 +29,17 @@ export type AppAction =
   | { action: 'log_session'; strain: string; amount: number; unit: 'mg' | 'g'; method?: string }
   | { action: 'open_tab'; tab: string };
 
-export type ChatAction = DeviceAction | AppAction;
+export type ChatAction = DeviceAction | AppAction | ImageSearchAction;
+
+/** Web image search — runs in the app itself (fetches /api/images/search).
+ *  Kept out of AppAction on purpose: it is async, and the bubble/voice
+ *  relay must never pick it up. */
+export type ImageSearchAction = { action: 'image_search'; query: string };
+
+/** True when the action is a web image search. */
+export function isImageSearchAction(action: ChatAction): action is ImageSearchAction {
+  return action.action === 'image_search';
+}
 
 /** True when the action changes the app (stash, journal, navigation). */
 export function isAppAction(action: ChatAction): action is AppAction {
@@ -43,7 +57,7 @@ function isInt(value: unknown): value is number {
   return typeof value === 'number' && Number.isFinite(value) && Math.floor(value) === value;
 }
 
-/** Validate the parsed JSON into one of the eleven known actions, or null. */
+/** Validate the parsed JSON into one of the twelve known actions, or null. */
 function cleanAction(value: unknown): ChatAction | null {
   if (!value || typeof value !== 'object') return null;
   const rec = value as Record<string, unknown>;
@@ -154,6 +168,10 @@ function cleanAction(value: unknown): ChatAction | null {
     case 'open_tab': {
       if (typeof rec.tab !== 'string' || rec.tab.trim() === '') return null;
       return { action: 'open_tab', tab: rec.tab.trim().slice(0, 30) };
+    }
+    case 'image_search': {
+      if (typeof rec.query !== 'string' || rec.query.trim() === '') return null;
+      return { action: 'image_search', query: rec.query.trim().slice(0, 200) };
     }
     default:
       return null;

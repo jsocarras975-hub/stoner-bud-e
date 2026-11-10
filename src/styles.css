@@ -1082,6 +1082,27 @@ button {
   cursor: pointer;
 }
 
+/* Web image search results under a Bud-E reply — sideways scroll. */
+.chat-images {
+  display: flex;
+  gap: 8px;
+  overflow-x: auto;
+  margin-top: 8px;
+  padding-bottom: 4px;
+}
+
+.chat-images a {
+  flex-shrink: 0;
+}
+
+.chat-images img {
+  width: 120px;
+  height: 120px;
+  object-fit: cover;
+  border-radius: 12px;
+  display: block;
+}
+
 .chat-foot {
   margin-top: 8px;
   display: flex;
