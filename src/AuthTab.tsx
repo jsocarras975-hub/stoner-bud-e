@@ -25,7 +25,15 @@
 
 import { useState } from 'react';
 import type { FormEvent, ReactElement } from 'react';
-import { signIn, signOut, signUp } from './lib/auth-client';
+import {
+  changeEmail,
+  changePassword,
+  requestPasswordReset,
+  resetPassword,
+  signIn,
+  signOut,
+  signUp,
+} from './lib/auth-client';
 import type { AuthUser } from './lib/auth-client';
 
 export interface AuthTabProps {
@@ -51,18 +59,34 @@ export default function AuthTab({
   stocked = 0,
   onGoSettings,
 }: AuthTabProps): ReactElement {
-  const [mode, setMode] = useState<'signin' | 'signup'>('signin');
+  const [mode, setMode] = useState<'signin' | 'signup' | 'forgot'>('signin');
   const [name, setName] = useState('');
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
   const [showPassword, setShowPassword] = useState(false);
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState('');
+  const [notice, setNotice] = useState('');
   const [signingOut, setSigningOut] = useState(false);
+  // Change email / change password (signed-in settings below).
+  const [newEmail, setNewEmail] = useState('');
+  const [emailBusy, setEmailBusy] = useState(false);
+  const [emailMsg, setEmailMsg] = useState('');
+  const [emailErr, setEmailErr] = useState('');
+  const [currentPassword, setCurrentPassword] = useState('');
+  const [nextPassword, setNextPassword] = useState('');
+  const [nextPasswordAgain, setNextPasswordAgain] = useState('');
+  const [pwBusy, setPwBusy] = useState(false);
+  const [pwMsg, setPwMsg] = useState('');
+  const [pwErr, setPwErr] = useState('');
 
   async function submit(event: FormEvent): Promise<void> {
     event.preventDefault();
     if (busy) return;
+    if (mode === 'forgot') {
+      await doForgot();
+      return;
+    }
     if (email.trim() === '' || password === '') {
       setError('Add your email and password first.');
       return;
@@ -73,6 +97,7 @@ export default function AuthTab({
     }
     setBusy(true);
     setError('');
+    setNotice('');
     try {
       const next =
         mode === 'signup'
@@ -84,6 +109,89 @@ export default function AuthTab({
       setError(friendlySubmitError(err instanceof Error ? err.message : 'Something went wrong — try again.'));
     } finally {
       setBusy(false);
+    }
+  }
+
+  /** Forgot password: ask for a reset link. The reply never says whether
+   *  the email has an account, so the message is the same either way. */
+  async function doForgot(): Promise<void> {
+    if (email.trim() === '') {
+      setError('Add your email first.');
+      return;
+    }
+    setBusy(true);
+    setError('');
+    setNotice('');
+    try {
+      await requestPasswordReset(email);
+      setNotice(
+        'If that email has a Bud-E account, a reset link is on its way — check your inbox (and spam). The link works for one hour.',
+      );
+    } catch (err) {
+      setError(err instanceof Error ? err.message : 'Could not send that reset email — try again.');
+    } finally {
+      setBusy(false);
+    }
+  }
+
+  /** Change the account email. It changes straight away — there is no
+   *  confirmation link, because accounts never verify email. */
+  async function doChangeEmail(event: FormEvent): Promise<void> {
+    event.preventDefault();
+    if (emailBusy) return;
+    if (newEmail.trim() === '') {
+      setEmailErr('Add the new email first.');
+      return;
+    }
+    if (newEmail.trim().toLowerCase() === user?.email.toLowerCase()) {
+      setEmailErr('That is already your email — nothing to change.');
+      return;
+    }
+    setEmailBusy(true);
+    setEmailErr('');
+    setEmailMsg('');
+    try {
+      const next = await changeEmail(newEmail);
+      setNewEmail('');
+      setEmailMsg(`Email changed to ${next.email} — use it next time you sign in.`);
+      onAuthChange(next);
+    } catch (err) {
+      setEmailErr(err instanceof Error ? err.message : 'Could not change your email — try again.');
+    } finally {
+      setEmailBusy(false);
+    }
+  }
+
+  /** Change the password. Needs the current one, and signs the user's
+   *  other devices out. */
+  async function doChangePassword(event: FormEvent): Promise<void> {
+    event.preventDefault();
+    if (pwBusy) return;
+    if (currentPassword === '' || nextPassword === '') {
+      setPwErr('Add your current password and a new one.');
+      return;
+    }
+    if (nextPassword.length < 8) {
+      setPwErr('Use a new password with at least 8 characters.');
+      return;
+    }
+    if (nextPassword !== nextPasswordAgain) {
+      setPwErr('The two new passwords do not match — check them and try again.');
+      return;
+    }
+    setPwBusy(true);
+    setPwErr('');
+    setPwMsg('');
+    try {
+      await changePassword(currentPassword, nextPassword);
+      setCurrentPassword('');
+      setNextPassword('');
+      setNextPasswordAgain('');
+      setPwMsg('Password changed — your other devices are signed out.');
+    } catch (err) {
+      setPwErr(err instanceof Error ? err.message : 'Could not change your password — try again.');
+    } finally {
+      setPwBusy(false);
     }
   }
 
@@ -101,9 +209,10 @@ export default function AuthTab({
     }
   }
 
-  function switchMode(next: 'signin' | 'signup'): void {
+  function switchMode(next: 'signin' | 'signup' | 'forgot'): void {
     setMode(next);
     setError('');
+    setNotice('');
   }
 
   // -- Signed in: Grok ProfilePanel ------------------------------------------
@@ -156,6 +265,93 @@ export default function AuthTab({
             🔄 Sync now
           </button>
         )}
+
+        <section className="card" aria-label="Account settings" style={{ marginTop: 16 }}>
+          <p className="eyebrow">Account settings</p>
+          <form onSubmit={(e) => void doChangeEmail(e)}>
+            <label htmlFor="account-new-email">
+              <span>Change your email</span>
+              <input
+                id="account-new-email"
+                type="email"
+                value={newEmail}
+                autoComplete="email"
+                placeholder={user.email}
+                onChange={(e) => setNewEmail(e.target.value)}
+                disabled={emailBusy}
+              />
+            </label>
+            {emailErr !== '' && (
+              <p className="muted" role="alert" style={{ color: '#ff9d9d' }}>
+                {emailErr}
+              </p>
+            )}
+            {emailMsg !== '' && (
+              <p className="result-box" role="status">
+                {emailMsg}
+              </p>
+            )}
+            <button type="submit" className="btn secondary btn-block" disabled={emailBusy}>
+              {emailBusy ? 'One sec…' : 'Change email'}
+            </button>
+          </form>
+
+          <form onSubmit={(e) => void doChangePassword(e)} style={{ marginTop: 20 }}>
+            <label htmlFor="account-current-password">
+              <span>Current password</span>
+              <input
+                id="account-current-password"
+                type="password"
+                value={currentPassword}
+                autoComplete="current-password"
+                placeholder="Your current password"
+                onChange={(e) => setCurrentPassword(e.target.value)}
+                disabled={pwBusy}
+              />
+            </label>
+            <label htmlFor="account-new-password">
+              <span>New password</span>
+              <input
+                id="account-new-password"
+                type="password"
+                value={nextPassword}
+                autoComplete="new-password"
+                placeholder="At least 8 characters"
+                onChange={(e) => setNextPassword(e.target.value)}
+                disabled={pwBusy}
+              />
+            </label>
+            <label htmlFor="account-new-password-again">
+              <span>New password again</span>
+              <input
+                id="account-new-password-again"
+                type="password"
+                value={nextPasswordAgain}
+                autoComplete="new-password"
+                placeholder="Repeat the new password"
+                onChange={(e) => setNextPasswordAgain(e.target.value)}
+                disabled={pwBusy}
+              />
+            </label>
+            {pwErr !== '' && (
+              <p className="muted" role="alert" style={{ color: '#ff9d9d' }}>
+                {pwErr}
+              </p>
+            )}
+            {pwMsg !== '' && (
+              <p className="result-box" role="status">
+                {pwMsg}
+              </p>
+            )}
+            <button type="submit" className="btn secondary btn-block" disabled={pwBusy}>
+              {pwBusy ? 'One sec…' : 'Change password'}
+            </button>
+          </form>
+          <p className="muted small" style={{ marginTop: 12 }}>
+            Changing your password signs your other devices out.
+          </p>
+        </section>
+
         <button
           type="button"
           className="btn danger btn-block"
@@ -220,35 +416,48 @@ export default function AuthTab({
               disabled={busy}
             />
           </label>
-          <label htmlFor="account-password">
-            <span>Password</span>
-            <span className="password-wrap">
-              <input
-                id="account-password"
-                type={showPassword ? 'text' : 'password'}
-                value={password}
-                autoComplete={mode === 'signup' ? 'new-password' : 'current-password'}
-                placeholder={mode === 'signup' ? 'At least 8 characters' : 'Your password'}
-                onChange={(e) => setPassword(e.target.value)}
-                disabled={busy}
-              />
-              <button
-                type="button"
-                className="password-toggle"
-                onClick={() => setShowPassword((s) => !s)}
-                disabled={busy}
-              >
-                {showPassword ? 'Hide' : 'Show'}
-              </button>
-            </span>
-          </label>
+          {mode !== 'forgot' && (
+            <label htmlFor="account-password">
+              <span>Password</span>
+              <span className="password-wrap">
+                <input
+                  id="account-password"
+                  type={showPassword ? 'text' : 'password'}
+                  value={password}
+                  autoComplete={mode === 'signup' ? 'new-password' : 'current-password'}
+                  placeholder={mode === 'signup' ? 'At least 8 characters' : 'Your password'}
+                  onChange={(e) => setPassword(e.target.value)}
+                  disabled={busy}
+                />
+                <button
+                  type="button"
+                  className="password-toggle"
+                  onClick={() => setShowPassword((s) => !s)}
+                  disabled={busy}
+                >
+                  {showPassword ? 'Hide' : 'Show'}
+                </button>
+              </span>
+            </label>
+          )}
           {error !== '' && (
             <p className="muted" role="alert" style={{ color: '#ff9d9d' }}>
               {error}
             </p>
           )}
+          {notice !== '' && (
+            <p className="result-box" role="status">
+              {notice}
+            </p>
+          )}
           <button type="submit" className="btn btn-block" disabled={busy}>
-            {busy ? 'One sec…' : mode === 'signup' ? 'Create my account' : 'Sign in'}
+            {busy
+              ? 'One sec…'
+              : mode === 'signup'
+                ? 'Create my account'
+                : mode === 'forgot'
+                  ? 'Send reset link'
+                  : 'Sign in'}
           </button>
         </form>
 
@@ -258,6 +467,16 @@ export default function AuthTab({
               New here?{' '}
               <button type="button" className="link" onClick={() => switchMode('signup')}>
                 Create an account
+              </button>
+              {' · '}
+              <button type="button" className="link" onClick={() => switchMode('forgot')}>
+                Forgot your password?
+              </button>
+            </>
+          ) : mode === 'forgot' ? (
+            <>
+              <button type="button" className="link" onClick={() => switchMode('signin')}>
+                Back to sign in
               </button>
             </>
           ) : (
@@ -271,8 +490,128 @@ export default function AuthTab({
         </p>
         <p className="muted small">
           Your password goes straight to Bud-E&apos;s own sign-in — it is never stored on this
-          device and never shared. No email is ever sent.
+          device and never shared. The only email Bud-E ever sends is a password-reset link, and
+          only when you ask for one.
         </p>
+      </div>
+    </main>
+  );
+}
+
+// ---------------------------------------------------------------------------
+// Reset password — the landing screen for a reset link from email.
+// App.tsx renders this instead of the tabs when the app opens with
+// ?token= (or ?error=INVALID_TOKEN) in the URL. The token works once and
+// expires after an hour. After a reset, onDone takes the user to sign-in.
+// ---------------------------------------------------------------------------
+
+export function ResetPasswordView({
+  token,
+  invalid,
+  onDone,
+}: {
+  token: string | null;
+  invalid: boolean;
+  onDone: () => void;
+}): ReactElement {
+  const [newPassword, setNewPassword] = useState('');
+  const [again, setAgain] = useState('');
+  const [busy, setBusy] = useState(false);
+  const [error, setError] = useState('');
+  const [done, setDone] = useState(false);
+
+  async function submit(event: FormEvent): Promise<void> {
+    event.preventDefault();
+    if (busy || token === null) return;
+    if (newPassword.length < 8) {
+      setError('Use a password with at least 8 characters.');
+      return;
+    }
+    if (newPassword !== again) {
+      setError('The two passwords do not match — check them and try again.');
+      return;
+    }
+    setBusy(true);
+    setError('');
+    try {
+      await resetPassword(newPassword, token);
+      setDone(true);
+    } catch (err) {
+      setError(err instanceof Error ? err.message : 'Could not reset your password — ask for a new link.');
+    } finally {
+      setBusy(false);
+    }
+  }
+
+  return (
+    <main>
+      <div className="account-screen">
+        <p className="eyebrow">Account</p>
+        <h1>
+          Pick a new
+          <br />
+          password.
+        </h1>
+        {invalid ? (
+          <>
+            <p className="muted" style={{ marginTop: 12 }}>
+              That reset link is expired or already used — ask for a new one from the sign-in
+              screen.
+            </p>
+            <button type="button" className="btn btn-block" onClick={onDone}>
+              Back to sign in
+            </button>
+          </>
+        ) : done ? (
+          <>
+            <p className="muted" style={{ marginTop: 12 }}>
+              Done — your password is changed. Sign in with the new one.
+            </p>
+            <button type="button" className="btn btn-block" onClick={onDone}>
+              Sign in
+            </button>
+          </>
+        ) : (
+          <>
+            <p className="muted" style={{ marginTop: 12 }}>
+              This link works once and expires after an hour.
+            </p>
+            <form onSubmit={(e) => void submit(e)}>
+              <label htmlFor="reset-new-password">
+                <span>New password</span>
+                <input
+                  id="reset-new-password"
+                  type="password"
+                  value={newPassword}
+                  autoComplete="new-password"
+                  placeholder="At least 8 characters"
+                  onChange={(e) => setNewPassword(e.target.value)}
+                  disabled={busy}
+                />
+              </label>
+              <label htmlFor="reset-new-password-again">
+                <span>New password again</span>
+                <input
+                  id="reset-new-password-again"
+                  type="password"
+                  value={again}
+                  autoComplete="new-password"
+                  placeholder="Repeat the new password"
+                  onChange={(e) => setAgain(e.target.value)}
+                  disabled={busy}
+                />
+              </label>
+              {error !== '' && (
+                <p className="muted" role="alert" style={{ color: '#ff9d9d' }}>
+                  {error}
+                </p>
+              )}
+              <button type="submit" className="btn btn-block" disabled={busy}>
+                {busy ? 'One sec…' : 'Reset my password'}
+              </button>
+            </form>
+          </>
+        )}
       </div>
     </main>
   );

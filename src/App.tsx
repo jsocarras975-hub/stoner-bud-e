@@ -50,7 +50,7 @@ import { JOURNAL_KEY, journalSummary, newEntryId } from './journal';
 import type { JournalEntry } from './journal';
 import { STASH_KEY, isRunningLow, lowNote, stashSummary, withAmount } from './stash';
 import type { StashItem } from './stash';
-import AuthTab from './AuthTab';
+import AuthTab, { ResetPasswordView } from './AuthTab';
 import { clearLocalSyncState, queueDeletion, uploadLocal, DEFAULT_PERSONALIZATION, cleanPersonalization } from './lib/sync';
 import type { SyncSettings, SyncedChatConversation, PremiumTier, Personalization } from './lib/sync';
 import { deleteAccount, getSession, signOut } from './lib/auth-client';
@@ -260,6 +260,23 @@ export default function App() {
     }
   });
   const [ageDeclined, setAgeDeclined] = useState(false);
+  // Password-reset landing: a reset link from email opens the app with
+  // ?token= (or ?error=INVALID_TOKEN) in the URL. Read once on load; the
+  // reset form renders instead of the tabs until it is done.
+  const [resetToken, setResetToken] = useState<string | null>(() => {
+    try {
+      return new URLSearchParams(window.location.search).get('token');
+    } catch {
+      return null;
+    }
+  });
+  const [resetInvalid, setResetInvalid] = useState<boolean>(() => {
+    try {
+      return new URLSearchParams(window.location.search).get('error') === 'INVALID_TOKEN';
+    } catch {
+      return false;
+    }
+  });
   const [session, setSession] = useState<Session>(() => load(SESSION_KEY, DEFAULT_SESSION));
   const [chats, setChats] = useState<SyncedChatConversation[]>(() => loadChats());
   const [currentChatId, setCurrentChatId] = useState<string | null>(() => {
@@ -729,6 +746,29 @@ export default function App() {
     }
     setAgeDeclined(false);
     setAgeConfirmed(true);
+  }
+
+  if (resetToken !== null || resetInvalid) {
+    return (
+      <div className="app-shell">
+        <div className="app-frame">
+          <ResetPasswordView
+            token={resetToken}
+            invalid={resetInvalid}
+            onDone={() => {
+              setResetToken(null);
+              setResetInvalid(false);
+              try {
+                window.history.replaceState(null, '', window.location.pathname);
+              } catch {
+                // Old browsers — the token just stays in the address bar.
+              }
+              setTab('account');
+            }}
+          />
+        </div>
+      </div>
+    );
   }
 
   if (!ageConfirmed) {

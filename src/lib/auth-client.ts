@@ -77,8 +77,29 @@ function friendlyError(
   if (/invalid (email or )?password|incorrect|user not found/i.test(message)) {
     return 'That email or password did not match. Check both and try again.';
   }
+  if (/current password/i.test(message)) {
+    return 'That current password did not match — check it and try again.';
+  }
+  if (/reset password isn't enabled|not set up/i.test(message)) {
+    return 'Password-reset emails are not set up yet — ask the app owner to switch them on.';
+  }
+  if (/verification email isn't enabled/i.test(message)) {
+    return 'That change needs email set up — ask the app owner to switch it on.';
+  }
+  if (/email is the same/i.test(message)) {
+    return 'That is already your email — nothing to change.';
+  }
+  if (/invalid token|expired/i.test(message)) {
+    return 'That reset link is expired or already used — ask for a new one.';
+  }
   return message !== '' ? message : fallback;
 }
+
+/** Where a reset link lands: the live site root, with ?token= on it. The
+ *  app reads the token on load and shows the new-password form. Always the
+ *  https site, never the Capacitor origin — the link is clicked in an
+ *  email app, so it opens in the browser. */
+export const RESET_ORIGIN = 'https://stoner-bud-e.vercel.app';
 
 /** Current signed-in user, or null when signed out. Never throws. */
 export async function getSession(): Promise<AuthUser | null> {
@@ -126,6 +147,70 @@ export async function signOut(): Promise<void> {
   const { error } = await authClient.signOut();
   if (error) {
     throw new Error(friendlyError(error, 'Could not sign out — try again.'));
+  }
+}
+
+/**
+ * Change the signed-in user's password. Needs the current password, and
+ * signs their other devices out. Throws a plain-words Error on failure.
+ */
+export async function changePassword(currentPassword: string, newPassword: string): Promise<void> {
+  const { error } = await authClient.changePassword({
+    currentPassword,
+    newPassword,
+    revokeOtherSessions: true,
+  });
+  if (error) {
+    throw new Error(friendlyError(error, 'Could not change your password — try again.'));
+  }
+}
+
+/**
+ * Change the signed-in user's email. It changes straight away — accounts
+ * never verify email, so there is no confirmation link. Returns the user
+ * with the new email. Throws a plain-words Error on failure.
+ */
+export async function changeEmail(newEmail: string): Promise<AuthUser> {
+  const { error } = await authClient.changeEmail({
+    newEmail: newEmail.trim(),
+    callbackURL: RESET_ORIGIN,
+  });
+  if (error) {
+    throw new Error(friendlyError(error, 'Could not change your email — try again.'));
+  }
+  // The endpoint answers only { status: true } — re-read the session for
+  // the user with the new email.
+  const next = await getSession();
+  if (!next) {
+    throw new Error('Could not change your email — try again.');
+  }
+  return next;
+}
+
+/**
+ * Ask for a password-reset email. The reply is always the same whether
+ * the email has an account or not, so it never leaks who is signed up.
+ * Throws a plain-words Error only when the mailer itself is not set up.
+ */
+export async function requestPasswordReset(email: string): Promise<void> {
+  const { error } = await authClient.requestPasswordReset({
+    email: email.trim(),
+    redirectTo: `${RESET_ORIGIN}/`,
+  });
+  if (error) {
+    throw new Error(friendlyError(error, 'Could not send that reset email — try again.'));
+  }
+}
+
+/**
+ * Set a new password with a reset token from the email link. The token
+ * works once and expires after an hour. Throws a plain-words Error when
+ * it is expired or already used.
+ */
+export async function resetPassword(newPassword: string, token: string): Promise<void> {
+  const { error } = await authClient.resetPassword({ newPassword, token });
+  if (error) {
+    throw new Error(friendlyError(error, 'Could not reset your password — ask for a new link.'));
   }
 }
 

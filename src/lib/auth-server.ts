@@ -19,6 +19,7 @@ import { Pool } from 'pg';
 import type { IncomingHttpHeaders, IncomingMessage, ServerResponse } from 'node:http';
 import { LIVE_ORIGIN, firstHeader, isPreflight, setCorsHeaders } from './cors.ts';
 import type { ReqLike, ResLike } from './cors.ts';
+import { sendResetPasswordEmail } from './mailer.ts';
 
 /** Read an env var, treating empty/whitespace as unset. No `process` global
  *  here on purpose: this file is typechecked under both tsconfigs, and the
@@ -61,9 +62,28 @@ function buildAuth(pool: Pool, secret: string) {
     secret,
     database: pool,
     trustedOrigins: [...new Set(TRUSTED_ORIGINS)],
-    // Email + password only. No email verification: Bud-E sends no email, and
-    // requiring verification with no mailer would lock every new account out.
-    emailAndPassword: { enabled: true, minPasswordLength: 8, requireEmailVerification: false },
+    // Email + password only. No email verification on sign-up: Bud-E sends
+    // no verification mail, and requiring it with no mailer would lock
+    // every new account out.
+    emailAndPassword: {
+      enabled: true,
+      minPasswordLength: 8,
+      requireEmailVerification: false,
+      // Forgot password: Better Auth builds the reset link and hands it
+      // here; the mailer sends it from the owner's Gmail. Until GMAIL_USER
+      // + GMAIL_APP_PASSWORD are set in Vercel, the hook throws and the
+      // form says the emails are not set up yet.
+      sendResetPassword: async ({ user, url }) => {
+        await sendResetPasswordEmail(user.email, url);
+      },
+    },
+    // Change email: accounts never verify their email (see above), so the
+    // verification-mail path cannot work for anyone — a signed-in user
+    // changes it straight away instead. The endpoint still needs a valid
+    // session, so a signed-out stranger cannot do it.
+    user: {
+      changeEmail: { enabled: true, updateEmailWithoutVerification: true },
+    },
     session: {
       expiresIn: 60 * 60 * 24 * 7, // 7 days
       updateAge: 60 * 60 * 24, // refresh the expiry at most once a day
