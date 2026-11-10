@@ -1,29 +1,119 @@
 // Stoner Bud-E — /api/premium/checkout (Vercel Node serverless).
 //
-// Creates a Stripe Checkout Session for a one-time Lit ($19) or Cloud Nine
-// ($49) purchase, tied to the signed-in user. Records nothing until the
-// webhook confirms the charge succeeded.
+// Crypto checkout for a one-time Lit ($19) or Cloud Nine ($49) purchase,
+// via Coinbase Commerce. Stripe won't take this app (cannabis), so premium
+// is sold as redeem codes (see api/sync.ts) OR paid here in crypto — the
+// buyer pays with any crypto, Coinbase confirms it, and the tier unlocks.
 //
-// Env vars required (set in Vercel project settings):
-//   STRIPE_SECRET_KEY     — sk_live_... or sk_test_...
-//   STRIPE_WEBHOOK_SECRET — whsec_... (for the webhook endpoint)
-//   STRIPE_PRICE_LIT      — price_... for the $19 Lit product
-//   STRIPE_PRICE_CLOUDNINE — price_... for the $49 Cloud Nine product
+// Env var required (set in Vercel project settings):
+//   COINBASE_COMMERCE_API_KEY — the API key secret (shown once when the
+//   key is created in the Coinbase Commerce dashboard). Production +
+//   Preview, Secret.
 //
-// Cannabis policy note: Stripe (and most processors) restrict or require
-// special approval for cannabis-related businesses. This is a 21+ cannabis
-// app. If the processor blocks the account or the checkout, the button
-// will not complete a real charge. Do not ship a pay button that cannot
-// work — resolve with the processor first. Square is an alternative the
-// owner already uses elsewhere; the same pattern applies (different env
-// vars and API).
+// How it works (no webhook secret needed):
+//   1. The app POSTs { tier } (signed in) -> we create a Coinbase
+//      Commerce charge with metadata { userId, tier } and return its
+//      hosted_url. The app opens that page; the buyer pays there.
+//   2. Coinbase POSTs a charge:confirmed webhook to this same URL with
+//      ?webhook=coinbase. We do NOT trust the event alone — we re-fetch
+//      the charge from Coinbase with the API key and only grant the tier
+//      when Coinbase itself says it is confirmed. A faked webhook cannot
+//      grant anything, because the grant always goes through the API.
+//   3. Fallback: the app POSTs { checkChargeId } (signed in) to ask
+//      whether a charge is confirmed yet — for the buyer who paid and
+//      came back before the webhook landed. Same verify-then-grant.
+//
+// The tier is written straight into user_settings (server-only, the same
+// place redeem codes write it). It never downgrades: a Lit payment cannot
+// take Cloud Nine away, and an owner already has everything.
 
-import { getSessionUser } from '../../src/lib/auth-server.ts';
+import { getPool, getSessionUser } from '../../src/lib/auth-server.ts';
 import { isPreflight, readJsonBody, setCorsHeaders } from '../../src/lib/cors.ts';
 import type { ReqLike, ResLike } from '../../src/lib/cors.ts';
 
-type Req = ReqLike & { on?: unknown };
+type Req = ReqLike & { on?: unknown; url?: string };
 type Res = ResLike & { headersSent?: boolean };
+
+const COINBASE_API = 'https://api.commerce.coinbase.com';
+const CC_VERSION = '2018-03-22';
+
+const PRICES: Record<string, { amount: string; name: string }> = {
+  lit: { amount: '19.00', name: 'Bud-E Lit' },
+  cloudnine: { amount: '49.00', name: 'Bud-E Cloud Nine' },
+};
+
+function tierRank(tier: unknown): number {
+  if (tier === 'owner') return 3;
+  if (tier === 'cloudnine') return 2;
+  if (tier === 'lit') return 1;
+  return 0;
+}
+
+/** Set a user's premium tier (never downgrades). Returns the tier set, or null. */
+async function grantTier(userId: string, tier: string): Promise<string | null> {
+  if (tier !== 'lit' && tier !== 'cloudnine') return null;
+  const pool = getPool();
+  const current = await pool.query<{ data: Record<string, unknown> | null }>(
+    'select data from user_settings where user_id = $1',
+    [userId],
+  );
+  const currentTier = current.rows[0]?.data?.premiumTier;
+  if (tierRank(currentTier) >= tierRank(tier)) return null;
+  const data = { ...(current.rows[0]?.data ?? {}), premiumTier: tier };
+  await pool.query(
+    `insert into user_settings (user_id, data, updated_at)
+     values ($1, $2, now())
+     on conflict (user_id) do update
+       set data = excluded.data, updated_at = excluded.updated_at`,
+    [userId, JSON.stringify(data)],
+  );
+  return tier;
+}
+
+interface CoinbaseCharge {
+  id?: string;
+  code?: string;
+  hosted_url?: string;
+  timeline?: Array<{ status?: string }>;
+  payments?: Array<{ status?: string }>;
+  metadata?: Record<string, unknown>;
+}
+
+function chargeIsConfirmed(charge: CoinbaseCharge): boolean {
+  if (Array.isArray(charge.timeline)) {
+    if (charge.timeline.some((t) => t.status === 'CONFIRMED')) return true;
+  }
+  if (Array.isArray(charge.payments)) {
+    if (charge.payments.some((p) => p.status === 'CONFIRMED')) return true;
+  }
+  return false;
+}
+
+async function fetchCharge(apiKey: string, chargeId: string): Promise<CoinbaseCharge | null> {
+  const res = await fetch(`${COINBASE_API}/charges/${encodeURIComponent(chargeId)}`, {
+    headers: {
+      'X-CC-Api-Key': apiKey,
+      'X-CC-Version': CC_VERSION,
+    },
+  });
+  if (!res.ok) return null;
+  const body = (await res.json()) as { data?: CoinbaseCharge };
+  return body.data ?? null;
+}
+
+/** Re-fetch a charge from Coinbase; if it is confirmed, grant its tier.
+ *  Returns { confirmed, tier? }. This is the only place a tier is granted
+ *  from a crypto payment — the webhook and the check button both go here. */
+async function verifyAndGrant(apiKey: string, chargeId: string): Promise<{ confirmed: boolean; tier?: string }> {
+  const charge = await fetchCharge(apiKey, chargeId);
+  if (!charge || !chargeIsConfirmed(charge)) return { confirmed: false };
+  const meta = charge.metadata ?? {};
+  const userId = typeof meta.userId === 'string' ? meta.userId : '';
+  const tier = typeof meta.tier === 'string' ? meta.tier : '';
+  if (!userId || (tier !== 'lit' && tier !== 'cloudnine')) return { confirmed: true };
+  const granted = await grantTier(userId, tier);
+  return { confirmed: true, tier: granted ?? undefined };
+}
 
 export default async function handler(req: Req, res: Res): Promise<void> {
   try {
@@ -38,69 +128,82 @@ export default async function handler(req: Req, res: Res): Promise<void> {
       return;
     }
 
+    const apiKey = process.env.COINBASE_COMMERCE_API_KEY;
+    if (!apiKey) {
+      res.status(503).json({
+        ok: false,
+        error: 'payments_not_configured',
+        message: 'Crypto payments are not set up yet — the Coinbase Commerce API key is missing in Vercel.',
+      });
+      return;
+    }
+
+    const isWebhook = typeof req.url === 'string' && req.url.includes('webhook=coinbase');
+
+    // ---- Coinbase webhook (charge:confirmed). No session — the grant is
+    // gated on re-fetching the charge from Coinbase, not on the event. ----
+    if (isWebhook) {
+      const body = await readJsonBody<{ type?: string; data?: { id?: string } }>(req);
+      const chargeId = body.data?.id;
+      if (body.type === 'charge:confirmed' && typeof chargeId === 'string') {
+        await verifyAndGrant(apiKey, chargeId).catch(() => {});
+      }
+      res.status(200).json({ ok: true });
+      return;
+    }
+
     const user = await getSessionUser(req);
     if (!user) {
       res.status(401).json({ ok: false, error: 'sign_in_required' });
       return;
     }
 
-    const secret = process.env.STRIPE_SECRET_KEY;
-    if (!secret) {
-      res.status(503).json({
-        ok: false,
-        error: 'payments_not_configured',
-        message:
-          'Payments are not set up yet. Cannabis-related businesses may need special approval from the processor (Stripe or Square). Resolve that before enabling checkout.',
-      });
+    const body = await readJsonBody<{ tier?: string; checkChargeId?: string }>(req);
+
+    // ---- "Did my payment go through?" (the buyer came back) ----
+    if (typeof body.checkChargeId === 'string' && body.checkChargeId) {
+      const result = await verifyAndGrant(apiKey, body.checkChargeId);
+      res.status(200).json({ ok: true, ...result });
       return;
     }
 
-    const body = await readJsonBody<{ tier?: string }>(req);
+    // ---- Create a charge and hand the app the hosted checkout page ----
     const tier = body.tier === 'lit' || body.tier === 'cloudnine' ? body.tier : null;
     if (!tier) {
       res.status(400).json({ ok: false, error: 'bad_tier' });
       return;
     }
-
-    const priceId =
-      tier === 'lit' ? process.env.STRIPE_PRICE_LIT : process.env.STRIPE_PRICE_CLOUDNINE;
-    if (!priceId) {
-      res.status(503).json({ ok: false, error: 'price_not_configured' });
-      return;
-    }
-
-    // Create Stripe Checkout Session via REST (no SDK dependency).
-    const origin = req.headers?.origin || 'https://stoner-bud-e-toonzkorner-9149s-projects.vercel.app';
-    const params = new URLSearchParams();
-    params.set('mode', 'payment');
-    params.set('success_url', `${origin}/?premium=success`);
-    params.set('cancel_url', `${origin}/?premium=cancel`);
-    params.set('client_reference_id', user.id);
-    params.set('line_items[0][price]', priceId);
-    params.set('line_items[0][quantity]', '1');
-    params.set('metadata[userId]', user.id);
-    params.set('metadata[tier]', tier);
-
-    const stripeRes = await fetch('https://api.stripe.com/v1/checkout/sessions', {
+    const price = PRICES[tier];
+    const createRes = await fetch(`${COINBASE_API}/charges`, {
       method: 'POST',
       headers: {
-        Authorization: `Bearer ${secret}`,
-        'Content-Type': 'application/x-www-form-urlencoded',
+        'X-CC-Api-Key': apiKey,
+        'X-CC-Version': CC_VERSION,
+        'Content-Type': 'application/json',
       },
-      body: params.toString(),
+      body: JSON.stringify({
+        name: price.name,
+        description: 'Stoner Bud-E premium — one-time purchase. 21+ only.',
+        pricing_type: 'fixed_price',
+        local_price: { amount: price.amount, currency: 'USD' },
+        metadata: { userId: user.id, tier },
+      }),
     });
-
-    const stripeData = (await stripeRes.json()) as { id?: string; url?: string; error?: { message?: string } };
-    if (!stripeRes.ok || !stripeData.url) {
+    const created = (await createRes.json()) as { data?: CoinbaseCharge; error?: { message?: string } };
+    if (!createRes.ok || !created.data?.hosted_url || !created.data?.id) {
       res.status(502).json({
         ok: false,
-        error: 'stripe_failed',
-        message: stripeData.error?.message || 'Could not start checkout.',
+        error: 'coinbase_failed',
+        message: created.error?.message || 'Could not start crypto checkout.',
       });
       return;
     }
-
-    res.status(200).json({ ok: true, url: stripeData.url });
+    res.status(200).json({
+      ok: true,
+      hostedUrl: created.data.hosted_url,
+      chargeId: created.data.id,
+      code: created.data.code,
+    });
   } catch {
     res.status(500).json({ ok: false, error: 'internal' });
   }

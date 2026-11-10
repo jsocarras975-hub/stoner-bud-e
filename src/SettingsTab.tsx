@@ -20,6 +20,7 @@ import { speakVoice, stopVoice } from './lib/voice-client';
 import { getKeyboardStatus, openKeyboardSettings, showKeyboardPicker } from './lib/keyboard';
 import type { KeyboardStatus } from './lib/keyboard';
 import { CommunityError, generatePremiumCodes, redeemPremiumCode } from './lib/community';
+import { checkCryptoCharge, createCryptoCheckout, getPendingChargeId } from './lib/crypto-checkout';
 import { Chip, ChipRow, Label, PageHead } from './bits';
 import type { Personalization, PremiumTier } from './lib/sync';
 import type { JournalEntry } from './journal';
@@ -122,6 +123,51 @@ export default function SettingsTab(props: {
   const [genCodes, setGenCodes] = useState<string[]>([]);
   const [genNote, setGenNote] = useState('');
   const [genBusy, setGenBusy] = useState(false);
+  // Crypto checkout (Coinbase Commerce): the buyer pays on Coinbase's page
+  // and the tier unlocks when Coinbase confirms it. The pending charge id
+  // is remembered so the check button works after coming back to the app.
+  const [cryptoNote, setCryptoNote] = useState('');
+  const [cryptoBusy, setCryptoBusy] = useState(false);
+  const [pendingChargeId, setPendingChargeId] = useState<string | null>(() => getPendingChargeId());
+
+  async function submitCrypto(tier: 'lit' | 'cloudnine'): Promise<void> {
+    if (cryptoBusy) return;
+    setCryptoBusy(true);
+    setCryptoNote('');
+    try {
+      const { hostedUrl, chargeId } = await createCryptoCheckout(tier);
+      setPendingChargeId(chargeId);
+      setCryptoNote(
+        'Pay on the Coinbase page that just opened. When it is done, come back here and tap “I’ve paid — check”.',
+      );
+      window.open(hostedUrl, '_blank');
+    } catch (e) {
+      setCryptoNote(e instanceof Error ? e.message : 'Could not start crypto checkout.');
+    } finally {
+      setCryptoBusy(false);
+    }
+  }
+
+  async function submitCryptoCheck(): Promise<void> {
+    const chargeId = pendingChargeId ?? getPendingChargeId();
+    if (!chargeId || cryptoBusy) return;
+    setCryptoBusy(true);
+    setCryptoNote('');
+    try {
+      const { confirmed } = await checkCryptoCharge(chargeId);
+      if (confirmed) {
+        setCryptoNote('✅ Payment confirmed — your tier is unlocked.');
+        setPendingChargeId(null);
+        onSyncNow();
+      } else {
+        setCryptoNote('Not confirmed yet — give the payment a minute, then check again.');
+      }
+    } catch {
+      setCryptoNote('That did not go through — check your connection and try again.');
+    } finally {
+      setCryptoBusy(false);
+    }
+  }
 
   async function submitRedeem(): Promise<void> {
     const code = redeemCode.trim();
@@ -1071,6 +1117,27 @@ export default function SettingsTab(props: {
                     </button>
                   </div>
                   {redeemNote && <p style={{ marginBottom: 0 }}>{redeemNote}</p>}
+                  <h3 style={{ marginTop: 16 }}>Pay with crypto</h3>
+                  <p className="muted" style={{ marginTop: 0 }}>
+                    No card needed — pay with any crypto on Coinbase&apos;s checkout page and
+                    the tier unlocks when the payment confirms. Same prices, one-time.
+                  </p>
+                  <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap' }}>
+                    {premiumTier !== 'lit' && premiumTier !== 'cloudnine' && (
+                      <button type="button" className="btn" onClick={() => void submitCrypto('lit')} disabled={cryptoBusy}>
+                        Pay crypto — Lit $19
+                      </button>
+                    )}
+                    <button type="button" className="btn secondary" onClick={() => void submitCrypto('cloudnine')} disabled={cryptoBusy}>
+                      Pay crypto — Cloud Nine $49
+                    </button>
+                    {(pendingChargeId ?? getPendingChargeId()) && (
+                      <button type="button" className="btn secondary" onClick={() => void submitCryptoCheck()} disabled={cryptoBusy}>
+                        I’ve paid — check
+                      </button>
+                    )}
+                  </div>
+                  {cryptoNote && <p style={{ marginBottom: 0 }}>{cryptoNote}</p>}
                 </>
               )}
             </section>
