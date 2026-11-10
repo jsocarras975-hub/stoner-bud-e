@@ -31,12 +31,12 @@ const SEARCH_TOOL = { type: 'browser_search' } as const;
 // minute per model — the second photo inside the same minute fails (proven
 // live 2026-11-09: call 1 worked, calls 2–3 failed, call after a 65s pause
 // worked). Llama 4 Scout is NOT a fallback: Groq decommissioned it
-// 2026-07-17 (404 now). qwen3.6-27b is a second Qwen vision model on Groq
-// (their named Scout replacement) with its own rate-limit bucket, so it is
-// tried second; Gemini (callGeminiVision below) is the third try — the
-// project's GEMINI_API_KEY, free tier, far more generous. Groq 3.8, then
-// Groq 3.6, then Gemini.
-const VISION_MODELS = ['qwen/qwen3.8-27b', 'qwen/qwen3.6-27b'];
+// 2026-07-17 (404 now). qwen3.6-27b is ALSO dead: Groq shut it down
+// 2026-09-14 and it 404s in the runtime logs (proven 2026-11-09) — it was
+// removed from this list. So the chain is Groq 3.8, then Gemini
+// (callGeminiVision below) — the project's GEMINI_API_KEY, free tier, far
+// more generous. When Groq is rate-limited (429), Gemini catches the photo.
+const VISION_MODELS = ['qwen/qwen3.8-27b'];
 
 interface SourceLink {
   title: string;
@@ -302,7 +302,11 @@ async function callGeminiVision(
     if (!match) return null;
     const [, mimeType, data] = match;
     const res = await fetch(
-      'https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash:generateContent',
+      // gemini-2.5-flash is RETIRED for this key: Google 404s it ("no longer
+      // available to new users") and names gemini-3.8-flash; the deprecation
+      // table recommends gemini-3.6-flash as the stable replacement, so
+      // that is what we call (proven by the runtime logs 2026-11-09).
+      'https://generativelanguage.googleapis.com/v1beta/models/gemini-3.6-flash:generateContent',
       {
         method: 'POST',
         headers: { 'Content-Type': 'application/json', 'x-goog-api-key': apiKey },
