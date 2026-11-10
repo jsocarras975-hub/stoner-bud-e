@@ -313,7 +313,10 @@ async function callGeminiVision(
                 {
                   text: `${question}\n\nLook at the attached photo closely and answer the question about it. Describe what you see, identify anything relevant (strains, products, plants, labels, amounts), and say plainly when something in the photo is unclear or you cannot tell.`,
                 },
-                { inline_data: { mime_type: mimeType, data } },
+                // The REST API wants camelCase (inlineData/mimeType) — the
+                // snake_case names are only for the Python SDK, which
+                // converts them. Snake_case here made Gemini 400 every call.
+                { inlineData: { mimeType, data } },
               ],
             },
           ],
