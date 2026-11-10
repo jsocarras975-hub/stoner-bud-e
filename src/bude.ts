@@ -18,10 +18,10 @@ export interface ChatMessage {
   text: string;
   /** Web sources for a live-AI reply (title + link), when the answer came from a search. */
   sources?: { title: string; url: string }[];
-  /** Photo attached to a user message, as a data URL. In-memory only:
-   *  it is stripped before the chat is saved or synced, so a photo is
-   *  never stored on the device or in the account — it is sent to the AI
-   *  once, for analysis, and then it is gone. */
+  /** Photo attached to a user message, as a data URL. Kept on this phone
+   *  only (capped at the 5 most recent photos) and stripped before sync,
+   *  so a photo never reaches the account's cloud copy — it is sent to the
+   *  AI once, for analysis, and then lives only on this device. */
   image?: string;
   /** Web image search results attached to a Bud-E reply (Openverse).
    *  These are plain URLs, so they stay in the saved chat like sources. */

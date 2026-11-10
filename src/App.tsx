@@ -202,9 +202,8 @@ function autoTitle(messages: ChatMessage[]): string {
   return text.slice(0, 37) + '…';
 }
 
-/** Strip attached photos from a chat list before it is saved or synced.
- *  Photos live in memory only (see ChatMessage.image) — without this, a
- *  photo's data URL would bloat localStorage and the account's database. */
+/** Strip attached photos from a chat list before it is synced. Photos
+ *  never leave the phone — the account's cloud copy never sees them. */
 function stripChatImages(chats: SyncedChatConversation[]): SyncedChatConversation[] {
   return chats.map((c) => ({
     ...c,
@@ -215,6 +214,56 @@ function stripChatImages(chats: SyncedChatConversation[]): SyncedChatConversatio
       return rest;
     }),
   }));
+}
+
+/** Keep photos in local storage, but cap them: only the 5 most recent
+ *  photos are kept, so a lot of photos can never fill up storage. */
+const MAX_STORED_PHOTOS = 5;
+function capChatImages(chats: SyncedChatConversation[]): SyncedChatConversation[] {
+  const photoSpots: Array<{ ci: number; mi: number }> = [];
+  chats.forEach((c, ci) => {
+    c.messages.forEach((m, mi) => {
+      if (m.image) photoSpots.push({ ci, mi });
+    });
+  });
+  const keep = new Set(
+    photoSpots.slice(-MAX_STORED_PHOTOS).map((s) => `${s.ci}:${s.mi}`),
+  );
+  return chats.map((c, ci) => ({
+    ...c,
+    messages: c.messages.map((m, mi) => {
+      if (!m.image) return m;
+      if (keep.has(`${ci}:${mi}`)) return m;
+      const { image: _dropped, ...rest } = m;
+      void _dropped;
+      return rest;
+    }),
+  }));
+}
+
+/** Re-attach the photos this phone holds onto a chat list that came back
+ *  from the server (the server copy has no photos — see stripChatImages).
+ *  Without this, a photo would vanish from the chat the moment a sync
+ *  round-trip landed. Matched by conversation, message position, and text. */
+function mergeChatImages(
+  local: SyncedChatConversation[],
+  server: SyncedChatConversation[],
+): SyncedChatConversation[] {
+  const byId = new Map(local.map((c) => [c.id, c]));
+  return server.map((sc) => {
+    const lc = byId.get(sc.id);
+    if (!lc) return sc;
+    return {
+      ...sc,
+      messages: sc.messages.map((m, i) => {
+        const lm = lc.messages[i];
+        if (lm && lm.image && lm.text === m.text && lm.role === m.role) {
+          return { ...m, image: lm.image };
+        }
+        return m;
+      }),
+    };
+  });
 }
 
 /** Shrink a picked photo to at most 1024px on the long edge and re-encode
@@ -458,8 +507,9 @@ export default function App() {
   }, [theme]);
 
   useEffect(() => save(SESSION_KEY, session), [session]);
-  // Photos are stripped here: they live in memory only, never in storage.
-  useEffect(() => save(CHATS_KEY, stripChatImages(chats)), [chats]);
+  // Photos stay on this phone (capped at the 5 most recent) — the sync
+  // upload strips them, so they never reach the account's cloud copy.
+  useEffect(() => save(CHATS_KEY, capChatImages(chats)), [chats]);
   // After successful migration, the old key can be cleared on next save, but we leave it for safety.
   useEffect(() => save(VIBE_KEY, vibe), [vibe]);
   useEffect(() => {
@@ -674,7 +724,8 @@ export default function App() {
     applyingServerState.current = true;
     setJournal(state.journal);
     setStash(state.stash);
-    setChats(state.chats);
+    // Keep the photos this phone holds — the server copy has none.
+    setChats((local) => mergeChatImages(local, state.chats));
     if (state.chats.length > 0 && !currentChatId) {
       setCurrentChatId(state.chats[0].id);
     }
@@ -1792,7 +1843,7 @@ function ChatTab({
         {pendingPhoto && (
           <div className="chat-photo-preview">
             <img src={pendingPhoto} alt="Photo to send" />
-            <span>Sent to Bud-E&apos;s AI to look at — not saved.</span>
+            <span>Sent to Bud-E&apos;s AI to look at — kept on this phone only.</span>
             <button
               type="button"
               onClick={() => {
