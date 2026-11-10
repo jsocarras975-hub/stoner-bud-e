@@ -83,8 +83,27 @@ public class BudEKeyboardService extends InputMethodService {
         LinearLayout root = new LinearLayout(this);
         root.setOrientation(LinearLayout.VERTICAL);
         root.setBackgroundColor(0xFF07110C);
-        int pad = dp(4);
+        final int pad = dp(4);
         root.setPadding(pad, pad, pad, pad);
+
+        // The Android nav bar (back/home pill) sits at the very bottom and
+        // overlaps the keyboard's bottom row. Two fixes, both live:
+        // 1. Hide the nav bar while the keyboard is up (swipe up from the
+        //    bottom brings it back for a moment, then it hides again).
+        // 2. Pad the keyboard up above the nav bar whenever it is visible,
+        //    so the bottom row is never covered even if the user swiped the
+        //    bar back. The padding follows the live inset, so there is no
+        //    gap when the bar is hidden.
+        root.setOnApplyWindowInsetsListener((v, insets) -> {
+            int navBottom = 0;
+            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.R) {
+                navBottom = insets.getInsets(android.view.WindowInsets.Type.navigationBars()).bottom;
+            } else {
+                navBottom = insets.getSystemWindowInsetBottom();
+            }
+            v.setPadding(pad, pad, pad, pad + navBottom);
+            return insets;
+        });
 
         // A thin top strip: the leaf + "Bud-E" on the left, a hide key on
         // the right (the system back button also hides it).
@@ -110,6 +129,7 @@ public class BudEKeyboardService extends InputMethodService {
         root.addView(modeContainer, new LinearLayout.LayoutParams(
                 ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.WRAP_CONTENT));
         showMode(mode);
+        hideNavigationBar();
         return root;
     }
 
@@ -122,6 +142,35 @@ public class BudEKeyboardService extends InputMethodService {
         capsLock = false;
         showMode(mode);
         updateEnterLabel(info);
+        hideNavigationBar();
+    }
+
+    /** Hide the Android nav bar while the keyboard is up, so it never
+     *  covers the bottom row. Swipe up from the bottom edge brings it back
+     *  for a moment (transient), then it hides again. On Android 10+ this
+     *  uses WindowInsetsController; older phones use the sticky-immersive
+     *  flags. The insets listener above is the safety net: if the bar is
+     *  visible anyway, the keyboard pads up above it. */
+    private void hideNavigationBar() {
+        try {
+            View decor = getWindow().getWindow().getDecorView();
+            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.R) {
+                android.view.WindowInsetsController controller = decor.getWindowInsetsController();
+                if (controller != null) {
+                    controller.hide(android.view.WindowInsets.Type.navigationBars());
+                    controller.setSystemBarsBehavior(
+                            android.view.WindowInsetsController.BEHAVIOR_SHOW_TRANSIENT_BARS_BY_SWIPE);
+                }
+            } else {
+                decor.setSystemUiVisibility(
+                        View.SYSTEM_UI_FLAG_HIDE_NAVIGATION
+                                | View.SYSTEM_UI_FLAG_IMMERSIVE_STICKY
+                                | View.SYSTEM_UI_FLAG_LAYOUT_HIDE_NAVIGATION);
+            }
+        } catch (Exception ignored) {
+            // Hiding is best-effort — the insets padding still keeps the
+            // bottom row clear when the bar stays visible.
+        }
     }
 
     // ------------------------------------------------------------------
