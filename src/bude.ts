@@ -377,14 +377,18 @@ export const HIGH_THOUGHTS: string[] = [
   'Somewhere, a playlist is one song away from being perfect. Go find it.',
 ];
 
+export type TriviaDifficulty = 'Easy' | 'Medium' | 'Hard' | 'Expert';
+
 export interface TriviaQuestion {
   question: string;
   options: string[];
   answer: number; // index into options
   fact: string;
+  difficulty: TriviaDifficulty;
 }
 
 export const TRIVIA: TriviaQuestion[] = [
+  // -- Easy: the basics ------------------------------------------------------
   {
     question: 'What does THC stand for?',
     options: [
@@ -395,18 +399,21 @@ export const TRIVIA: TriviaQuestion[] = [
     ],
     answer: 0,
     fact: 'THC is the main compound that gets you high.',
+    difficulty: 'Easy',
   },
   {
     question: 'What gives cannabis its smell and flavor?',
     options: ['Terpenes', 'Chlorophyll', 'Seeds', 'The stems'],
     answer: 0,
     fact: 'Terpenes are the aromatic oils — like limonene (citrusy) and myrcene (earthy).',
+    difficulty: 'Easy',
   },
   {
     question: 'How long do edibles usually take to kick in?',
     options: ['Instantly', '5–10 minutes', '30–120 minutes', '6 hours'],
     answer: 2,
-    fact: 'Most people feel edibles in 45–90 minutes. That\'s why the 2-hour wait rule matters.',
+    fact: "Most people feel edibles in 45–90 minutes. That's why the 2-hour wait rule matters.",
+    difficulty: 'Easy',
   },
   {
     question: 'What does CBD do on its own?',
@@ -417,16 +424,296 @@ export const TRIVIA: TriviaQuestion[] = [
       'It only works on pets',
     ],
     answer: 1,
-    fact: 'CBD won\'t get you high. It also won\'t undo a high quickly, no matter what the internet says.',
+    fact: "CBD won't get you high. It also won't undo a high quickly, no matter what the internet says.",
+    difficulty: 'Easy',
   },
   {
     question: 'Which of these is a real cannabis strain name?',
     options: ['Blue Dream', 'Purple Tractor', 'Green Keyboard', 'Orange Laptop'],
     answer: 0,
-    fact: 'Blue Dream is a classic — a sweet, mellow hybrid that\'s been around for years.',
+    fact: "Blue Dream is a classic — a sweet, mellow hybrid that's been around for years.",
+    difficulty: 'Easy',
+  },
+  {
+    question: 'Which type is known for a body-heavy, mellow feel?',
+    options: ['Indica', 'Sativa', 'Hybrid', 'Ruderalis'],
+    answer: 0,
+    fact: 'Indica leans body-heavy and mellow — the classic couch-lock side.',
+    difficulty: 'Easy',
+  },
+  {
+    question: 'What are the munchies?',
+    options: [
+      'Getting hungry after smoking',
+      'A type of edible',
+      'Dry mouth',
+      'A strain name',
+    ],
+    answer: 0,
+    fact: 'The munchies are the hungry feeling — THC nudges the part of the brain that says eat.',
+    difficulty: 'Easy',
+  },
+  {
+    question: 'What should you do if you feel too high?',
+    options: [
+      'Take more to balance it out',
+      'Stay calm, drink water, and wait it out',
+      'Run a mile',
+      'Drink coffee to sober up fast',
+    ],
+    answer: 1,
+    fact: 'Too high passes on its own. Water, a calm spot, and time are the real fix — and a snack helps.',
+    difficulty: 'Easy',
+  },
+  // -- Medium: you know your stuff ------------------------------------------
+  {
+    question: 'Which terpene is known for the earthy, couch-lock smell?',
+    options: ['Myrcene', 'Limonene', 'Pinene', 'Linalool'],
+    answer: 0,
+    fact: 'Myrcene is the earthy, musky one — the classic couch-lock terpene.',
+    difficulty: 'Medium',
+  },
+  {
+    question: 'Which terpene smells like citrus?',
+    options: ['Limonene', 'Myrcene', 'Caryophyllene', 'Humulene'],
+    answer: 0,
+    fact: 'Limonene smells like lemons and oranges — the bright, citrusy note.',
+    difficulty: 'Medium',
+  },
+  {
+    question: 'What is decarboxylation?',
+    options: [
+      'Heating cannabis so the THC becomes active',
+      'Freezing buds to keep them fresh',
+      'Removing the seeds',
+      'Grinding it extra fine',
+    ],
+    answer: 0,
+    fact: 'Raw cannabis has THCA, which does not get you high. Heat turns it into THC — that is decarboxylation.',
+    difficulty: 'Medium',
+  },
+  {
+    question: 'How long should you wait before taking more of an edible?',
+    options: ['15 minutes', '30 minutes', '2 hours', '6 hours'],
+    answer: 2,
+    fact: 'Edibles are quiet at first and peak 2–4 hours in. The full 2-hour wait keeps you from stacking doses.',
+    difficulty: 'Medium',
+  },
+  {
+    question: 'What does "hybrid" mean?',
+    options: [
+      'A mix of indica and sativa',
+      'A strain grown indoors',
+      'A strain with no THC',
+      'A lab-made synthetic',
+    ],
+    answer: 0,
+    fact: 'A hybrid is a cross of indica and sativa — a bit of both worlds.',
+    difficulty: 'Medium',
+  },
+  {
+    question: 'What is a dab?',
+    options: [
+      'A concentrated form of cannabis, vaporized',
+      'A small joint',
+      'A type of edible',
+      'A rolling technique',
+    ],
+    answer: 0,
+    fact: 'Dabs are concentrates — very strong, vaporized on a hot surface. A little goes a long way.',
+    difficulty: 'Medium',
+  },
+  {
+    question: 'What does tolerance mean?',
+    options: [
+      'Needing more for the same effect',
+      'Being allergic to cannabis',
+      'Liking every strain',
+      'Never getting high',
+    ],
+    answer: 0,
+    fact: 'Tolerance builds with regular use — the same dose does less. A short break resets a lot of it.',
+    difficulty: 'Medium',
+  },
+  {
+    question: 'Which part of the plant has the most THC?',
+    options: ['The flower (buds)', 'The leaves', 'The stems', 'The seeds'],
+    answer: 0,
+    fact: 'The flower holds the most THC — that is why buds are what people smoke.',
+    difficulty: 'Medium',
+  },
+  // -- Hard: deeper knowledge ------------------------------------------------
+  {
+    question: 'What is the entourage effect?',
+    options: [
+      'Cannabinoids and terpenes working together',
+      'Getting high with friends',
+      'THC and CBD canceling each other out',
+      'A strain that only grows outdoors',
+    ],
+    answer: 0,
+    fact: 'The entourage effect is the idea that the whole plant — THC, CBD, terpenes and all — works better together than any one piece alone.',
+    difficulty: 'Hard',
+  },
+  {
+    question: 'What is CBN mostly known for?',
+    options: [
+      'A sleepy, sedative feel — it forms as THC ages',
+      'Giving you energy',
+      'Killing your appetite',
+      'Making edibles kick in faster',
+    ],
+    answer: 0,
+    fact: 'CBN forms when THC breaks down over time, and it is known for a heavy, sleepy feel.',
+    difficulty: 'Hard',
+  },
+  {
+    question: 'What is CBG?',
+    options: [
+      'The "mother cannabinoid" — the precursor THC and CBD are made from',
+      'A synthetic THC',
+      'A type of hash',
+      'The chemical that makes your eyes red',
+    ],
+    answer: 0,
+    fact: 'CBG is the starting point — the plant makes CBG first, then turns it into THC, CBD, and the rest.',
+    difficulty: 'Hard',
+  },
+  {
+    question: 'What does "full spectrum" mean?',
+    options: [
+      'It contains the whole range of cannabinoids and terpenes',
+      'It is the strongest product on the shelf',
+      'It has no THC at all',
+      'It works instantly',
+    ],
+    answer: 0,
+    fact: 'Full spectrum keeps the whole plant profile in — THC, CBD, minor cannabinoids, and terpenes.',
+    difficulty: 'Hard',
+  },
+  {
+    question: 'Which terpene is peppery and also found in black pepper?',
+    options: ['Caryophyllene', 'Limonene', 'Myrcene', 'Pinene'],
+    answer: 0,
+    fact: 'Caryophyllene is the peppery one — it is in black pepper, cloves, and a lot of strains.',
+    difficulty: 'Hard',
+  },
+  {
+    question: 'What is the main legal difference between hemp and marijuana in the US?',
+    options: [
+      'Hemp has under 0.3% THC',
+      'Hemp has no CBD',
+      'Hemp only grows indoors',
+      'There is no difference',
+    ],
+    answer: 0,
+    fact: 'By US federal law, hemp is cannabis with under 0.3% THC. Over that, it is marijuana.',
+    difficulty: 'Hard',
+  },
+  {
+    question: 'What is kief?',
+    options: [
+      'The powdery trichomes that fall off the buds',
+      'A type of edible',
+      'The stem of the plant',
+      'A rolling paper brand',
+    ],
+    answer: 0,
+    fact: 'Kief is the dusty, crystal-like trichomes — the tiny glands that hold most of the THC.',
+    difficulty: 'Hard',
+  },
+  {
+    question: 'What does curing do for cannabis?',
+    options: [
+      'Slow drying that improves flavor and smoothness',
+      'Makes it stronger instantly',
+      'Removes all the THC',
+      'Turns it into hash',
+    ],
+    answer: 0,
+    fact: 'Curing is a slow dry after harvest — it smooths the smoke and brings out the flavor.',
+    difficulty: 'Hard',
+  },
+  // -- Expert: strain-nerd territory -----------------------------------------
+  {
+    question: "What are Granddaddy Purple's parent strains?",
+    options: [
+      'Purple Urkle × Big Bud',
+      'Blueberry × Haze',
+      'OG Kush × Durban Poison',
+      'Northern Lights × Sour Diesel',
+    ],
+    answer: 0,
+    fact: 'Granddaddy Purple comes from Purple Urkle crossed with Big Bud — that is where the grape and the heavy body come from.',
+    difficulty: 'Expert',
+  },
+  {
+    question: 'In what year did the US Marihuana Tax Act effectively ban cannabis?',
+    options: ['1937', '1952', '1970', '1914'],
+    answer: 0,
+    fact: 'The Marihuana Tax Act of 1937 made cannabis all but illegal in the US — the start of a very long prohibition.',
+    difficulty: 'Expert',
+  },
+  {
+    question: 'What is anandamide?',
+    options: [
+      'A "bliss molecule" your own body makes, similar to THC',
+      'A synthetic cannabinoid',
+      'A strain from Thailand',
+      'A type of terpene',
+    ],
+    answer: 0,
+    fact: 'Anandamide is an endocannabinoid your body makes on its own — it fits the same receptors THC does. It is nicknamed the bliss molecule.',
+    difficulty: 'Expert',
+  },
+  {
+    question: 'Which strains were crossed to make Blue Dream?',
+    options: [
+      'Blueberry × Haze',
+      'Purple Urkle × Big Bud',
+      'OG Kush × GSC',
+      'Durban Poison × Jack Herer',
+    ],
+    answer: 0,
+    fact: 'Blue Dream is Blueberry crossed with Haze — sweet berry flavor with an upbeat, hazy lift.',
+    difficulty: 'Expert',
+  },
+  {
+    question: 'What does "landrace" mean?',
+    options: [
+      'A strain that evolved naturally in one region',
+      'A strain grown on a farm',
+      'A strain with no terpenes',
+      'A government-approved strain',
+    ],
+    answer: 0,
+    fact: 'A landrace is a strain that grew and adapted in one place over generations — like Durban Poison from South Africa.',
+    difficulty: 'Expert',
+  },
+  {
+    question: 'What is THCV mostly known for?',
+    options: [
+      'Appetite-suppressing effects — the "diet weed" nickname',
+      'Making you sleepy',
+      'Causing anxiety',
+      'Tasting like citrus',
+    ],
+    answer: 0,
+    fact: 'THCV is studied for appetite suppression — the opposite of the munchies — which earned it the "diet weed" nickname.',
+    difficulty: 'Expert',
   },
 ];
 
 export function pickRandom<T>(items: readonly T[]): T {
   return items[Math.floor(Math.random() * items.length)];
+}
+
+/** A shuffled copy of the items (Fisher–Yates) — the original is untouched. */
+export function shuffle<T>(items: readonly T[]): T[] {
+  const arr = [...items];
+  for (let i = arr.length - 1; i > 0; i--) {
+    const j = Math.floor(Math.random() * (i + 1));
+    [arr[i], arr[j]] = [arr[j] as T, arr[i] as T];
+  }
+  return arr;
 }

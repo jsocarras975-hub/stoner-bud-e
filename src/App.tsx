@@ -39,8 +39,9 @@ import {
   minutesSinceTaken,
   parseClock,
   pickRandom,
+  shuffle,
 } from './bude';
-import type { ChatImage, ChatMessage, Method, Session } from './bude';
+import type { ChatImage, ChatMessage, Method, Session, TriviaQuestion } from './bude';
 import StrainsTab from './StrainsTab';
 import MusicTab from './MusicTab';
 import TonightTab from './TonightTab';
@@ -2596,7 +2597,7 @@ const TOOL_DEFS: { id: ToolId; name: string; detail: string; icon: React.ReactNo
   {
     id: 'trivia',
     name: 'Bud-E trivia',
-    detail: '5 questions, no judgment',
+    detail: '10 questions, easy to expert',
     icon: <Brain size={20} aria-hidden />,
   },
   {
@@ -3108,12 +3109,26 @@ function HighThoughts() {
   );
 }
 
+/** Pick one game's worth of trivia: 10 questions, mixed difficulty, shuffled. */
+function pickTriviaGame(): TriviaQuestion[] {
+  const byDifficulty = (d: TriviaQuestion['difficulty']) =>
+    shuffle(TRIVIA.filter((q) => q.difficulty === d));
+  const picked = [
+    ...byDifficulty('Easy').slice(0, 3),
+    ...byDifficulty('Medium').slice(0, 3),
+    ...byDifficulty('Hard').slice(0, 2),
+    ...byDifficulty('Expert').slice(0, 2),
+  ];
+  return shuffle(picked);
+}
+
 function TriviaGame() {
+  const [questions, setQuestions] = useState<TriviaQuestion[]>(() => pickTriviaGame());
   const [index, setIndex] = useState(0);
   const [selected, setSelected] = useState<number | null>(null);
   const [score, setScore] = useState(0);
   const [done, setDone] = useState(false);
-  const q = TRIVIA[index];
+  const q = questions[index] as TriviaQuestion;
 
   function pick(i: number) {
     if (selected !== null) return;
@@ -3122,7 +3137,7 @@ function TriviaGame() {
   }
 
   function next() {
-    if (index + 1 >= TRIVIA.length) {
+    if (index + 1 >= questions.length) {
       setDone(true);
     } else {
       setIndex((i) => i + 1);
@@ -3131,6 +3146,7 @@ function TriviaGame() {
   }
 
   function playAgain() {
+    setQuestions(pickTriviaGame());
     setIndex(0);
     setSelected(null);
     setScore(0);
@@ -3143,12 +3159,12 @@ function TriviaGame() {
       {done ? (
         <>
           <p className="score-display">
-            {score} / {TRIVIA.length}
+            {score} / {questions.length}
           </p>
           <p style={{ textAlign: 'center' }}>
-            {score === TRIVIA.length
+            {score === questions.length
               ? 'Perfect score — certified Bud-E brain. 🌿'
-              : score >= 3
+              : score >= 7
                 ? 'Solid! You know your stuff.'
                 : "Hey, that's what Bud-E is here for. Run it back!"}
           </p>
@@ -3159,7 +3175,7 @@ function TriviaGame() {
       ) : (
         <>
           <p className="muted small">
-            Question {index + 1} of {TRIVIA.length} · Score: {score}
+            Question {index + 1} of {questions.length} · {q.difficulty} · Score: {score}
           </p>
           <p style={{ fontWeight: 700, fontSize: '1.1rem' }}>{q.question}</p>
           {q.options.map((opt, i) => (
@@ -3180,7 +3196,7 @@ function TriviaGame() {
             <>
               <p className="result-box">{q.fact}</p>
               <button className="btn btn-block" onClick={next}>
-                {index + 1 >= TRIVIA.length ? 'See my score' : 'Next question →'}
+                {index + 1 >= questions.length ? 'See my score' : 'Next question →'}
               </button>
             </>
           )}

@@ -48,6 +48,46 @@ const WOULD_YOU_RATHER: WouldYouRatherQ[] = [
   { a: 'Have a dragon', b: 'Have a unicorn' },
   { a: 'Be the funniest person in the room', b: 'Be the smartest person in the room' },
   { a: 'Always have great hair', b: 'Always have great shoes' },
+  { a: 'Never be able to taste food again', b: 'Never be able to smell anything' },
+  { a: 'Have a theme song play whenever you walk in', b: 'Have a laugh track follow you' },
+  { a: 'Always know when someone is lying', b: 'Always know when someone is high' },
+  { a: 'Be able to talk to your pet', b: 'Be able to read minds (but only when high)' },
+  { a: 'Live without music', b: 'Live without movies' },
+  { a: 'Have a bottomless bag of chips', b: 'Have a bottomless fridge' },
+  { a: 'Always have the perfect lighter', b: 'Always have the perfect playlist' },
+  { a: 'Be able to pause time', b: 'Be able to rewind time (once a day)' },
+  { a: 'Know the exact moment you will fall asleep', b: 'Know the exact moment you will wake up' },
+  { a: 'Have a personal sauna', b: 'Have a personal hot tub' },
+  { a: 'Only wear tie-dye', b: 'Only wear all black' },
+  { a: 'Have a treehouse with WiFi', b: 'Have a cabin with no WiFi' },
+  { a: 'Fly, but only 3 feet off the ground', b: 'Teleport, but only to places you have been' },
+  { a: 'Always have popcorn', b: 'Always have ice cream' },
+  { a: 'Watch the same movie 100 times', b: 'Watch a new movie every day (but never rewatch)' },
+  { a: 'Have a pet dragon that snores', b: 'Have a pet unicorn that farts glitter' },
+  { a: 'Eat anything without gaining weight', b: 'Sleep anywhere instantly' },
+  { a: 'Always be the DJ', b: 'Always be the chef' },
+  { a: 'Have a hammock everywhere you go', b: 'Have a beanbag everywhere you go' },
+  { a: 'Know all the lyrics', b: 'Know all the dance moves' },
+  { a: 'Have a time machine that only goes to yesterday', b: 'Have a time machine that only goes to tomorrow' },
+  { a: 'Be able to make any plant grow', b: 'Be able to make any food taste amazing' },
+  { a: 'Always have a full phone battery', b: 'Always have perfect WiFi' },
+  { a: 'Live in a world with no clocks', b: 'Live in a world with no mirrors' },
+  { a: 'Have a rewind button for conversations', b: 'Have a mute button for people' },
+  { a: 'Be able to breathe underwater', b: 'Be able to survive in space' },
+  { a: 'Always have a snack in your pocket', b: 'Always have a lighter in your pocket' },
+  { a: 'Have a personal theme park', b: 'Have a personal movie theater' },
+  { a: 'Be able to talk to plants', b: 'Be able to talk to your past self' },
+  { a: 'Always be barefoot', b: 'Always wear shoes (even in bed)' },
+  { a: 'Have a magic fridge that makes any food', b: 'Have a magic closet that makes any outfit' },
+  { a: 'Know the answer to any question', b: 'Know the future (but only 10 seconds ahead)' },
+  { a: 'Have a pet that talks', b: 'Have a car that talks' },
+  { a: 'Live on a beach', b: 'Live in the mountains' },
+  { a: 'Always be laughing', b: 'Always be calm' },
+  { a: 'Have a superpower that only works when you are high', b: 'Have no superpower but unlimited snacks' },
+  { a: 'Stop time for 10 seconds', b: 'Rewind 10 seconds (unlimited times)' },
+  { a: 'Have a personal chef who only makes breakfast', b: 'Have a personal chef who only makes dessert' },
+  { a: 'Always have the munchies at 2am', b: 'Always crave a nap at 2pm' },
+  { a: 'Be able to remember every high', b: 'Be able to forget every bad high' },
 ];
 
 const PICK_REACTIONS = [
@@ -144,37 +184,59 @@ export function WouldYouRather() {
 }
 
 // ---------------------------------------------------------------------------
-// Guess the Strain — read the vibe, name the strain. 5 rounds.
+// Guess the Strain — read the vibe, name the strain. 10 rounds, easy to
+// expert: the clues shrink as the rounds go on. Easy gets the blurb +
+// flavors + effects; Medium drops the blurb; Hard is one effect only;
+// Expert is just the lineage (the parent strains) — strain-nerd territory.
 // ---------------------------------------------------------------------------
 
-const GUESS_ROUNDS = 5;
+const GUESS_ROUNDS = 10;
+
+type GuessDifficulty = 'Easy' | 'Medium' | 'Hard' | 'Expert';
+
+/** Difficulty ramps with the round: 3 easy, 3 medium, 2 hard, 2 expert. */
+function guessDifficulty(roundIndex: number): GuessDifficulty {
+  if (roundIndex < 3) return 'Easy';
+  if (roundIndex < 6) return 'Medium';
+  if (roundIndex < 8) return 'Hard';
+  return 'Expert';
+}
 
 interface GuessRound {
   answer: Strain;
   options: Strain[];
+  difficulty: GuessDifficulty;
 }
 
 function buildGuessRounds(): GuessRound[] {
   const answers = shuffle(STRAINS).slice(0, GUESS_ROUNDS);
-  return answers.map((answer) => {
+  return answers.map((answer, i) => {
     const others = shuffle(STRAINS.filter((s) => s.id !== answer.id)).slice(0, 3);
-    return { answer, options: shuffle([answer, ...others]) };
+    return { answer, options: shuffle([answer, ...others]), difficulty: guessDifficulty(i) };
   });
 }
 
-/** The clues: blurb + flavors + top effects, but never the name or lineage. */
-function strainClues(strain: Strain): { blurb: string; flavors: string; effects: string } {
+/**
+ * The clues for one round, by difficulty — never the name.
+ * Easy: blurb + flavors + top effects. Medium: flavors + top effect.
+ * Hard: top effect only. Expert: lineage only.
+ */
+function strainClues(
+  strain: Strain,
+  difficulty: GuessDifficulty,
+): { blurb?: string; flavors?: string; effects?: string; lineage?: string } {
   const top = strain.effects
     .slice()
     .sort((a, b) => b.level - a.level)
     .slice(0, 2)
     .map((e) => e.name)
     .join(' · ');
-  return {
-    blurb: strain.blurb,
-    flavors: strain.flavors.join(' · '),
-    effects: top,
-  };
+  if (difficulty === 'Expert') return { lineage: strain.lineage };
+  if (difficulty === 'Hard') return { effects: top.split(' · ')[0] as string };
+  if (difficulty === 'Medium') {
+    return { flavors: strain.flavors.join(' · '), effects: top };
+  }
+  return { blurb: strain.blurb, flavors: strain.flavors.join(' · '), effects: top };
 }
 
 export function GuessTheStrain() {
@@ -184,7 +246,7 @@ export function GuessTheStrain() {
   const [score, setScore] = useState(0);
   const [done, setDone] = useState(false);
   const current = rounds[round] as GuessRound;
-  const clues = strainClues(current.answer);
+  const clues = strainClues(current.answer, current.difficulty);
 
   function pick(id: string) {
     if (selected !== null) return;
@@ -220,7 +282,7 @@ export function GuessTheStrain() {
           <p style={{ textAlign: 'center' }}>
             {score === GUESS_ROUNDS
               ? 'Perfect — you know the garden by heart. 🌿'
-              : score >= 3
+              : score >= 7
                 ? 'Solid nose. You know your strains.'
                 : 'The guide is right there — go study up and run it back.'}
           </p>
@@ -231,17 +293,26 @@ export function GuessTheStrain() {
       ) : (
         <>
           <p className="muted small">
-            Round {round + 1} of {GUESS_ROUNDS} · Score: {score}
+            Round {round + 1} of {GUESS_ROUNDS} · {current.difficulty} · Score: {score}
           </p>
           <p style={{ fontWeight: 700, fontSize: '1.1rem' }}>Which strain is this?</p>
           <div className="result-box">
-            <p style={{ margin: '0 0 8px' }}>{clues.blurb}</p>
-            <p className="small" style={{ margin: '0 0 4px' }}>
-              <strong>Flavors:</strong> {clues.flavors}
-            </p>
-            <p className="small" style={{ margin: 0 }}>
-              <strong>Known for:</strong> {clues.effects}
-            </p>
+            {clues.blurb && <p style={{ margin: '0 0 8px' }}>{clues.blurb}</p>}
+            {clues.flavors && (
+              <p className="small" style={{ margin: '0 0 4px' }}>
+                <strong>Flavors:</strong> {clues.flavors}
+              </p>
+            )}
+            {clues.effects && (
+              <p className="small" style={{ margin: 0 }}>
+                <strong>Known for:</strong> {clues.effects}
+              </p>
+            )}
+            {clues.lineage && (
+              <p className="small" style={{ margin: 0 }}>
+                <strong>From:</strong> {clues.lineage}
+              </p>
+            )}
           </div>
           <div style={{ display: 'flex', flexDirection: 'column', gap: 10, marginTop: 12 }}>
             {current.options.map((opt) => (
@@ -280,9 +351,11 @@ export function GuessTheStrain() {
 
 // ---------------------------------------------------------------------------
 // Memory Match — flip cards, match the pairs. Fewest moves wins.
+// All 12 pairs are marijuana-themed: leaf, herb, seedling, smoke, fire,
+// edibles, the flavors (grape, blueberry, lemon), the night, and the fog.
 // ---------------------------------------------------------------------------
 
-const MATCH_FACES = ['🍃', '🌿', '🔥', '🍪', '🎵', '🌙', '⭐', '🍕'];
+const MATCH_FACES = ['🍃', '🌿', '🌱', '💨', '🔥', '🍪', '🧁', '🍇', '🫐', '🍋', '🌙', '😶‍🌫️'];
 
 interface MatchCard {
   key: number;
@@ -350,9 +423,9 @@ export function MemoryMatch() {
         <>
           <p className="score-display">🎉 {moves} moves</p>
           <p style={{ textAlign: 'center' }}>
-            {moves <= 12
+            {moves <= 16
               ? 'Sharp. That is a great run.'
-              : moves <= 18
+              : moves <= 24
                 ? 'Nice — matched them all.'
                 : 'All matched! Run it back for a better score.'}
           </p>
