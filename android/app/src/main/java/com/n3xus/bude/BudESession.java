@@ -68,9 +68,6 @@ public class BudESession extends VoiceInteractionSession {
     private boolean ttsReady;
     private boolean listening;
     private boolean destroyed;
-    /** True when this showing was handed off to the bubble chat, so a late
-     *  onHandleAssist does not start listening anyway. */
-    private boolean bubbleRedirected;
 
     public BudESession(Context context) {
         super(context);
@@ -89,28 +86,27 @@ public class BudESession extends VoiceInteractionSession {
     public void onShow(Bundle args, int showFlags) {
         super.onShow(args, showFlags);
         // The power-button long-press (and any other system trigger) opens
-        // the bubble chat now, not the voice overlay — only an explicit
-        // voice request (the notification's Talk button, marked bude_voice)
-        // listens. The session goes away; the bubble chat opens in its place.
-        if (args == null || !args.getBoolean("bude_voice", false)) {
-            bubbleRedirected = true;
-            openBubbleChat();
+        // the voice overlay and listens right away — talk, don't type.
+        // The bubble chat is the text way in (the widget Talk button opens
+        // it); the notification's Talk button also lands here, via
+        // showVoiceSession with bude_voice set.
+        // App lock: while Bud-E is locked, the voice overlay stays shut —
+        // open the app instead, which shows the lock screen.
+        if (BudEBiometricPlugin.isLocked(getContext())) {
+            openFullApp();
             return;
         }
-        bubbleRedirected = false;
         startListening();
     }
 
     @Override
     public void onHandleAssist(Bundle data, AssistStructure structure, AssistContent content) {
         super.onHandleAssist(data, structure, content);
-        if (bubbleRedirected) return;
         startListening();
     }
 
     @Override
     public void onHide() {
-        bubbleRedirected = false;
         stopListening();
         stopSpeaking();
         super.onHide();
@@ -553,45 +549,6 @@ public class BudESession extends VoiceInteractionSession {
     }
 
     // ------------------------------------------------------------------ App
-
-    /** Power-button long-press: open the bubble chat directly — the app
-     *  itself never opens, so the panel floats over whatever he was
-     *  doing. Goes straight to the bubble service (the overlay permission
-     *  is checked first); when it is not allowed, the app's chat tab is
-     *  the fallback instead of nothing. */
-    private void openBubbleChat() {
-        if (!android.provider.Settings.canDrawOverlays(getContext())) {
-            Intent intent = new Intent(getContext(), MainActivity.class);
-            intent.putExtra(BudELaunchInfo.EXTRA_TAB, "chat");
-            intent.addFlags(Intent.FLAG_ACTIVITY_NEW_TASK | Intent.FLAG_ACTIVITY_CLEAR_TOP);
-            try {
-                startAssistantActivity(intent);
-            } catch (Exception e) {
-                try {
-                    getContext().startActivity(intent);
-                } catch (Exception ignored) {
-                    // The app could not be opened from here — fall back to
-                    // listening as before, instead of showing nothing.
-                    bubbleRedirected = false;
-                    startListening();
-                    return;
-                }
-            }
-            hide();
-            return;
-        }
-        try {
-            BudEBubbleService.setEnabled(getContext(), true);
-            BudEBubbleService.startWithAction(getContext(), BudEBubbleService.ACTION_EXPAND_CHAT);
-        } catch (Exception e) {
-            // The bubble could not be started — fall back to listening as
-            // before, instead of showing nothing.
-            bubbleRedirected = false;
-            startListening();
-            return;
-        }
-        hide();
-    }
 
     private void openFullApp() {
         stopListening();

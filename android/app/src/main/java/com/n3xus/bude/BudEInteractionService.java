@@ -47,9 +47,10 @@ public class BudEInteractionService extends VoiceInteractionService {
      * phone's default assistant. A plain ACTION_ASSIST intent cannot open
      * the session (it just resolves to an app), which is why Talk goes
      * through here. Only the notification's Talk button uses this now:
-     * the widget Talk button and the power-button long-press open the
-     * bubble chat instead. Returns false when there is no live service
-     * to ask, so the caller can fall back to opening the app instead.
+     * the widget Talk button opens the bubble chat, and the power-button
+     * long-press shows the voice session on its own (the system starts it
+     * directly). Returns false when there is no live service to ask, so
+     * the caller can fall back to opening the app instead.
      */
     public static boolean showVoiceSession() {
         BudEInteractionService service = instance;
