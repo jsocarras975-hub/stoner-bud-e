@@ -45,6 +45,8 @@ import StrainsTab from './StrainsTab';
 import MusicTab from './MusicTab';
 import TonightTab from './TonightTab';
 import SettingsTab from './SettingsTab';
+import DrivingMode from './DrivingMode';
+import { tasteSummary } from './lib/taste';
 import LockScreen from './LockScreen';
 import {
   biometricStatus,
@@ -443,6 +445,8 @@ export default function App() {
     return loaded.length > 0 ? loaded[0].id : null;
   });
   const [showChatList, setShowChatList] = useState(false);
+  // Hands-free driving mode overlay.
+  const [drivingOpen, setDrivingOpen] = useState(false);
   const [vibe, setVibe] = useState<Vibe>(() => load(VIBE_KEY, DEFAULT_VIBE));
   const [voice, setVoice] = useState<VoiceSettings>(() => loadVoiceSettings());
   const [premiumTier, setPremiumTier] = useState<PremiumTier>(null);
@@ -1372,7 +1376,7 @@ export default function App() {
           showChatList={showChatList}
           setShowChatList={setShowChatList}
           setSource={setSource}
-          journalNote={journalSummary(journal)}
+          journalNote={[journalSummary(journal), tasteSummary(journal)].filter(Boolean).join(' ')}
           stashNote={stashSummary(stash)}
           onAppAction={applyAppAction}
           prefill={pendingQuestion}
@@ -1381,6 +1385,7 @@ export default function App() {
           voice={voice}
           onDeleteChat={(id) => queueDeletion('chat', id)}
           personalization={personalization}
+          onOpenDriving={() => setDrivingOpen(true)}
         />
       )}
       {tab === 'tools' && (
@@ -1399,7 +1404,7 @@ export default function App() {
         />
       )}
       {tab === 'plan' && planView}
-      {tab === 'strains' && <StrainsTab onAskAbout={askAboutStrain} />}
+      {tab === 'strains' && <StrainsTab onAskAbout={askAboutStrain} journal={journal} />}
       {tab === 'music' && (
         <MusicTab
           currentTrack={currentTrack}
@@ -1583,6 +1588,20 @@ export default function App() {
           onForgotPin={handleForgotPin}
         />
       )}
+
+      {/* Hands-free driving mode — full-screen overlay over the whole app. */}
+      {drivingOpen && (
+        <DrivingMode
+          apiBase={apiBase()}
+          persona={voice.persona}
+          session={session}
+          journalNote={[journalSummary(journal), tasteSummary(journal)].filter(Boolean).join(' ')}
+          stashNote={stashSummary(stash)}
+          personalization={personalization}
+          onAppAction={applyAppAction}
+          onClose={() => setDrivingOpen(false)}
+        />
+      )}
     </div>
   );
 }
@@ -1677,6 +1696,7 @@ function ChatTab({
   voice,
   onDeleteChat,
   personalization,
+  onOpenDriving,
 }: {
   session: Session;
   chats: SyncedChatConversation[];
@@ -1695,6 +1715,8 @@ function ChatTab({
   voice: VoiceSettings;
   onDeleteChat: (id: string) => void;
   personalization: Personalization;
+  /** Open hands-free driving mode. */
+  onOpenDriving: () => void;
 }) {
   const current = chats.find((c) => c.id === currentChatId) ?? null;
   const transcript = current?.messages ?? [];
@@ -2178,6 +2200,9 @@ function ChatTab({
             </div>
             <button type="button" className="btn" onClick={() => setShowChatList(true)}>
               Chats
+            </button>
+            <button type="button" className="btn secondary" onClick={onOpenDriving} style={{ marginLeft: 8 }}>
+              🚗 Driving
             </button>
           </div>
 

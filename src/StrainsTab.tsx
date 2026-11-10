@@ -4,6 +4,9 @@ import { useEffect, useMemo, useState } from 'react';
 import { EFFECT_NAMES, STRAINS, TERPENE_NAMES } from './data/strains';
 import type { Strain, StrainType } from './data/strains';
 import { Chip, ChipRow, Label, PageHead } from './bits';
+import { tasteRecommendations } from './lib/taste';
+import { strainOfTheDay } from './lib/daily';
+import type { JournalEntry } from './journal';
 
 const FAVS_KEY = 'bude-strain-favs-v1';
 
@@ -63,6 +66,7 @@ function StrainCard({
   compareDisabled,
   onToggleCompare,
   onAskAbout,
+  isDailyPick,
 }: {
   strain: Strain;
   isFav: boolean;
@@ -71,9 +75,15 @@ function StrainCard({
   compareDisabled: boolean;
   onToggleCompare: () => void;
   onAskAbout: (name: string) => void;
+  isDailyPick?: boolean;
 }) {
   return (
     <article className="card" aria-label={strain.name}>
+      {isDailyPick && (
+        <p className="eyebrow" style={{ margin: '0 0 4px' }}>
+          ⭐ Today&apos;s pick
+        </p>
+      )}
       <h2 className="strain-name">{strain.name}</h2>
       <p className="muted small" style={{ marginTop: 4 }}>
         {TYPE_LABELS[strain.type]} · {typeHint(strain.type)}
@@ -152,7 +162,14 @@ function StrainCard({
   );
 }
 
-export default function StrainsTab({ onAskAbout }: { onAskAbout: (strainName: string) => void }) {
+export default function StrainsTab({
+  onAskAbout,
+  journal = [],
+}: {
+  onAskAbout: (strainName: string) => void;
+  /** Past recaps — Bud-E learns your taste from these for "Picked for you". */
+  journal?: JournalEntry[];
+}) {
   const [query, setQuery] = useState('');
   const [typeFilter, setTypeFilter] = useState<'all' | StrainType>('all');
   const [effectFilter, setEffectFilter] = useState('all');
@@ -161,6 +178,11 @@ export default function StrainsTab({ onAskAbout }: { onAskAbout: (strainName: st
   const [favs, setFavs] = useState<string[]>(loadFavs);
   const [favsOnly, setFavsOnly] = useState(false);
   const [compareIds, setCompareIds] = useState<string[]>([]);
+
+  // What Bud-E learned from your recaps — strains that match your taste.
+  const picks = useMemo(() => tasteRecommendations(journal), [journal]);
+  // Today's strain pick, so its card gets the badge.
+  const daily = useMemo(() => strainOfTheDay(), []);
 
   useEffect(() => {
     try {
@@ -220,6 +242,46 @@ export default function StrainsTab({ onAskAbout }: { onAskAbout: (strainName: st
         title="Strains"
         sub="12 classics, plain and simple — what they taste like, how they tend to feel, and what is in them."
       />
+      {picks.length > 0 ? (
+        <section className="card" aria-label="Picked for you">
+          <p className="eyebrow">💚 Picked for you</p>
+          <p style={{ margin: '4px 0 12px' }}>
+            From your own recaps — strains that match what you actually liked.
+          </p>
+          {picks.map((pick) => (
+            <div key={pick.strain.id} className="result-box" style={{ marginBottom: 8 }}>
+              <p style={{ margin: '0 0 4px' }}>
+                <strong>{pick.strain.name}</strong>{' '}
+                <span className="muted small">
+                  ·{' '}
+                  {pick.strain.type === 'indica'
+                    ? 'Indica'
+                    : pick.strain.type === 'sativa'
+                      ? 'Sativa'
+                      : 'Hybrid'}
+                </span>
+              </p>
+              <p className="muted small" style={{ margin: '0 0 8px' }}>
+                {pick.reason}
+              </p>
+              <button
+                className="btn sm secondary"
+                onClick={() => onAskAbout(pick.strain.name)}
+              >
+                💬 Ask Bud-E about it
+              </button>
+            </div>
+          ))}
+        </section>
+      ) : (
+        <section className="card" aria-label="Picked for you">
+          <p className="eyebrow">💚 Picked for you</p>
+          <p style={{ marginBottom: 0 }}>
+            Log a few recaps with a strain and how it felt, and Bud-E will start picking strains
+            that match your taste.
+          </p>
+        </section>
+      )}
       <section className="card" aria-label="Strain guide filters">
         <p className="muted" style={{ marginTop: 0 }}>
           THC numbers are typical ranges; every batch is a little different. Start low, go slow, and
@@ -395,6 +457,7 @@ export default function StrainsTab({ onAskAbout }: { onAskAbout: (strainName: st
             compareDisabled={!compareIds.includes(strain.id) && compareIds.length >= 3}
             onToggleCompare={() => toggleCompare(strain.id)}
             onAskAbout={onAskAbout}
+            isDailyPick={strain.id === daily.strain.id}
           />
         ))
       )}

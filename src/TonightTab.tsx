@@ -11,6 +11,8 @@ import RecapForm from './RecapForm';
 import { isRunningLow, lowNote } from './stash';
 import type { StashItem } from './stash';
 import type { JournalEntry } from './journal';
+import { strainOfTheDay } from './lib/daily';
+import { shareRecap } from './lib/share';
 
 const EXPERIENCE_LABELS: Record<Session['experience'], string> = {
   new: 'New — just starting out',
@@ -75,6 +77,11 @@ export default function TonightTab(props: {
   const [editing, setEditing] = useState(session.amount.trim() === '');
   const [recapOpen, setRecapOpen] = useState(false);
   const [recapSaved, setRecapSaved] = useState(false);
+  // The recap just saved, so it can be shared from here too.
+  const [lastRecap, setLastRecap] = useState<JournalEntry | null>(null);
+  const [shareNote, setShareNote] = useState('');
+  // Today's strain pick — same all day, different tomorrow.
+  const daily = useMemo(() => strainOfTheDay(), []);
 
   // What Bud-E learned from past recaps: the most common dose, and the
   // strains that show up most. Recomputed when the journal changes.
@@ -150,6 +157,27 @@ export default function TonightTab(props: {
         </section>
       )}
 
+      <section className="card" aria-label="Strain of the day">
+        <p className="eyebrow">🌿 Strain of the day · {daily.dayLabel}</p>
+        <p className="strain-name" style={{ margin: '4px 0 0' }}>
+          {daily.strain.name}
+        </p>
+        <p className="muted small" style={{ margin: '4px 0 0' }}>
+          {daily.strain.type === 'indica'
+            ? 'Indica'
+            : daily.strain.type === 'sativa'
+              ? 'Sativa'
+              : 'Hybrid'}{' '}
+          · THC about {daily.strain.thcMin}–{daily.strain.thcMax}%
+        </p>
+        <p style={{ marginBottom: 0 }}>{daily.why}</p>
+        <div className="button-row" style={{ marginTop: 12 }}>
+          <button className="btn sm" onClick={onChat}>
+            💬 Ask Bud-E about it
+          </button>
+        </div>
+      </section>
+
       {editing ? (
         <Logger
           initial={loggerInitial}
@@ -195,6 +223,30 @@ export default function TonightTab(props: {
               ✓ Saved — Bud-E will remember this one.
             </p>
           )}
+          {recapSaved && lastRecap !== null && (
+            <div className="button-row" style={{ marginTop: 8 }}>
+              <button
+                className="btn sm secondary"
+                onClick={async () => {
+                  const result = await shareRecap(lastRecap);
+                  setShareNote(
+                    result === 'shared'
+                      ? 'Shared ✓'
+                      : result === 'copied'
+                        ? 'Copied — paste it anywhere.'
+                        : "Couldn't share that one — try again.",
+                  );
+                }}
+              >
+                📤 Share this recap
+              </button>
+            </div>
+          )}
+          {shareNote !== '' && (
+            <p className="muted small" style={{ marginTop: 8 }}>
+              {shareNote}
+            </p>
+          )}
         </section>
       )}
 
@@ -204,6 +256,8 @@ export default function TonightTab(props: {
           usualStrains={strains}
           onSave={(entry) => {
             onAddJournal(entry);
+            setLastRecap(entry);
+            setShareNote('');
             setRecapOpen(false);
             setRecapSaved(true);
           }}

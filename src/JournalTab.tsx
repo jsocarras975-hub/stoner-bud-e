@@ -9,6 +9,7 @@ import { FEEL_LABELS, newEntryId } from './journal';
 import type { JournalEntry } from './journal';
 import type { StashItem } from './stash';
 import { Chip, ChipRow, Label } from './bits';
+import { shareRecap } from './lib/share';
 
 function todayLocal(): string {
   const d = new Date();
@@ -55,6 +56,9 @@ export default function JournalTab(props: JournalTabProps) {
   const [expandedId, setExpandedId] = useState<string | null>(null);
   const [confirmDeleteId, setConfirmDeleteId] = useState<string | null>(null);
   const [error, setError] = useState('');
+  // Which entry was just shared, and what happened — shown under that entry.
+  const [sharedId, setSharedId] = useState<string | null>(null);
+  const [shareNote, setShareNote] = useState('');
   // Open on the form when there is nothing logged yet — nothing to look back at.
   const [view, setView] = useState<JournalView>(entries.length === 0 ? 'form' : 'main');
 
@@ -342,14 +346,39 @@ export default function JournalTab(props: JournalTabProps) {
                     </button>
                   </div>
                 ) : (
-                  <button
-                    type="button"
-                    className="btn ghost sm"
-                    onClick={() => setConfirmDeleteId(e.id)}
-                    aria-label={`Delete entry from ${showDate(e.date)}`}
-                  >
-                    🗑 Delete
-                  </button>
+                  <div className="button-row">
+                    <button
+                      type="button"
+                      className="btn ghost sm"
+                      onClick={async () => {
+                        const result = await shareRecap(e);
+                        setSharedId(e.id);
+                        setShareNote(
+                          result === 'shared'
+                            ? 'Shared ✓'
+                            : result === 'copied'
+                              ? 'Copied — paste it anywhere.'
+                              : "Couldn't share that one — try again.",
+                        );
+                      }}
+                      aria-label={`Share entry from ${showDate(e.date)}`}
+                    >
+                      📤 Share
+                    </button>
+                    <button
+                      type="button"
+                      className="btn ghost sm"
+                      onClick={() => setConfirmDeleteId(e.id)}
+                      aria-label={`Delete entry from ${showDate(e.date)}`}
+                    >
+                      🗑 Delete
+                    </button>
+                  </div>
+                )}
+                {sharedId === e.id && shareNote !== '' && (
+                  <p className="muted small" style={{ marginTop: 6 }}>
+                    {shareNote}
+                  </p>
                 )}
               </div>
             </article>

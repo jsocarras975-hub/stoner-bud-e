@@ -1,6 +1,7 @@
 import { useEffect, useState } from 'react';
 import type { ReactElement } from 'react';
 import { Chip, ChipRow, Label, PageHead } from './bits';
+import { coachLine, dailyTip } from './lib/break-coach';
 
 // Tolerance Break Tracker — everything stays on this device in localStorage.
 // Plain words, 21+, harm reduction. No medical advice, no diagnosis.
@@ -114,6 +115,8 @@ export default function BreakTab(): ReactElement {
   const [cravings, setCravings] = useState<number>(3);
   const [note, setNote] = useState<string>('');
   const [savedMessage, setSavedMessage] = useState<string>('');
+  // Bud-E's coach line for today's check-in — set when it is saved.
+  const [coachNote, setCoachNote] = useState<string>('');
 
   // Keep the stored break in sync whenever it changes.
   useEffect(() => {
@@ -139,10 +142,12 @@ export default function BreakTab(): ReactElement {
       setMood(todaysCheckin.mood);
       setCravings(todaysCheckin.cravings);
       setNote(todaysCheckin.note);
+      setCoachNote(coachLine(dayNumber, todaysCheckin.mood, todaysCheckin.cravings));
     } else {
       setMood('Okay');
       setCravings(3);
       setNote('');
+      setCoachNote('');
     }
     setSavedMessage('');
     // Only re-run when the break or the day changes.
@@ -188,6 +193,7 @@ export default function BreakTab(): ReactElement {
     setSavedMessage(
       todaysCheckin ? 'Updated your check-in for today.' : 'Check-in saved. Nice work.',
     );
+    setCoachNote(coachLine(dayNumber, mood, cravings));
   }
 
   function endBreakEarly(): void {
@@ -295,6 +301,9 @@ export default function BreakTab(): ReactElement {
             Cravings come in waves and pass. Drink some water, go for a walk, or text a friend —
             you&apos;ve already made it this far.
           </p>
+          <p className="muted small" style={{ marginTop: 8 }}>
+            💚 Coach tip for today: {dailyTip(dayNumber)}
+          </p>
         </div>
 
         <div className="card">
@@ -336,6 +345,13 @@ export default function BreakTab(): ReactElement {
             </button>
           </div>
           {savedMessage !== '' && <p className="muted small">{savedMessage}</p>}
+          {coachNote !== '' && (
+            <div className="result-box" style={{ marginTop: 12 }}>
+              <p style={{ margin: 0 }}>
+                <strong>💚 Bud-E:</strong> {coachNote}
+              </p>
+            </div>
+          )}
         </div>
 
         {pastCheckins.length > 0 && (
