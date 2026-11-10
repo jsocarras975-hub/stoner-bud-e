@@ -16,9 +16,12 @@ import {
   Music,
   Package,
   Pause,
+  Play,
   Scale,
   Send,
   Settings,
+  SkipBack,
+  SkipForward,
   Timer,
   UserRound,
   Volume2,
@@ -64,6 +67,8 @@ import { executeDeviceAction, extractDeviceAction, getBubbleStatus, getLaunchInf
 import type { AppAction } from './lib/device-actions';
 import type { ActiveRecording } from './lib/voice-client';
 import { TIMER_ALERTS, buzz, planAlerts, type PlannedAlert, type TimerAlert, type TimerAlertId } from './lib/timer-alerts';
+import { streamUrl } from './lib/audius';
+import type { AudiusTrack } from './lib/audius';
 import {
   cancelNativeAlerts,
   checkAlertPermission,
@@ -435,6 +440,79 @@ export default function App() {
   // Which tool is open in the Tools tab (null = the grid). Lifted to App so
   // the header timer pill can open the timer tool directly (Grok behavior).
   const [activeTool, setActiveTool] = useState<ToolId | null>(null);
+
+  // In-app music (Audius) — the <audio> element and the queue live here so
+  // the music keeps playing while the user moves around the app. The Music
+  // tab is just the browser + now-playing controls.
+  const audioRef = useRef<HTMLAudioElement | null>(null);
+  const [currentTrack, setCurrentTrack] = useState<AudiusTrack | null>(null);
+  const [musicQueue, setMusicQueue] = useState<AudiusTrack[]>([]);
+  const [isPlaying, setIsPlaying] = useState(false);
+  const [audioError, setAudioError] = useState<string | null>(null);
+
+  // When the track changes, load it and play. (The play() call can be
+  // refused if the browser still wants a tap — then the paused state shows
+  // and the user just hits play.)
+  useEffect(() => {
+    const audio = audioRef.current;
+    if (!audio || !currentTrack) return;
+    audio.src = streamUrl(currentTrack.id);
+    audio.play().catch(() => setIsPlaying(false));
+  }, [currentTrack]);
+
+  function playTrack(track: AudiusTrack, list: AudiusTrack[]): void {
+    setMusicQueue(list);
+    setCurrentTrack(track);
+    setAudioError(null);
+  }
+
+  function togglePlay(): void {
+    const audio = audioRef.current;
+    if (!audio || !currentTrack) return;
+    if (audio.paused) {
+      void audio.play().catch(() => setIsPlaying(false));
+    } else {
+      audio.pause();
+    }
+  }
+
+  function playNext(): void {
+    if (!currentTrack) return;
+    const i = musicQueue.findIndex((t) => t.id === currentTrack.id);
+    if (i >= 0 && i < musicQueue.length - 1) setCurrentTrack(musicQueue[i + 1]);
+    // At the end of the queue: stay on the last track.
+  }
+
+  function playPrev(): void {
+    const audio = audioRef.current;
+    if (!audio || !currentTrack) return;
+    if (audio.currentTime > 3) {
+      audio.currentTime = 0;
+      return;
+    }
+    const i = musicQueue.findIndex((t) => t.id === currentTrack.id);
+    if (i > 0) setCurrentTrack(musicQueue[i - 1]);
+  }
+
+  function handleAudioEnded(): void {
+    if (!currentTrack) return;
+    const i = musicQueue.findIndex((t) => t.id === currentTrack.id);
+    if (i >= 0 && i < musicQueue.length - 1) {
+      setCurrentTrack(musicQueue[i + 1]);
+    } else {
+      // End of the queue — playback stopped.
+      setIsPlaying(false);
+    }
+  }
+
+  function stopPlayer(): void {
+    const audio = audioRef.current;
+    if (audio) audio.pause();
+    setCurrentTrack(null);
+    setMusicQueue([]);
+    setIsPlaying(false);
+  }
+
   const [moreOpen, setMoreOpen] = useState(false);
   const [isOnline, setIsOnline] = useState(
     typeof navigator === 'undefined' ? true : navigator.onLine,
@@ -1087,7 +1165,17 @@ export default function App() {
       )}
       {tab === 'plan' && planView}
       {tab === 'strains' && <StrainsTab onAskAbout={askAboutStrain} />}
-      {tab === 'music' && <MusicTab />}
+      {tab === 'music' && (
+        <MusicTab
+          currentTrack={currentTrack}
+          isPlaying={isPlaying}
+          audioError={audioError}
+          onPlayTrack={playTrack}
+          onTogglePlay={togglePlay}
+          onNext={playNext}
+          onPrev={playPrev}
+        />
+      )}
       {tab === 'journal' && journalView}
       {tab === 'stash' && (
         <StashTab
@@ -1139,6 +1227,56 @@ export default function App() {
           />
         )}
         <div className="nav-wrap">
+          {/* Mini player — shows while a track is loaded, above the nav, so
+              the music keeps playing while the user moves around the app. */}
+          {currentTrack && (
+            <div className="mini-player" role="region" aria-label="Now playing">
+              <button
+                type="button"
+                className="mini-player-info"
+                onClick={() => setTab('music')}
+                aria-label={`Open music — ${currentTrack.title} by ${currentTrack.artist}`}
+              >
+                {currentTrack.artwork ? (
+                  <img src={currentTrack.artwork} alt="" />
+                ) : (
+                  <span className="mini-player-art-fallback" aria-hidden>
+                    ♫
+                  </span>
+                )}
+                <span className="mini-player-text">
+                  <strong>{currentTrack.title}</strong>
+                  <span className="muted">{currentTrack.artist}</span>
+                </span>
+              </button>
+              <button type="button" className="mini-player-btn" onClick={playPrev} aria-label="Previous track">
+                <SkipBack size={20} aria-hidden />
+              </button>
+              <button
+                type="button"
+                className="mini-player-btn"
+                onClick={togglePlay}
+                aria-label={isPlaying ? 'Pause' : 'Play'}
+              >
+                {isPlaying ? <Pause size={20} aria-hidden /> : <Play size={20} aria-hidden />}
+              </button>
+              <button type="button" className="mini-player-btn" onClick={playNext} aria-label="Next track">
+                <SkipForward size={20} aria-hidden />
+              </button>
+              <button type="button" className="mini-player-btn" onClick={stopPlayer} aria-label="Stop music">
+                <X size={20} aria-hidden />
+              </button>
+            </div>
+          )}
+          {/* The player itself — hidden; the mini player + Music tab are the controls. */}
+          <audio
+            ref={audioRef}
+            onPlay={() => setIsPlaying(true)}
+            onPause={() => setIsPlaying(false)}
+            onEnded={() => handleAudioEnded()}
+            onError={() => setAudioError("That track wouldn't play — try another one.")}
+            preload="metadata"
+          />
           {moreOpen && (
             <div className="more-sheet" role="menu" aria-label="More destinations">
               {MORE_ITEMS.map((item) => {

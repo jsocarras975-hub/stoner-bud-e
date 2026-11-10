@@ -518,7 +518,7 @@ p {
 
 .bottom-nav {
   display: grid;
-  grid-template-columns: repeat(8, 1fr);
+  grid-template-columns: repeat(6, 1fr);
   padding: 6px 4px 14px;
   border-top: 1px solid var(--line);
   background: var(--surface);
@@ -561,6 +561,141 @@ p {
   padding: 0;
   border: none;
   background: rgba(0, 0, 0, 0.45);
+}
+
+/* Mini player (Audius) — sits above the bottom nav while a track is loaded. */
+
+.mini-player {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 8px 10px;
+  border-top: 1px solid var(--line);
+  background: var(--surface);
+}
+
+.mini-player-info {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  flex: 1;
+  min-width: 0;
+  padding: 0;
+  border: none;
+  background: transparent;
+  color: inherit;
+  text-align: left;
+}
+
+.mini-player-info img,
+.mini-player-art-fallback {
+  width: 44px;
+  height: 44px;
+  border-radius: 10px;
+  object-fit: cover;
+  flex-shrink: 0;
+}
+
+.mini-player-art-fallback {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background: var(--card);
+  color: var(--accent);
+  font-size: 1.3rem;
+}
+
+.mini-player-text {
+  display: flex;
+  flex-direction: column;
+  min-width: 0;
+}
+
+.mini-player-text strong,
+.mini-player-text span {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.mini-player-btn {
+  flex-shrink: 0;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 40px;
+  height: 40px;
+  border-radius: 50%;
+  border: 1px solid var(--line);
+  background: var(--card);
+  color: var(--text);
+}
+
+/* Audius track rows (Music tab) */
+
+.track-row {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  width: 100%;
+  padding: 10px;
+  border: 1px solid var(--line);
+  border-radius: 14px;
+  background: var(--card);
+  color: inherit;
+  text-align: left;
+}
+
+.track-row.playing {
+  border-color: var(--accent);
+}
+
+.track-row img,
+.track-row-art-fallback {
+  width: 52px;
+  height: 52px;
+  border-radius: 10px;
+  object-fit: cover;
+  flex-shrink: 0;
+}
+
+.track-row-art-fallback {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background: var(--surface);
+  color: var(--accent);
+  font-size: 1.4rem;
+}
+
+.track-row-text {
+  flex: 1;
+  min-width: 0;
+}
+
+.track-row-text strong,
+.track-row-text span {
+  display: block;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+/* Music search input */
+
+.music-search {
+  flex: 1;
+  min-width: 0;
+  padding: 12px 14px;
+  border: 1px solid var(--line);
+  border-radius: 14px;
+  background: var(--card);
+  color: var(--text);
+  font: inherit;
+}
+
+.music-search::placeholder {
+  color: var(--muted);
 }
 
 .more-sheet {
