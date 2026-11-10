@@ -1699,6 +1699,61 @@ button {
   line-height: 1;
 }
 
+/* Birthdate entry on the age gate — three big fields (MM / DD / YYYY) that
+   auto-advance as you type, with a numeric keyboard on mobile. */
+.dob-row {
+  display: flex;
+  align-items: flex-end;
+  justify-content: center;
+  gap: 8px;
+  margin-top: 16px;
+}
+
+.dob-field {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 6px;
+}
+
+.dob-field label {
+  font-size: 0.8rem;
+  letter-spacing: 0.12em;
+  text-transform: uppercase;
+  color: var(--text-muted);
+}
+
+.dob-input {
+  width: 68px;
+  min-height: 64px;
+  padding: 10px 8px;
+  border-radius: 16px;
+  border: 1px solid var(--line);
+  background: var(--bg-soft);
+  color: var(--text);
+  font-size: 1.5rem;
+  font-weight: 700;
+  text-align: center;
+  font-family: inherit;
+}
+
+.dob-field.dob-year .dob-input {
+  width: 104px;
+}
+
+.dob-input:focus {
+  outline: 3px solid var(--accent);
+  outline-offset: 1px;
+  border-color: var(--accent);
+}
+
+.dob-sep {
+  font-size: 1.5rem;
+  font-weight: 700;
+  color: var(--text-muted);
+  padding-bottom: 16px;
+}
+
 /* Theme picker (Settings tab) */
 
 .theme-grid {

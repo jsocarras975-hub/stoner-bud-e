@@ -1211,7 +1211,12 @@ export default function App() {
 
   if (!ageConfirmed) {
     return (
-      <AgeGate declined={ageDeclined} onConfirm={confirmAge} onDecline={() => setAgeDeclined(true)} />
+      <AgeGate
+        declined={ageDeclined}
+        onConfirm={confirmAge}
+        onDecline={() => setAgeDeclined(true)}
+        onRetry={() => setAgeDeclined(false)}
+      />
     );
   }
 
@@ -1607,18 +1612,77 @@ export default function App() {
 }
 
 // ---------------------------------------------------------------------------
-// 21+ age gate — first open only. Plain words, no lecture.
+// 21+ age gate — first open only. Birthdate entry, plain words, no lecture.
+// The birthdate is checked once, on this phone, and never saved or sent
+// anywhere — only the "yes, they are 21+" flag is stored (AGE_GATE_KEY).
 // ---------------------------------------------------------------------------
+
+/** Age in whole years from a birthdate, or null when the date is not real. */
+function ageFromBirthdate(month: string, day: string, year: string): number | null {
+  const m = Number(month);
+  const d = Number(day);
+  const y = Number(year);
+  if (!Number.isInteger(m) || !Number.isInteger(d) || !Number.isInteger(y)) return null;
+  if (m < 1 || m > 12 || d < 1 || d > 31) return null;
+  const now = new Date();
+  if (y < 1900 || y > now.getFullYear()) return null;
+  const date = new Date(y, m - 1, d);
+  // A rolled-over date (Feb 30 -> Mar 2) will not match its parts.
+  if (date.getFullYear() !== y || date.getMonth() !== m - 1 || date.getDate() !== d) return null;
+  if (date > now) return null;
+  let age = now.getFullYear() - y;
+  if (now < new Date(now.getFullYear(), m - 1, d)) age -= 1;
+  return age;
+}
 
 function AgeGate({
   declined,
   onConfirm,
   onDecline,
+  onRetry,
 }: {
   declined: boolean;
   onConfirm: () => void;
   onDecline: () => void;
+  /** Back to the birthdate form (a typo, not a bypass — the date is checked again). */
+  onRetry: () => void;
 }) {
+  const [month, setMonth] = useState('');
+  const [day, setDay] = useState('');
+  const [year, setYear] = useState('');
+  const [error, setError] = useState('');
+  const dayRef = useRef<HTMLInputElement | null>(null);
+  const yearRef = useRef<HTMLInputElement | null>(null);
+  const monthRef = useRef<HTMLInputElement | null>(null);
+
+  /** Only digits, capped at the field's length; auto-advance when full. */
+  function digitsOnly(value: string, maxLen: number): string {
+    return value.replace(/\D/g, '').slice(0, maxLen);
+  }
+
+  function checkBirthdate(): void {
+    if (month === '' || day === '' || year === '') {
+      setError('Add your full birthdate — month, day, and year.');
+      return;
+    }
+    if (year.length !== 4) {
+      setError('The year needs 4 digits — like 1995.');
+      return;
+    }
+    const age = ageFromBirthdate(month, day, year);
+    if (age === null) {
+      setError("That date doesn't look right — check the month, day, and year.");
+      return;
+    }
+    if (age < 21) {
+      setError('');
+      onDecline();
+      return;
+    }
+    setError('');
+    onConfirm();
+  }
+
   return (
     <div className="age-gate">
       <div className="garden-glow" aria-hidden />
@@ -1634,30 +1698,119 @@ function AgeGate({
       </div>
       <div>
         {declined ? (
-          <>
-            <h2>This one is for adults.</h2>
+          <section className="card" aria-label="Adults only">
+            <p className="eyebrow">21+ only</p>
+            <h2 style={{ marginTop: 8 }}>This one is for adults.</h2>
             <p className="muted">
-              Bud-E is only for people 21 and over. If that was a mis-tap, you can continue.
+              Bud-E is only for people 21 and over. If that was a typo in the birthdate, you can
+              check it again.
             </p>
-            <button className="btn btn-block" onClick={onConfirm}>
-              I am 21 or older
+            <button className="btn btn-block" onClick={onRetry}>
+              Check my birthdate again
             </button>
-          </>
+          </section>
         ) : (
-          <>
-            <p className="muted">
+          <section className="card" aria-label="Enter your birthdate">
+            <p className="eyebrow">First — how old are you?</p>
+            <h2 style={{ marginTop: 8 }}>Enter your birthdate</h2>
+            <p className="muted small" style={{ marginTop: 4 }}>
+              Bud-E is 21+. We check it once, right here on your phone.
+            </p>
+            <div className="dob-row" role="group" aria-label="Birthdate">
+              <div className="dob-field">
+                <label htmlFor="dob-month">Month</label>
+                <input
+                  id="dob-month"
+                  ref={monthRef}
+                  className="dob-input"
+                  inputMode="numeric"
+                  autoComplete="bday-month"
+                  placeholder="MM"
+                  aria-label="Birth month"
+                  value={month}
+                  onChange={(e) => {
+                    const next = digitsOnly(e.target.value, 2);
+                    setMonth(next);
+                    setError('');
+                    if (next.length === 2) dayRef.current?.focus();
+                  }}
+                  onKeyDown={(e) => {
+                    if (e.key === 'Backspace' && month === '') yearRef.current?.focus();
+                  }}
+                />
+              </div>
+              <span className="dob-sep" aria-hidden>
+                /
+              </span>
+              <div className="dob-field">
+                <label htmlFor="dob-day">Day</label>
+                <input
+                  id="dob-day"
+                  ref={dayRef}
+                  className="dob-input"
+                  inputMode="numeric"
+                  autoComplete="bday-day"
+                  placeholder="DD"
+                  aria-label="Birth day"
+                  value={day}
+                  onChange={(e) => {
+                    const next = digitsOnly(e.target.value, 2);
+                    setDay(next);
+                    setError('');
+                    if (next.length === 2) yearRef.current?.focus();
+                  }}
+                  onKeyDown={(e) => {
+                    if (e.key === 'Backspace' && day === '') monthRef.current?.focus();
+                  }}
+                />
+              </div>
+              <span className="dob-sep" aria-hidden>
+                /
+              </span>
+              <div className="dob-field dob-year">
+                <label htmlFor="dob-year">Year</label>
+                <input
+                  id="dob-year"
+                  ref={yearRef}
+                  className="dob-input"
+                  inputMode="numeric"
+                  autoComplete="bday-year"
+                  placeholder="YYYY"
+                  aria-label="Birth year"
+                  value={year}
+                  onChange={(e) => {
+                    const next = digitsOnly(e.target.value, 4);
+                    setYear(next);
+                    setError('');
+                  }}
+                  onKeyDown={(e) => {
+                    if (e.key === 'Backspace' && year === '') dayRef.current?.focus();
+                    if (e.key === 'Enter') checkBirthdate();
+                  }}
+                />
+              </div>
+            </div>
+            {error !== '' && (
+              <p role="alert" style={{ marginTop: 12, marginBottom: 0 }}>
+                {error}
+              </p>
+            )}
+            <button
+              className="btn btn-block"
+              style={{ marginTop: 16 }}
+              onClick={checkBirthdate}
+            >
+              Enter Bud-E →
+            </button>
+            <p className="muted small" style={{ marginTop: 12, marginBottom: 0 }}>
+              Your birthdate is never saved or sent anywhere — only that you are 21+ is
+              remembered, so you do not have to enter it again.
+            </p>
+            <p className="muted small" style={{ marginTop: 8, marginBottom: 0 }}>
               Cannabis information for adults. Bud-E is not a doctor, not a shop, and not legal
               advice. Start low, go slow. Never drive high.
             </p>
-            <div style={{ display: 'flex', flexDirection: 'column', gap: 12, marginTop: 20 }}>
-              <button className="btn btn-block" onClick={onConfirm}>
-                I&apos;m 21 or older
-              </button>
-              <button className="btn secondary btn-block" onClick={onDecline}>
-                I&apos;m under 21
-              </button>
-            </div>
-          </>
+          </section>
         )}
       </div>
     </div>
