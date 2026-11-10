@@ -48,24 +48,29 @@ public class BudEWidgetProvider extends AppWidgetProvider {
             RemoteViews views = new RemoteViews(context.getPackageName(), R.layout.bud_e_widget);
             views.setTextViewText(R.id.widget_stash, line);
             views.setTextColor(R.id.widget_stash, color);
-            // Talk: the app starts the bubble service and opens the chat
-            // panel (the voice session is only for the notification now).
-            views.setOnClickPendingIntent(R.id.widget_talk, tabIntent(context, 0, true, null));
-            views.setOnClickPendingIntent(R.id.widget_open, tabIntent(context, 1, false, null));
-            views.setOnClickPendingIntent(R.id.widget_log, tabIntent(context, 2, false, "journal"));
-            views.setOnClickPendingIntent(R.id.widget_stash_btn, tabIntent(context, 3, false, "stash"));
-            views.setOnClickPendingIntent(R.id.widget_tonight, tabIntent(context, 4, false, "tonight"));
+            // Talk: start the bubble service and open the chat panel
+            // directly — the app itself never opens, so the panel floats
+            // over whatever he was doing. (The voice session is only for
+            // the notification now.)
+            PendingIntent talk = PendingIntent.getService(
+                    context, 0,
+                    new Intent(context, BudEBubbleService.class)
+                            .setAction(BudEBubbleService.ACTION_EXPAND_CHAT),
+                    PendingIntent.FLAG_UPDATE_CURRENT | PendingIntent.FLAG_IMMUTABLE);
+            views.setOnClickPendingIntent(R.id.widget_talk, talk);
+            views.setOnClickPendingIntent(R.id.widget_open, tabIntent(context, 1, null));
+            views.setOnClickPendingIntent(R.id.widget_log, tabIntent(context, 2, "journal"));
+            views.setOnClickPendingIntent(R.id.widget_stash_btn, tabIntent(context, 3, "stash"));
+            views.setOnClickPendingIntent(R.id.widget_tonight, tabIntent(context, 4, "tonight"));
             manager.updateAppWidget(id, views);
         }
     }
 
     /** One PendingIntent per button (distinct request codes, or they collide). */
-    private PendingIntent tabIntent(Context context, int code, boolean talk, String tab) {
+    private PendingIntent tabIntent(Context context, int code, String tab) {
         Intent intent = new Intent(context, MainActivity.class)
                 .addFlags(Intent.FLAG_ACTIVITY_NEW_TASK | Intent.FLAG_ACTIVITY_CLEAR_TOP);
-        if (talk) {
-            intent.putExtra("bude_bubble_chat", true);
-        } else if (tab != null) {
+        if (tab != null) {
             intent.putExtra("bude_tab", tab);
         }
         return PendingIntent.getActivity(

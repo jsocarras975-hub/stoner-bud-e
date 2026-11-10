@@ -12,6 +12,7 @@ import android.os.Build;
 import android.os.Handler;
 import android.os.IBinder;
 import android.os.Looper;
+import android.provider.Settings;
 import android.text.InputType;
 import android.util.DisplayMetrics;
 import android.view.Gravity;
@@ -121,6 +122,22 @@ public class BudEBubbleService extends Service {
     @Override
     public void onCreate() {
         super.onCreate();
+        if (!Settings.canDrawOverlays(this)) {
+            // Without "draw over other apps" the bubble cannot appear at
+            // all — fall back to the app's chat tab instead of showing
+            // nothing, and say why.
+            Toast.makeText(this, "Allow Bud-E to draw over other apps to use the bubble chat — it's in Settings, under Phone.", Toast.LENGTH_LONG).show();
+            try {
+                Intent open = new Intent(this, MainActivity.class)
+                        .putExtra(BudELaunchInfo.EXTRA_TAB, "chat")
+                        .addFlags(Intent.FLAG_ACTIVITY_NEW_TASK | Intent.FLAG_ACTIVITY_CLEAR_TOP);
+                startActivity(open);
+            } catch (Exception ignored) {
+                // The app could not be opened from here.
+            }
+            stopSelf();
+            return;
+        }
         windowManager = (WindowManager) getSystemService(WINDOW_SERVICE);
         bubble = new ImageView(this);
         bubble.setImageResource(R.drawable.ic_bud_leaf);
@@ -145,9 +162,15 @@ public class BudEBubbleService extends Service {
     @Override
     public int onStartCommand(Intent intent, int flags, int startId) {
         if (intent != null && ACTION_EXPAND_CHAT.equals(intent.getAction())) {
+            // Opening the chat this way turns the bubble on — the leaf
+            // stays floating after, and Settings shows it as on.
+            setEnabled(this, true);
             // The circle is up by now (onCreate runs first) — swap it for
-            // the chat panel. A no-op when the panel is already open.
-            expandChat();
+            // the chat panel. A no-op when the panel is already open, and
+            // skipped entirely when onCreate bailed out (no permission).
+            if (bubble != null) {
+                expandChat();
+            }
         }
         // If the system kills the service, bring the bubble back.
         return START_STICKY;

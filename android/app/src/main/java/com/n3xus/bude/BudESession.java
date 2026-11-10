@@ -527,25 +527,41 @@ public class BudESession extends VoiceInteractionSession {
 
     // ------------------------------------------------------------------ App
 
-    /** Power-button long-press: hand off to the bubble chat through the
-     *  app (it checks the overlay permission and starts the bubble
-     *  service from the foreground), then this session goes away. */
+    /** Power-button long-press: open the bubble chat directly — the app
+     *  itself never opens, so the panel floats over whatever he was
+     *  doing. Goes straight to the bubble service (the overlay permission
+     *  is checked first); when it is not allowed, the app's chat tab is
+     *  the fallback instead of nothing. */
     private void openBubbleChat() {
-        Intent intent = new Intent(getContext(), MainActivity.class);
-        intent.putExtra("bude_bubble_chat", true);
-        intent.addFlags(Intent.FLAG_ACTIVITY_NEW_TASK | Intent.FLAG_ACTIVITY_CLEAR_TOP);
-        try {
-            startAssistantActivity(intent);
-        } catch (Exception e) {
+        if (!android.provider.Settings.canDrawOverlays(getContext())) {
+            Intent intent = new Intent(getContext(), MainActivity.class);
+            intent.putExtra(BudELaunchInfo.EXTRA_TAB, "chat");
+            intent.addFlags(Intent.FLAG_ACTIVITY_NEW_TASK | Intent.FLAG_ACTIVITY_CLEAR_TOP);
             try {
-                getContext().startActivity(intent);
-            } catch (Exception ignored) {
-                // The app could not be opened from here — fall back to
-                // listening as before, instead of showing nothing.
-                bubbleRedirected = false;
-                startListening();
-                return;
+                startAssistantActivity(intent);
+            } catch (Exception e) {
+                try {
+                    getContext().startActivity(intent);
+                } catch (Exception ignored) {
+                    // The app could not be opened from here — fall back to
+                    // listening as before, instead of showing nothing.
+                    bubbleRedirected = false;
+                    startListening();
+                    return;
+                }
             }
+            hide();
+            return;
+        }
+        try {
+            BudEBubbleService.setEnabled(getContext(), true);
+            BudEBubbleService.startWithAction(getContext(), BudEBubbleService.ACTION_EXPAND_CHAT);
+        } catch (Exception e) {
+            // The bubble could not be started — fall back to listening as
+            // before, instead of showing nothing.
+            bubbleRedirected = false;
+            startListening();
+            return;
         }
         hide();
     }
