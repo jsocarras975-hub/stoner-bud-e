@@ -1,0 +1,18 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- Cannabis leaf mark for the floating chat bubble: a nine-point fan
+     (four leaflet pairs plus the tall centre leaflet) with a short stem.
+     Drawn dark so it reads on the bubble's lime circle. -->
+<vector xmlns:android="http://schemas.android.com/apk/res/android"
+    android:width="24dp"
+    android:height="24dp"
+    android:viewportWidth="100"
+    android:viewportHeight="100">
+    <path
+        android:fillColor="#07110c"
+        android:pathData="M50,90 L6,72 L30,62 L4,48 L28,46 L12,26 L34,30 L28,12 L44,22 L50,4 L56,22 L72,12 L66,30 L88,26 L72,46 L96,48 L70,62 L94,72 L50,90 Z" />
+    <path
+        android:strokeColor="#07110c"
+        android:strokeWidth="5"
+        android:strokeLineCap="round"
+        android:pathData="M50,90 L50,99" />
+</vector>

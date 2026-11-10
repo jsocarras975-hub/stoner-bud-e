@@ -41,6 +41,40 @@ public final class BudEChatClient {
     }
 
     public static String ask(String text) {
+        JSONArray messages = new JSONArray();
+        try {
+            JSONObject message = new JSONObject();
+            message.put("role", "user");
+            message.put("text", text);
+            messages.put(message);
+        } catch (Exception e) {
+            return null;
+        }
+        return post(messages);
+    }
+
+    /** Same call, with the conversation so far — the bubble chat keeps
+     *  context instead of answering every message cold like the voice
+     *  session does. Each entry is {role, text}; roles are "user" or
+     *  "assistant". */
+    public static String askHistory(java.util.List<String[]> history) {
+        JSONArray messages = new JSONArray();
+        try {
+            for (String[] entry : history) {
+                if (entry == null || entry.length < 2) continue;
+                JSONObject message = new JSONObject();
+                message.put("role", entry[0]);
+                message.put("text", entry[1]);
+                messages.put(message);
+            }
+        } catch (Exception e) {
+            return null;
+        }
+        if (messages.length() == 0) return null;
+        return post(messages);
+    }
+
+    private static String post(JSONArray messages) {
         HttpURLConnection conn = null;
         try {
             conn = (HttpURLConnection) new URL(CHAT_URL).openConnection();
@@ -51,11 +85,8 @@ public final class BudEChatClient {
             conn.setReadTimeout(TIMEOUT_MS);
             conn.setDoOutput(true);
 
-            JSONObject message = new JSONObject();
-            message.put("role", "user");
-            message.put("text", text);
             JSONObject body = new JSONObject();
-            body.put("messages", new JSONArray().put(message));
+            body.put("messages", messages);
             body.put("persona", "chill");
             // The server uses this to resolve "tomorrow at noon" and other
             // relative times into real dates for device actions.
