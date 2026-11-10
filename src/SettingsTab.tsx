@@ -17,6 +17,8 @@ import type { AuthUser } from './lib/auth-client';
 import { PERSONAS, personaById, isPremiumPersona, isOwnerPersona } from './voice';
 import type { VoiceSettings } from './voice';
 import { speakVoice, stopVoice } from './lib/voice-client';
+import { getKeyboardStatus, openKeyboardSettings, showKeyboardPicker } from './lib/keyboard';
+import type { KeyboardStatus } from './lib/keyboard';
 import { Chip, ChipRow, Label, PageHead } from './bits';
 import type { Personalization, PremiumTier } from './lib/sync';
 import type { JournalEntry } from './journal';
@@ -39,6 +41,7 @@ type SettingsView =
   | 'main'
   | 'appearance'
   | 'phone'
+  | 'keyboard'
   | 'personalization'
   | 'display'
   | 'voice'
@@ -57,6 +60,7 @@ const SECTION_TITLES: Record<
 > = {
   appearance: 'Appearance',
   phone: 'Phone',
+  keyboard: 'Keyboard',
   personalization: 'Personalization',
   display: 'Display',
   voice: 'Voice',
@@ -102,6 +106,20 @@ export default function SettingsTab(props: {
   // Floating chat bubble (phone app only).
   const [bubble, setBubble] = useState<boolean | null>(null);
   const [bubbleNote, setBubbleNote] = useState<string | null>(null);
+  // Bud-E Keyboard (phone app only): whether it is enabled and whether it
+  // is the keyboard currently in use. Refreshed when the section opens.
+  const [keyboardStatus, setKeyboardStatus] = useState<KeyboardStatus | null>(null);
+
+  useEffect(() => {
+    if (view !== 'keyboard') return;
+    let cancelled = false;
+    void getKeyboardStatus().then((status) => {
+      if (!cancelled) setKeyboardStatus(status);
+    });
+    return () => {
+      cancelled = true;
+    };
+  }, [view]);
   // App lock (PIN + fingerprint/face). lockFlow drives the PIN pad steps:
   // set → confirm, change → verify → new → confirm, remove → verify.
   const [lockFlow, setLockFlow] = useState<
@@ -399,6 +417,15 @@ export default function SettingsTab(props: {
                   <span aria-hidden>›</span>
                 </button>
               )}
+              {isNative() && (
+                <button type="button" className="legal-row" onClick={() => setView('keyboard')}>
+                  <span>
+                    <strong>Keyboard</strong>
+                    <span className="muted">Bud-E keyboard, stickers included</span>
+                  </span>
+                  <span aria-hidden>›</span>
+                </button>
+              )}
               <button type="button" className="legal-row" onClick={() => setView('personalization')}>
                 <span>
                   <strong>Personalization</strong>
@@ -607,6 +634,62 @@ export default function SettingsTab(props: {
                   there, restart the phone once and look again.
                 </p>
               </div>
+            </section>
+          )}
+
+          {view === 'keyboard' && isNative() && (
+            <section className="card" aria-label="Keyboard">
+              <p className="muted">
+                Type with Bud-E anywhere on your phone — letters, symbols, and your 20
+                stickers. The leaf key jumps into the app.
+              </p>
+              <p className="muted" style={{ marginTop: 6 }}>
+                {keyboardStatus === null
+                  ? 'Checking…'
+                  : keyboardStatus.active
+                    ? 'Bud-E Keyboard is on and it is your current keyboard. 🌿'
+                    : keyboardStatus.enabled
+                      ? 'Bud-E Keyboard is enabled — switch to it below.'
+                      : 'Bud-E Keyboard is not enabled yet.'}
+              </p>
+              <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap', marginTop: 12 }}>
+                <button
+                  type="button"
+                  className="btn"
+                  onClick={() => {
+                    void openKeyboardSettings().then(() => {
+                      // Refresh when the user comes back — the status may
+                      // have changed while they were in Settings.
+                      window.setTimeout(() => {
+                        void getKeyboardStatus().then(setKeyboardStatus);
+                      }, 1500);
+                    });
+                  }}
+                >
+                  Enable Bud-E Keyboard
+                </button>
+                <button
+                  type="button"
+                  className="btn"
+                  disabled={keyboardStatus?.enabled !== true}
+                  onClick={() => {
+                    void showKeyboardPicker().then(() => {
+                      window.setTimeout(() => {
+                        void getKeyboardStatus().then(setKeyboardStatus);
+                      }, 1500);
+                    });
+                  }}
+                >
+                  Switch to Bud-E Keyboard
+                </button>
+              </div>
+              <p className="muted" style={{ marginTop: 12 }}>
+                Android makes you turn it on yourself: tap Enable, switch on Bud-E Keyboard in
+                the list (Android will warn you — keyboards can see what you type, and this
+                one is yours), then come back and tap Switch. Stickers send as images, so
+                they land in messaging apps; an app that does not take images will say so.
+                No autocorrect yet — that comes later.
+              </p>
             </section>
           )}
 

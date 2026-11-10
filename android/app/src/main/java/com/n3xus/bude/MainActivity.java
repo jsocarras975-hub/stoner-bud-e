@@ -14,6 +14,7 @@ public class MainActivity extends BridgeActivity {
         // App-local native plugins must be registered before the bridge loads.
         registerPlugin(BudEActionsPlugin.class);
         registerPlugin(BudEBiometricPlugin.class);
+        registerPlugin(BudEKeyboardPlugin.class);
         super.onCreate(savedInstanceState);
         // The music widget's play button resumes playback by launching the
         // app — that play() call comes from the launch flow, not from a tap

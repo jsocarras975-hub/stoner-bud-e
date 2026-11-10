@@ -149,6 +149,22 @@
             android:exported="false"
             android:foregroundServiceType="specialUse" />
 
+        <!-- Bud-E Keyboard: an input method (IME) in this same app. The user
+             enables it in Settings → Languages & input (Android makes the
+             user pick the keyboard — an app can never set itself). -->
+        <service
+            android:name=".BudEKeyboardService"
+            android:label="Bud-E Keyboard"
+            android:permission="android.permission.BIND_INPUT_METHOD"
+            android:exported="true">
+            <intent-filter>
+                <action android:name="android.view.InputMethod" />
+            </intent-filter>
+            <meta-data
+                android:name="android.view.im"
+                android:resource="@xml/bude_keyboard_method" />
+        </service>
+
         <!-- After a reboot, bring the bubble back if it was left on. -->
         <receiver
             android:name=".BudEBootReceiver"
