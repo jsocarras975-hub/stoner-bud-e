@@ -132,8 +132,10 @@ function isTab(value: string): value is Tab {
   );
 }
 
-/** Which tool is open inside the Tools tab (Grok drill-in). Null = the tool grid. */
-type ToolId = 'timer' | 'breathe' | 'munchies' | 'thoughts' | 'trivia';
+/** Which tool is open inside the Tools tab (Grok drill-in). Null = the tool grid.
+ *  Log and Plan live here too now — they are full sections, not little helpers,
+ *  but they open the same way, with "All tools" to go back. */
+type ToolId = 'timer' | 'breathe' | 'munchies' | 'thoughts' | 'trivia' | 'journal' | 'plan';
 
 /** Live state of the edible timer, lifted to App so the header pill can show it. */
 interface TimerState {
@@ -144,14 +146,13 @@ interface TimerState {
 
 const IDLE_TIMER: TimerState = { status: 'idle', remainingSec: 0, totalSec: 0 };
 
-/** Bottom-nav destinations (8 slots: 7 tabs + More). All 11 tabs stay reachable. */
+/** Bottom-nav destinations (6 slots: 5 tabs + More). Log and Plan live
+ *  inside Tools now; every tab is still reachable. */
 const NAV_ITEMS: { id: Tab; label: string; icon: typeof Moon }[] = [
   { id: 'tonight', label: 'Tonight', icon: Moon },
   { id: 'chat', label: 'Buddy', icon: MessageCircle },
   { id: 'stash', label: 'Stash', icon: Package },
-  { id: 'journal', label: 'Log', icon: BookOpen },
   { id: 'tools', label: 'Tools', icon: LayoutGrid },
-  { id: 'plan', label: 'Plan', icon: ClipboardList },
   { id: 'account', label: 'You', icon: UserRound },
 ];
 
@@ -905,6 +906,43 @@ export default function App() {
       : 0;
   const moreActive = MORE_TAB_IDS.includes(tab);
 
+  // Log and Plan live inside Tools now, but they are also reachable directly
+  // (device actions / launch info can still open them). Define the views
+  // once and use them in both places.
+  const logDetail =
+    journal.length === 0
+      ? 'Nothing logged yet'
+      : `${journal.length} night${journal.length === 1 ? '' : 's'} logged`;
+  const planDetail =
+    session.amount.trim() === ''
+      ? 'No session logged yet'
+      : `${METHOD_LABELS[session.method]} — ${session.amount.trim()}${session.unit}`;
+  const journalView = (
+    <JournalTab
+      key={`${session.method}-${session.amount}-${session.timeTaken}`}
+      entries={journal}
+      onAdd={(e) => setJournal((j) => [e, ...j])}
+      onDelete={(id) => {
+        // Queue the tombstone first: the delete must sync even if the
+        // user signs out or closes the app before the next upload.
+        queueDeletion('journal', id);
+        setJournal((j) => j.filter((e) => e.id !== id));
+      }}
+      session={session}
+      stash={stash}
+      onDeduct={deductFromStash}
+    />
+  );
+  const planView = (
+    <PlanTab
+      session={session}
+      vibe={vibe}
+      setVibe={setVibe}
+      timerStatus={timerStatus}
+      onGoTonight={() => setTab('tonight')}
+    />
+  );
+
   return (
     <div className="app-shell">
       <div className="app-frame">
@@ -1041,35 +1079,16 @@ export default function App() {
           onAlert={setTimerAlert}
           activeTool={activeTool}
           onToolChange={setActiveTool}
+          journalView={journalView}
+          planView={planView}
+          logDetail={logDetail}
+          planDetail={planDetail}
         />
       )}
-      {tab === 'plan' && (
-        <PlanTab
-          session={session}
-          vibe={vibe}
-          setVibe={setVibe}
-          timerStatus={timerStatus}
-          onGoTonight={() => setTab('tonight')}
-        />
-      )}
+      {tab === 'plan' && planView}
       {tab === 'strains' && <StrainsTab onAskAbout={askAboutStrain} />}
       {tab === 'music' && <MusicTab />}
-      {tab === 'journal' && (
-        <JournalTab
-          key={`${session.method}-${session.amount}-${session.timeTaken}`}
-          entries={journal}
-          onAdd={(e) => setJournal((j) => [e, ...j])}
-          onDelete={(id) => {
-            // Queue the tombstone first: the delete must sync even if the
-            // user signs out or closes the app before the next upload.
-            queueDeletion('journal', id);
-            setJournal((j) => j.filter((e) => e.id !== id));
-          }}
-          session={session}
-          stash={stash}
-          onDeduct={deductFromStash}
-        />
-      )}
+      {tab === 'journal' && journalView}
       {tab === 'stash' && (
         <StashTab
           items={stash}
@@ -1991,6 +2010,8 @@ function ChatTab({
 // ---------------------------------------------------------------------------
 
 const TOOL_DEFS: { id: ToolId; name: string; detail: string; icon: React.ReactNode }[] = [
+  { id: 'journal', name: 'Log', detail: '', icon: <BookOpen size={20} aria-hidden /> },
+  { id: 'plan', name: 'Plan', detail: '', icon: <ClipboardList size={20} aria-hidden /> },
   { id: 'timer', name: 'Wait it out', detail: '', icon: <Timer size={20} aria-hidden /> },
   {
     id: 'breathe',
@@ -2026,6 +2047,10 @@ function ToolsTab({
   onAlert,
   activeTool,
   onToolChange,
+  journalView,
+  planView,
+  logDetail,
+  planDetail,
 }: {
   session: Session;
   timerStatus: string;
@@ -2034,7 +2059,19 @@ function ToolsTab({
   onAlert: (a: TimerAlert | null) => void;
   activeTool: ToolId | null;
   onToolChange: (t: ToolId | null) => void;
+  journalView: React.ReactNode;
+  planView: React.ReactNode;
+  logDetail: string;
+  planDetail: string;
 }) {
+  // Log, Plan and the timer show a live detail, like the timer does.
+  function tileDetail(tool: { id: ToolId; detail: string }): string {
+    if (tool.id === 'timer') return timerStatus;
+    if (tool.id === 'journal') return logDetail;
+    if (tool.id === 'plan') return planDetail;
+    return tool.detail;
+  }
+
   if (activeTool === null) {
     return (
       <main>
@@ -2049,9 +2086,7 @@ function ToolsTab({
             >
               {tool.icon}
               <span className="tool-tile-title">{tool.name}</span>
-              <span className="tool-tile-detail">
-                {tool.id === 'timer' ? timerStatus : tool.detail}
-              </span>
+              <span className="tool-tile-detail">{tileDetail(tool)}</span>
             </button>
           ))}
         </div>
@@ -2064,6 +2099,8 @@ function ToolsTab({
       <button type="button" className="tool-back" onClick={() => onToolChange(null)}>
         <ArrowLeft size={16} aria-hidden /> All tools
       </button>
+      {activeTool === 'journal' && journalView}
+      {activeTool === 'plan' && planView}
       {activeTool === 'timer' && (
         <EdibleTimer
           session={session}
