@@ -347,6 +347,69 @@ async function callGeminiVision(
   }
 }
 
+// Gemini text fallback — when Groq's free tier is maxed out (429), Gemini
+// answers the chat instead of the client falling back to the canned offline
+// reply. Same model as the vision fallback (gemini-3.6-flash), native API.
+// The conversation is converted from the Groq shape: system becomes the
+// systemInstruction, user stays user, assistant becomes model. Consecutive
+// turns from the same side are merged, because Gemini requires user/model
+// roles to alternate (the session line and the first user message would
+// otherwise be two user turns in a row).
+async function callGeminiText(
+  apiKey: string,
+  messages: GroqChatMessage[],
+): Promise<string | null> {
+  try {
+    let systemInstruction = '';
+    const contents: Array<{ role: 'user' | 'model'; parts: Array<{ text: string }> }> = [];
+    for (const m of messages) {
+      if (typeof m.content !== 'string' || m.content.trim() === '') continue;
+      if (m.role === 'system') {
+        systemInstruction = m.content;
+        continue;
+      }
+      const role = m.role === 'assistant' ? 'model' : 'user';
+      const last = contents[contents.length - 1];
+      if (last && last.role === role) {
+        last.parts[0].text += `\n\n${m.content}`;
+      } else {
+        contents.push({ role, parts: [{ text: m.content }] });
+      }
+    }
+    if (contents.length === 0) return null;
+    const res = await fetch(
+      'https://generativelanguage.googleapis.com/v1beta/models/gemini-3.6-flash:generateContent',
+      {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json', 'x-goog-api-key': apiKey },
+        body: JSON.stringify({
+          ...(systemInstruction !== ''
+            ? { systemInstruction: { parts: [{ text: systemInstruction }] } }
+            : {}),
+          contents,
+          generationConfig: { maxOutputTokens: 600, temperature: 0.9 },
+        }),
+      },
+    );
+    if (!res.ok) {
+      console.error('[chat] gemini text error', res.status);
+      return null;
+    }
+    const json = (await res.json()) as {
+      candidates?: Array<{ content?: { parts?: Array<{ text?: string }> } }>;
+    };
+    const text =
+      json.candidates?.[0]?.content?.parts?.map((p) => p.text ?? '').join('') ?? '';
+    return text.trim() !== '' ? text.trim() : null;
+  } catch (err) {
+    console.error(
+      '[chat] gemini text exception',
+      err instanceof Error ? err.message : 'unknown',
+    );
+    return null;
+  }
+}
+
 async function callGroq(
   apiKey: string,
   model: string,
@@ -557,6 +620,19 @@ export default async function handler(req: ReqLike, res: ResLike): Promise<void>
     // search outage, ...), retry plain before giving up on live AI.
     if (!result) {
       result = await callGroq(apiKey, GROQ_MODELS[0], groqMessages, false, false);
+    }
+    // Groq said no — usually its free tier's per-minute limit. Fall back
+    // to Gemini so the chat still answers right away instead of going
+    // quiet with the canned offline reply.
+    if (!result) {
+      const geminiKey = process.env.GEMINI_API_KEY;
+      if (geminiKey) {
+        const geminiReply = await callGeminiText(geminiKey, groqMessages);
+        if (geminiReply) {
+          res.status(200).json({ ok: true, source: 'live', reply: geminiReply });
+          return;
+        }
+      }
     }
     if (!result) {
       fallback(res);
