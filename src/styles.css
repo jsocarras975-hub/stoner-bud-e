@@ -1043,6 +1043,45 @@ button {
   font-weight: 700;
 }
 
+/* Photo in a chat message (in-memory only — never saved). */
+.chat-photo {
+  display: block;
+  max-width: 220px;
+  max-height: 220px;
+  border-radius: 12px;
+  margin-bottom: 6px;
+}
+
+/* Photo picked and waiting to be sent, above the chat input. */
+.chat-photo-preview {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin-bottom: 8px;
+}
+
+.chat-photo-preview img {
+  width: 56px;
+  height: 56px;
+  object-fit: cover;
+  border-radius: 12px;
+}
+
+.chat-photo-preview span {
+  flex: 1;
+  font-size: 0.85rem;
+  color: var(--muted);
+}
+
+.chat-photo-preview button {
+  flex-shrink: 0;
+  background: none;
+  border: none;
+  color: var(--text);
+  padding: 6px;
+  cursor: pointer;
+}
+
 .chat-foot {
   margin-top: 8px;
   display: flex;

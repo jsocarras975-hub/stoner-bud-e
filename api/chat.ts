@@ -23,6 +23,12 @@ const GROQ_MODELS = ['openai/gpt-oss-120b', 'openai/gpt-oss-20b'] as const;
 // answer plus executed_tools with the sources. No extra key needed.
 const SEARCH_TOOL = { type: 'browser_search' } as const;
 
+// Photo analysis: Groq cannot generate images, but its vision models can
+// look at one. qwen/qwen3.8-27b is the free-tier vision model (up to 3
+// images per request, each counts as 2,048 input tokens). It only takes
+// images in — the answer is still text.
+const VISION_MODEL = 'qwen/qwen3.8-27b';
+
 interface SourceLink {
   title: string;
   url: string;
@@ -30,7 +36,12 @@ interface SourceLink {
 
 interface GroqChatMessage {
   role: 'system' | 'user' | 'assistant';
-  content: string;
+  content:
+    | string
+    | Array<
+        | { type: 'text'; text: string }
+        | { type: 'image_url'; image_url: { url: string } }
+      >;
 }
 
 interface GroqSearchResult {
@@ -70,6 +81,10 @@ type Body = {
   memory?: string;
   /** Local wall-clock time from the client, ISO with offset (e.g. 2026-11-09T15:30:00-06:00). */
   now?: string;
+  /** Optional photo attached to the last message, as a data URL
+   *  (data:image/jpeg;base64,...). The client downscales it first; the
+   *  server sends it to the vision model. Never stored — analysis only. */
+  image?: string;
   personalization?: {
     buddyName?: string;
     userName?: string;
@@ -339,6 +354,15 @@ export default async function handler(req: ReqLike, res: ResLike): Promise<void>
       return;
     }
 
+    // Optional photo: must be an image data URL, capped so a huge upload
+    // cannot blow up the request. The client downscales first (max 1024px).
+    const image =
+      typeof body.image === 'string' &&
+      body.image.startsWith('data:image/') &&
+      body.image.length <= 4_000_000
+        ? body.image
+        : null;
+
     const persona = isPersonaId(body.persona) ? personaById(body.persona) : null;
     const p = body.personalization;
     const buddyName = p?.buddyName?.trim() || 'Bud-E';
@@ -370,6 +394,9 @@ export default async function handler(req: ReqLike, res: ResLike): Promise<void>
       styleLine,
       memoryLine,
       stashLine,
+      image
+        ? 'The user attached a photo to their last message. Look at it closely and answer their question about it. Describe what you see, identify anything relevant (strains, products, plants, labels, amounts), and say plainly when something in the photo is unclear or you cannot tell.'
+        : '',
       ACTIONS_GUIDE(localTimeText(body.now), localMidnightMillis(body.now)),
     ]
       .filter(Boolean)
@@ -383,6 +410,47 @@ export default async function handler(req: ReqLike, res: ResLike): Promise<void>
         content: m.text,
       })),
     ];
+
+    // Photo attached: the last user message becomes multimodal (text +
+    // image) and goes to the vision model instead of the text models.
+    // The vision model takes no search tool, so this is one call, no retry
+    // to another vision model — there is not one on this tier.
+    if (image) {
+      for (let i = groqMessages.length - 1; i >= 0; i--) {
+        if (groqMessages[i].role === 'user') {
+          const text =
+            typeof groqMessages[i].content === 'string'
+              ? (groqMessages[i].content as string)
+              : '';
+          groqMessages[i] = {
+            role: 'user',
+            content: [
+              { type: 'text', text },
+              { type: 'image_url', image_url: { url: image } },
+            ],
+          };
+          break;
+        }
+      }
+      const vision = await callGroq(apiKey, VISION_MODEL, groqMessages, false, false);
+      if (vision) {
+        res.status(200).json({
+          ok: true,
+          source: 'live',
+          reply: vision.reply,
+          ...(vision.sources.length > 0 ? { sources: vision.sources } : {}),
+        });
+        return;
+      }
+      // The photo could not be read — say so plainly instead of falling
+      // back to a canned reply that ignores the photo entirely.
+      res.status(200).json({
+        ok: true,
+        source: 'live',
+        reply: "I couldn't look at that photo — try sending it again, or just tell me what's in it.",
+      });
+      return;
+    }
 
     const lastUser = [...messages].reverse().find((m) => m.role === 'user');
     const forceSearch = lastUser ? CURRENT_INFO_RE.test(lastUser.text) : false;

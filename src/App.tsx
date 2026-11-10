@@ -3,6 +3,7 @@ import {
   ArrowLeft,
   BookOpen,
   Brain,
+  Camera,
   Check,
   ClipboardList,
   Cookie,
@@ -22,6 +23,7 @@ import {
   UserRound,
   Volume2,
   Wind,
+  X,
 } from 'lucide-react';
 import {
   DEFAULT_SESSION,
@@ -198,6 +200,46 @@ function autoTitle(messages: ChatMessage[]): string {
   const text = first.text.trim();
   if (text.length <= 40) return text;
   return text.slice(0, 37) + '…';
+}
+
+/** Strip attached photos from a chat list before it is saved or synced.
+ *  Photos live in memory only (see ChatMessage.image) — without this, a
+ *  photo's data URL would bloat localStorage and the account's database. */
+function stripChatImages(chats: SyncedChatConversation[]): SyncedChatConversation[] {
+  return chats.map((c) => ({
+    ...c,
+    messages: c.messages.map((m) => {
+      if (!m.image) return m;
+      const { image: _dropped, ...rest } = m;
+      void _dropped;
+      return rest;
+    }),
+  }));
+}
+
+/** Shrink a picked photo to at most 1024px on the long edge and re-encode
+ *  it as JPEG, so the upload stays small. Returns a data URL. */
+async function downscalePhoto(file: File): Promise<string> {
+  const original = await new Promise<string>((resolve, reject) => {
+    const reader = new FileReader();
+    reader.onload = () => resolve(String(reader.result));
+    reader.onerror = () => reject(new Error('read failed'));
+    reader.readAsDataURL(file);
+  });
+  const img = await new Promise<HTMLImageElement>((resolve, reject) => {
+    const el = new Image();
+    el.onload = () => resolve(el);
+    el.onerror = () => reject(new Error('not an image'));
+    el.src = original;
+  });
+  const scale = Math.min(1, 1024 / Math.max(img.naturalWidth, img.naturalHeight));
+  const canvas = document.createElement('canvas');
+  canvas.width = Math.max(1, Math.round(img.naturalWidth * scale));
+  canvas.height = Math.max(1, Math.round(img.naturalHeight * scale));
+  const ctx = canvas.getContext('2d');
+  if (!ctx) throw new Error('no canvas');
+  ctx.drawImage(img, 0, 0, canvas.width, canvas.height);
+  return canvas.toDataURL('image/jpeg', 0.8);
 }
 
 function loadChats(): SyncedChatConversation[] {
@@ -416,7 +458,8 @@ export default function App() {
   }, [theme]);
 
   useEffect(() => save(SESSION_KEY, session), [session]);
-  useEffect(() => save(CHATS_KEY, chats), [chats]);
+  // Photos are stripped here: they live in memory only, never in storage.
+  useEffect(() => save(CHATS_KEY, stripChatImages(chats)), [chats]);
   // After successful migration, the old key can be cleared on next save, but we leave it for safety.
   useEffect(() => save(VIBE_KEY, vibe), [vibe]);
   useEffect(() => {
@@ -671,7 +714,10 @@ export default function App() {
     if (!currentUser) return;
     setSyncMessage('Syncing…');
     try {
-      const state = await uploadLocal({ journal, stash, chats }, currentSettings());
+      const state = await uploadLocal(
+        { journal, stash, chats: stripChatImages(chats) },
+        currentSettings(),
+      );
       applyServerState(state);
       setSyncMessage(`Synced just now${reason === 'signin' ? ' — your stuff from this device is now on your account.' : '.'}`);
     } catch (err) {
@@ -1171,6 +1217,11 @@ function ChatTab({
 
   const [input, setInput] = useState('');
   const [sending, setSending] = useState(false);
+  // Photo attached to the next message (data URL, downscaled). Sent once
+  // for analysis, then cleared — never saved (see ChatMessage.image).
+  const [pendingPhoto, setPendingPhoto] = useState<string | null>(null);
+  const [photoNote, setPhotoNote] = useState('');
+  const photoInputRef = useRef<HTMLInputElement | null>(null);
   const [confirmClear, setConfirmClear] = useState(false);
   const [renamingId, setRenamingId] = useState<string | null>(null);
   const [renameValue, setRenameValue] = useState('');
@@ -1281,9 +1332,25 @@ function ChatTab({
     }, 60000);
   }
 
-  async function sendText(text: string): Promise<void> {
+  /** Pick a photo (camera or gallery on the phone) and shrink it for sending. */
+  async function pickPhoto(file: File | undefined): Promise<void> {
+    if (!file) return;
+    if (!file.type.startsWith('image/')) {
+      setPhotoNote("That didn't look like a photo — try another file.");
+      return;
+    }
+    try {
+      const dataUrl = await downscalePhoto(file);
+      setPendingPhoto(dataUrl);
+      setPhotoNote('');
+    } catch {
+      setPhotoNote("Couldn't read that photo — try another one.");
+    }
+  }
+
+  async function sendText(text: string, photo?: string | null): Promise<void> {
     const trimmed = text.trim();
-    if (!trimmed || sending) return;
+    if ((!trimmed && !photo) || sending) return;
     unlockAudio();
     stopVoice();
     setSpeakingIdx(null);
@@ -1296,7 +1363,14 @@ function ChatTab({
       setCurrentChatId(chatId);
     }
 
-    const next: ChatMessage[] = [...baseMessages, { role: 'user', text: trimmed }];
+    // No question typed with a photo: ask what is in it.
+    const userText = trimmed || "What's in this photo?";
+    const next: ChatMessage[] = [
+      ...baseMessages,
+      photo
+        ? { role: 'user', text: userText, image: photo }
+        : { role: 'user', text: userText },
+    ];
     const title = chats.find((c) => c.id === chatId)?.title || autoTitle(next);
 
     function updateChat(messages: ChatMessage[]) {
@@ -1314,6 +1388,7 @@ function ChatTab({
 
     updateChat(next);
     setInput('');
+    setPendingPhoto(null);
     setSending(true);
     let serverSource: string | undefined;
     try {
@@ -1352,6 +1427,7 @@ function ChatTab({
           ...(memory ? { memory } : {}),
           ...(journalNote !== '' ? { journal: journalNote } : {}),
           ...(stashNote !== '' ? { stash: stashNote } : {}),
+          ...(photo ? { image: photo } : {}),
         }),
       });
       const data: unknown = await res.json();
@@ -1418,7 +1494,9 @@ function ChatTab({
         err instanceof Error && err.message
           ? err.message
           : 'request failed';
-      const fallbackText = localReply(trimmed, session, next);
+      const fallbackText = photo
+        ? "I couldn't look at that photo right now — I'm offline. Try sending it again when you're back online."
+        : localReply(userText, session, next);
       const withReason = `${fallbackText}\n\n[offline: ${reason}]`;
       updateChat([...next, { role: 'bud', text: withReason }]);
       setSource('fallback');
@@ -1429,7 +1507,7 @@ function ChatTab({
   }
 
   function send(): void {
-    void sendText(input);
+    void sendText(input, pendingPhoto);
   }
 
   const amount = session.amount.trim();
@@ -1574,6 +1652,9 @@ function ChatTab({
         {transcript.map((m, i) => (
           <div key={i} className={m.role === 'user' ? 'msg user' : 'msg bud'}>
             <span className="who">{m.role === 'user' ? 'You' : 'Bud-E'}</span>
+            {m.image && (
+              <img src={m.image} alt="Photo you sent" className="chat-photo" />
+            )}
             {m.text}
             {m.role === 'bud' && m.sources && m.sources.length > 0 && (
               <span className="chat-sources">
@@ -1623,6 +1704,27 @@ function ChatTab({
             </button>
           ))}
         </div>
+        {pendingPhoto && (
+          <div className="chat-photo-preview">
+            <img src={pendingPhoto} alt="Photo to send" />
+            <span>Sent to Bud-E&apos;s AI to look at — not saved.</span>
+            <button
+              type="button"
+              onClick={() => {
+                setPendingPhoto(null);
+                if (photoInputRef.current) photoInputRef.current.value = '';
+              }}
+              aria-label="Remove photo"
+            >
+              <X size={16} aria-hidden />
+            </button>
+          </div>
+        )}
+        {photoNote !== '' && (
+          <p className="muted" role="alert" style={{ margin: '0 0 8px' }}>
+            {photoNote}
+          </p>
+        )}
         <form
           className="chat-input-row"
           onSubmit={(e) => {
@@ -1630,6 +1732,25 @@ function ChatTab({
             send();
           }}
         >
+          <input
+            ref={photoInputRef}
+            type="file"
+            accept="image/*"
+            style={{ display: 'none' }}
+            onChange={(e) => {
+              void pickPhoto(e.target.files?.[0]);
+              e.target.value = '';
+            }}
+          />
+          <button
+            type="button"
+            className="btn chat-mic"
+            disabled={sending}
+            onClick={() => photoInputRef.current?.click()}
+            aria-label="Send a photo for Bud-E to look at"
+          >
+            <Camera size={18} aria-hidden />
+          </button>
           <input
             type="text"
             value={input}
@@ -1651,7 +1772,7 @@ function ChatTab({
           <button
             type="submit"
             className="btn chat-send"
-            disabled={sending || input.trim() === ''}
+            disabled={sending || (input.trim() === '' && !pendingPhoto)}
             aria-label="Send"
           >
             <Send size={18} aria-hidden />

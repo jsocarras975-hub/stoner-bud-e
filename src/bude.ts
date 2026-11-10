@@ -18,6 +18,11 @@ export interface ChatMessage {
   text: string;
   /** Web sources for a live-AI reply (title + link), when the answer came from a search. */
   sources?: { title: string; url: string }[];
+  /** Photo attached to a user message, as a data URL. In-memory only:
+   *  it is stripped before the chat is saved or synced, so a photo is
+   *  never stored on the device or in the account — it is sent to the AI
+   *  once, for analysis, and then it is gone. */
+  image?: string;
 }
 
 export const DEFAULT_SESSION: Session = {
