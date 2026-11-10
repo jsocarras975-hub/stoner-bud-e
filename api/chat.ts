@@ -27,6 +27,14 @@ const SEARCH_TOOL = { type: 'browser_search' } as const;
 // look at one. qwen/qwen3.8-27b is the free-tier vision model (up to 3
 // images per request, each counts as 2,048 input tokens). It only takes
 // images in — the answer is still text.
+// CAUTION: Groq's free tier for this preview model is about ONE photo a
+// minute — the second photo inside the same minute fails (proven live
+// 2026-11-09: call 1 worked, calls 2–3 failed, call after a 65s pause
+// worked). Llama 4 Scout is NOT a fallback: Groq decommissioned it
+// 2026-07-17 (404 now) and qwen is their only vision model. So the
+// fallback is Gemini (callGeminiVision below) — the project's
+// GEMINI_API_KEY, free tier, far more generous. Groq first, Gemini when
+// Groq says no.
 const VISION_MODEL = 'qwen/qwen3.8-27b';
 
 interface SourceLink {
@@ -278,6 +286,59 @@ const ACTIONS_GUIDE = (localTime: string, midnightMillis: number | null): string
   '- image_search {"action":"image_search","query":"blue dream buds"} — find pictures of something on the web. Only when the user asks for pictures, images, or photos of something. Say something like "Finding pictures of blue dream buds."\n' +
   'Rules: only emit an action block when the user asked for one of these twelve AND every required field is clear from what they said. If anything is missing or unclear — no time for the alarm, no length for the timer, no reminder text, no title or time for the event, no name or number for a call or text, no message for a text, no jar name or amount for a stash change, no strain or amount for a session log, no tab for opening a part of the app, no subject for pictures — ask one short follow-up question instead and emit no action block. If several people share a name, the phone asks which one — just send the name. If the jar name does not match any jar in the stash list and the user is not clearly adding a new jar, ask which jar they mean instead of guessing. Amounts: "half a gram" is 0.5g, "500mg" is 500mg — send the amount in the unit the user said. Never emit an action block for anything else: no other phone features, no deleting, no account changes. Never explain the JSON or mention it. The spoken sentence comes first, the action block last.';
 
+// Gemini vision fallback — the free tier is far more generous than Groq's
+// preview vision model, so a second photo in the same minute still gets
+// answered instead of failing. Native Gemini API (not the OpenAI-compatible
+// one): the photo goes in as base64 with its mime type. The key is the
+// project's GEMINI_API_KEY, already in Vercel.
+async function callGeminiVision(
+  apiKey: string,
+  imageDataUrl: string,
+  question: string,
+): Promise<string | null> {
+  try {
+    const match = /^data:(image\/[a-zA-Z0-9.+-]+);base64,(.+)$/.exec(imageDataUrl);
+    if (!match) return null;
+    const [, mimeType, data] = match;
+    const res = await fetch(
+      'https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash:generateContent',
+      {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json', 'x-goog-api-key': apiKey },
+        body: JSON.stringify({
+          contents: [
+            {
+              parts: [
+                {
+                  text: `${question}\n\nLook at the attached photo closely and answer the question about it. Describe what you see, identify anything relevant (strains, products, plants, labels, amounts), and say plainly when something in the photo is unclear or you cannot tell.`,
+                },
+                { inline_data: { mime_type: mimeType, data } },
+              ],
+            },
+          ],
+          generationConfig: { maxOutputTokens: 800, temperature: 0.9 },
+        }),
+      },
+    );
+    if (!res.ok) {
+      console.error('[chat] gemini vision error', res.status);
+      return null;
+    }
+    const json = (await res.json()) as {
+      candidates?: Array<{ content?: { parts?: Array<{ text?: string }> } }>;
+    };
+    const text =
+      json.candidates?.[0]?.content?.parts?.map((p) => p.text ?? '').join('') ?? '';
+    return text.trim() !== '' ? text.trim() : null;
+  } catch (err) {
+    console.error(
+      '[chat] gemini vision exception',
+      err instanceof Error ? err.message : 'unknown',
+    );
+    return null;
+  }
+}
+
 async function callGroq(
   apiKey: string,
   model: string,
@@ -443,12 +504,27 @@ export default async function handler(req: ReqLike, res: ResLike): Promise<void>
         });
         return;
       }
-      // The photo could not be read — say so plainly instead of falling
-      // back to a canned reply that ignores the photo entirely.
+      // Groq said no — usually its free tier's one-photo-a-minute limit.
+      // Fall back to Gemini so the photo still gets answered right away.
+      const geminiKey = process.env.GEMINI_API_KEY;
+      if (geminiKey) {
+        const lastUser = [...messages].reverse().find((m) => m.role === 'user');
+        const geminiReply = await callGeminiVision(
+          geminiKey,
+          image,
+          lastUser?.text ?? "What's in this photo?",
+        );
+        if (geminiReply) {
+          res.status(200).json({ ok: true, source: 'live', reply: geminiReply });
+          return;
+        }
+      }
+      // Both eyes are closed — say so plainly instead of falling back to
+      // a canned reply that ignores the photo entirely.
       res.status(200).json({
         ok: true,
         source: 'live',
-        reply: "I couldn't look at that photo — try sending it again, or just tell me what's in it.",
+        reply: "I couldn't look at that photo right now — give it a minute and try sending it again, or just tell me what's in it.",
       });
       return;
     }
