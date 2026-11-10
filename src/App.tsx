@@ -46,6 +46,7 @@ import MusicTab from './MusicTab';
 import TonightTab from './TonightTab';
 import SettingsTab from './SettingsTab';
 import DrivingMode from './DrivingMode';
+import { GuessTheStrain, MemoryMatch, WouldYouRather } from './Games';
 import { tasteSummary } from './lib/taste';
 import LockScreen from './LockScreen';
 import {
@@ -154,7 +155,7 @@ function isTab(value: string): value is Tab {
 /** Which tool is open inside the Tools tab (Grok drill-in). Null = the tool grid.
  *  Log and Plan live here too now — they are full sections, not little helpers,
  *  but they open the same way, with "All tools" to go back. */
-type ToolId = 'timer' | 'breathe' | 'munchies' | 'thoughts' | 'trivia' | 'journal' | 'plan';
+type ToolId = 'timer' | 'breathe' | 'munchies' | 'thoughts' | 'trivia' | 'journal' | 'plan' | 'would-you-rather' | 'guess-strain' | 'memory';
 
 /** Live state of the edible timer, lifted to App so the header pill can show it. */
 interface TimerState {
@@ -2598,6 +2599,24 @@ const TOOL_DEFS: { id: ToolId; name: string; detail: string; icon: React.ReactNo
     detail: '5 questions, no judgment',
     icon: <Brain size={20} aria-hidden />,
   },
+  {
+    id: 'would-you-rather',
+    name: 'Would you rather',
+    detail: 'Pick one, no wrong answers',
+    icon: <MessageCircle size={20} aria-hidden />,
+  },
+  {
+    id: 'guess-strain',
+    name: 'Guess the strain',
+    detail: 'Read the vibe, name it',
+    icon: <Leaf size={20} aria-hidden />,
+  },
+  {
+    id: 'memory',
+    name: 'Memory match',
+    detail: 'Flip cards, match the pairs',
+    icon: <LayoutGrid size={20} aria-hidden />,
+  },
 ];
 
 function ToolsTab({
@@ -2674,6 +2693,9 @@ function ToolsTab({
       {activeTool === 'munchies' && <MunchiesMaker />}
       {activeTool === 'thoughts' && <HighThoughts />}
       {activeTool === 'trivia' && <TriviaGame />}
+      {activeTool === 'would-you-rather' && <WouldYouRather />}
+      {activeTool === 'guess-strain' && <GuessTheStrain />}
+      {activeTool === 'memory' && <MemoryMatch />}
     </main>
   );
 }
