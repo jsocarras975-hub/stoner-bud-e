@@ -10,11 +10,12 @@ import android.content.SharedPreferences;
 import android.widget.RemoteViews;
 
 /**
- * Bud-E's home-screen widget (4 wide, 2 tall): the stash line on top,
- * Talk / Open Bud-E, then Log / Stash / Tonight. Talk opens the bubble
- * chat panel (MainActivity starts the bubble service and asks it to
- * expand); the other buttons open the app straight to that tab. The
- * widget never talks by itself; it only opens things.
+ * Bud-E's home-screen widget (4 wide, 2 tall): a leaf-disc header with
+ * the stash line, one big Talk pill, then Log / Stash / Tonight. Tapping
+ * the header opens the app; Talk opens the bubble chat panel (MainActivity
+ * starts the bubble service and asks it to expand); the other buttons open
+ * the app straight to that tab. The widget never talks by itself; it only
+ * opens things.
  *
  * The stash line comes from SharedPreferences ("bude-widget"), written
  * by the app whenever the stash changes — a low jar wins the line, so
@@ -58,7 +59,8 @@ public class BudEWidgetProvider extends AppWidgetProvider {
                             .setAction(BudEBubbleService.ACTION_EXPAND_CHAT),
                     PendingIntent.FLAG_UPDATE_CURRENT | PendingIntent.FLAG_IMMUTABLE);
             views.setOnClickPendingIntent(R.id.widget_talk, talk);
-            views.setOnClickPendingIntent(R.id.widget_open, tabIntent(context, 1, null));
+            // The header (leaf + name + stash line) opens the app.
+            views.setOnClickPendingIntent(R.id.widget_header, tabIntent(context, 1, null));
             views.setOnClickPendingIntent(R.id.widget_log, tabIntent(context, 2, "journal"));
             views.setOnClickPendingIntent(R.id.widget_stash_btn, tabIntent(context, 3, "stash"));
             views.setOnClickPendingIntent(R.id.widget_tonight, tabIntent(context, 4, "tonight"));

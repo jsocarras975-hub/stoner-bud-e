@@ -1,10 +1,14 @@
 <?xml version="1.0" encoding="utf-8"?>
-<!-- Home widget background: night-garden card, rounded, thin green edge. -->
+<!-- Home widget background: deep night-garden gradient (forest green
+     fading to near-black), soft rounded corners, thin lime-tinted edge. -->
 <shape xmlns:android="http://schemas.android.com/apk/res/android"
     android:shape="rectangle">
-    <solid android:color="#163024" />
+    <gradient
+        android:startColor="#1e4432"
+        android:endColor="#0a1810"
+        android:angle="270" />
     <stroke
         android:width="1dp"
-        android:color="#2a4a38" />
-    <corners android:radius="16dp" />
+        android:color="#2e5a40" />
+    <corners android:radius="28dp" />
 </shape>
