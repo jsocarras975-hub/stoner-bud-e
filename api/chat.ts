@@ -377,9 +377,9 @@ async function callGeminiText(
       }
     }
     if (contents.length === 0) return null;
-    // Try gemini-3.6-flash first, then gemini-2.0-flash — when the main
-    // model is overloaded (503) the older one is often still answering.
-    for (const model of ['gemini-3.6-flash', 'gemini-2.0-flash']) {
+    // gemini-3.6-flash only — gemini-2.0-flash 404s for this key
+    // (retired, same as 2.5-flash), so asking for it just wastes a call.
+    for (const model of ['gemini-3.6-flash']) {
       const res = await fetch(
         `https://generativelanguage.googleapis.com/v1beta/models/${model}:generateContent`,
         {
@@ -429,8 +429,8 @@ async function callOpenRouter(
     .map((m) => ({ role: m.role, content: m.content as string }));
   if (openAiMessages.length === 0) return null;
   for (const model of [
-    'meta-llama/llama-3.1-8b-instruct:free',
-    'google/gemma-2-9b-it:free',
+    'google/gemma-4-26b-a4b-it:free',
+    'google/gemma-4-31b-it:free',
   ]) {
     try {
       const res = await fetch('https://openrouter.ai/api/v1/chat/completions', {
