@@ -182,6 +182,22 @@ const PREMIUM_CODES_DDL = `create table if not exists premium_codes (
   created_at timestamptz not null default CURRENT_TIMESTAMP
 )`;
 
+// Cash App payments the owner verifies himself: the buyer sends the money
+// to his $Cashtag ($kartoon93), taps "I paid" in the app, and the owner
+// checks Cash App and taps Confirm — the tier unlocks straight away (no
+// code to redeem). One row per claim: who, which tier, their Cash App
+// name (so the owner can match the payment), and the status.
+const CASHAPP_PAYMENTS_DDL = `create table if not exists cashapp_payments (
+  id uuid not null primary key default gen_random_uuid(),
+  user_id text not null references "user" ("id") on delete cascade,
+  tier text not null check (tier in ('lit', 'cloudnine')),
+  note text not null default '',
+  status text not null default 'pending' check (status in ('pending', 'confirmed', 'declined')),
+  created_at timestamptz not null default CURRENT_TIMESTAMP,
+  confirmed_at timestamptz
+);
+create index if not exists cashapp_payments_status_idx on cashapp_payments (status, created_at desc)`;
+
 let deletedItemsEnsured = false;
 let chatTableEnsured = false;
 let playlistsTableEnsured = false;
@@ -248,6 +264,7 @@ async function ensureCommunityTables(pool: Pool): Promise<void> {
     await pool.query(COMMUNITY_COMMENT_LIKES_DDL);
     await pool.query(STRAIN_REVIEWS_DDL);
     await pool.query(PREMIUM_CODES_DDL);
+    await pool.query(CASHAPP_PAYMENTS_DDL);
     // The posts table predates comment_count (added with comments) — add
     // the column to tables created before it existed. No-op when present.
     await pool.query(
@@ -277,6 +294,33 @@ async function isOwner(pool: Pool, userId: string): Promise<boolean> {
   } catch {
     return false;
   }
+}
+
+function premiumRank(tier: unknown): number {
+  if (tier === 'owner') return 3;
+  if (tier === 'cloudnine') return 2;
+  if (tier === 'lit') return 1;
+  return 0;
+}
+
+/** Set a user's premium tier (never downgrades). Returns the tier set, or null. */
+async function grantPremiumTier(pool: Pool, userId: string, tier: string): Promise<string | null> {
+  if (tier !== 'lit' && tier !== 'cloudnine') return null;
+  const current = await pool.query<{ data: Record<string, unknown> | null }>(
+    'select data from user_settings where user_id = $1',
+    [userId],
+  );
+  const currentTier = current.rows[0]?.data?.premiumTier;
+  if (premiumRank(currentTier) >= premiumRank(tier)) return null;
+  const data = { ...(current.rows[0]?.data ?? {}), premiumTier: tier };
+  await pool.query(
+    `insert into user_settings (user_id, data, updated_at)
+     values ($1, $2, now())
+     on conflict (user_id) do update
+       set data = excluded.data, updated_at = excluded.updated_at`,
+    [userId, JSON.stringify(data)],
+  );
+  return tier;
 }
 
 const STRAIN_IDS = new Set([
@@ -830,6 +874,129 @@ async function handleCommunity(
       );
     }
     res.status(200).json({ ok: true, tier, codes });
+    return;
+  }
+
+  // ---- Cash App payments (owner verifies them himself) ----
+
+  // The buyer sent money to $kartoon93 and taps "I paid". One pending
+  // claim per user per tier — a second tap returns the one already there.
+  if (action === 'cashapp_claim') {
+    const tier = body.tier;
+    const note = typeof body.note === 'string' ? body.note.trim().slice(0, 60) : '';
+    if (tier !== 'lit' && tier !== 'cloudnine') {
+      res.status(400).json({ ok: false, error: 'bad_community_body' });
+      return;
+    }
+    const current = await pool.query<{ data: Record<string, unknown> | null }>(
+      'select data from user_settings where user_id = $1',
+      [user.id],
+    );
+    if (premiumRank(current.rows[0]?.data?.premiumTier) >= premiumRank(tier)) {
+      res.status(400).json({ ok: false, error: 'already_premium' });
+      return;
+    }
+    const existing = await pool.query<{ id: string }>(
+      `select id from cashapp_payments
+       where user_id = $1 and tier = $2 and status = 'pending'
+       order by created_at desc limit 1`,
+      [user.id, tier],
+    );
+    if (existing.rows[0]) {
+      res.status(200).json({ ok: true, paymentId: existing.rows[0].id, tier });
+      return;
+    }
+    const created = await pool.query<{ id: string }>(
+      `insert into cashapp_payments (user_id, tier, note)
+       values ($1, $2, $3) returning id`,
+      [user.id, tier, note],
+    );
+    res.status(200).json({ ok: true, paymentId: created.rows[0]?.id, tier });
+    return;
+  }
+
+  // The buyer's own Cash App claims (so they can see "pending" turn into
+  // "confirmed" and the tier unlock).
+  if (action === 'cashapp_mine') {
+    const rows = await pool.query<{ id: string; tier: string; note: string; status: string; created_at: string }>(
+      `select id, tier, note, status, created_at from cashapp_payments
+       where user_id = $1 order by created_at desc limit 20`,
+      [user.id],
+    );
+    res.status(200).json({ ok: true, payments: rows.rows });
+    return;
+  }
+
+  // Owner only: the Cash App payments waiting for him to verify.
+  if (action === 'cashapp_pending') {
+    if (!(await isOwner(pool, user.id))) {
+      res.status(403).json({ ok: false, error: 'not_owner' });
+      return;
+    }
+    const rows = await pool.query<{
+      id: string; user_id: string; tier: string; note: string; status: string; created_at: string;
+      email: string | null; name: string | null;
+    }>(
+      `select p.id, p.user_id, p.tier, p.note, p.status, p.created_at, u.email, u.name
+       from cashapp_payments p
+       left join "user" u on u.id = p.user_id
+       where p.status = 'pending'
+       order by p.created_at asc`,
+    );
+    res.status(200).json({ ok: true, payments: rows.rows });
+    return;
+  }
+
+  // Owner only: the money arrived in Cash App — unlock the tier straight
+  // away (no code to redeem). Never downgrades.
+  if (action === 'cashapp_confirm') {
+    if (!(await isOwner(pool, user.id))) {
+      res.status(403).json({ ok: false, error: 'not_owner' });
+      return;
+    }
+    const paymentId = body.paymentId;
+    if (typeof paymentId !== 'string' || !paymentId) {
+      res.status(400).json({ ok: false, error: 'bad_community_body' });
+      return;
+    }
+    const found = await pool.query<{ user_id: string; tier: string; status: string }>(
+      'select user_id, tier, status from cashapp_payments where id = $1',
+      [paymentId],
+    );
+    const row = found.rows[0];
+    if (!row) {
+      res.status(400).json({ ok: false, error: 'bad_community_body' });
+      return;
+    }
+    if (row.status !== 'pending') {
+      res.status(400).json({ ok: false, error: 'already_used' });
+      return;
+    }
+    const granted = await grantPremiumTier(pool, row.user_id, row.tier);
+    await pool.query(
+      `update cashapp_payments set status = 'confirmed', confirmed_at = now() where id = $1`,
+      [paymentId],
+    );
+    res.status(200).json({ ok: true, tier: granted ?? row.tier });
+    return;
+  }
+
+  // Owner only: no money arrived — mark it declined so it leaves the list.
+  if (action === 'cashapp_decline') {
+    if (!(await isOwner(pool, user.id))) {
+      res.status(403).json({ ok: false, error: 'not_owner' });
+      return;
+    }
+    const paymentId = body.paymentId;
+    if (typeof paymentId !== 'string' || !paymentId) {
+      res.status(400).json({ ok: false, error: 'bad_community_body' });
+      return;
+    }
+    await pool.query(
+      `update cashapp_payments set status = 'declined' where id = $1 and status = 'pending'`,
+      [paymentId],
+    );
+    res.status(200).json({ ok: true });
     return;
   }
 

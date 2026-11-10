@@ -116,7 +116,7 @@ function communityError(status: number, body: unknown): CommunityError {
   return new CommunityError('other', 'That did not go through — try again.');
 }
 
-async function communityCall(action: string, extra: Record<string, unknown> = {}): Promise<Record<string, unknown>> {
+export async function communityCall(action: string, extra: Record<string, unknown> = {}): Promise<Record<string, unknown>> {
   let res: Response;
   try {
     res = await authedFetch('/api/sync', {

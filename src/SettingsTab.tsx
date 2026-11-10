@@ -21,6 +21,16 @@ import { getKeyboardStatus, openKeyboardSettings, showKeyboardPicker } from './l
 import type { KeyboardStatus } from './lib/keyboard';
 import { CommunityError, generatePremiumCodes, redeemPremiumCode } from './lib/community';
 import { checkCryptoCharge, createCryptoCheckout, getPendingChargeId } from './lib/crypto-checkout';
+import {
+  CASHAPP_TAG,
+  CASHAPP_URL,
+  claimCashAppPayment,
+  confirmCashAppPayment,
+  declineCashAppPayment,
+  fetchMyCashAppPayments,
+  fetchPendingCashAppPayments,
+} from './lib/cashapp';
+import type { CashAppPayment } from './lib/cashapp';
 import { Chip, ChipRow, Label, PageHead } from './bits';
 import type { Personalization, PremiumTier } from './lib/sync';
 import type { JournalEntry } from './journal';
@@ -166,6 +176,91 @@ export default function SettingsTab(props: {
       setCryptoNote('That did not go through — check your connection and try again.');
     } finally {
       setCryptoBusy(false);
+    }
+  }
+
+  // Cash App payments (owner verifies himself): the buyer sends the money
+  // to $kartoon93 and taps "I paid"; the owner confirms it here.
+  const [cashNote, setCashNote] = useState('');
+  const [cashMsg, setCashMsg] = useState('');
+  const [cashBusy, setCashBusy] = useState(false);
+  const [myCashPayments, setMyCashPayments] = useState<CashAppPayment[]>([]);
+  const [pendingCash, setPendingCash] = useState<CashAppPayment[]>([]);
+
+  async function refreshCashPayments(): Promise<void> {
+    try {
+      const mine = await fetchMyCashAppPayments();
+      setMyCashPayments(mine);
+    } catch {
+      // Best effort — the list just stays as it was.
+    }
+    if (premiumTier === 'owner') {
+      try {
+        setPendingCash(await fetchPendingCashAppPayments());
+      } catch {
+        // Best effort.
+      }
+    }
+  }
+
+  useEffect(() => {
+    if (view !== 'premium') return;
+    void refreshCashPayments();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [view]);
+
+  async function submitCashClaim(tier: 'lit' | 'cloudnine'): Promise<void> {
+    if (cashBusy) return;
+    setCashBusy(true);
+    setCashMsg('');
+    try {
+      await claimCashAppPayment(tier, cashNote);
+      setCashMsg(
+        'Got it — send the money to $kartoon93 if you haven’t yet, then sit tight. The owner checks Cash App and confirms it, and your tier unlocks.',
+      );
+      await refreshCashPayments();
+    } catch (e) {
+      setCashMsg(
+        e instanceof CommunityError
+          ? e.message
+          : 'That did not go through — check your connection and try again.',
+      );
+    } finally {
+      setCashBusy(false);
+    }
+  }
+
+  async function submitCashConfirm(payment: CashAppPayment): Promise<void> {
+    if (cashBusy) return;
+    setCashBusy(true);
+    setCashMsg('');
+    try {
+      const { tier } = await confirmCashAppPayment(payment.id);
+      setCashMsg(
+        `Confirmed — ${payment.name ?? payment.email ?? 'that buyer'} is now on ${tier === 'cloudnine' ? 'Cloud Nine' : 'Lit'}.`,
+      );
+      await refreshCashPayments();
+    } catch (e) {
+      setCashMsg(
+        e instanceof CommunityError
+          ? e.message
+          : 'That did not go through — check your connection and try again.',
+      );
+    } finally {
+      setCashBusy(false);
+    }
+  }
+
+  async function submitCashDecline(payment: CashAppPayment): Promise<void> {
+    if (cashBusy) return;
+    setCashBusy(true);
+    try {
+      await declineCashAppPayment(payment.id);
+      await refreshCashPayments();
+    } catch {
+      setCashMsg('That did not go through — try again.');
+    } finally {
+      setCashBusy(false);
     }
   }
 
@@ -1060,6 +1155,40 @@ export default function SettingsTab(props: {
                       ))}
                     </ul>
                   )}
+                  <h3 style={{ marginTop: 16 }}>Cash App payments to verify</h3>
+                  <p className="muted" style={{ marginTop: 0 }}>
+                    Buyers send the money to <strong>{CASHAPP_TAG}</strong> and tap “I paid”.
+                    Check Cash App, and when the money is there, tap Confirm — their tier
+                    unlocks straight away. Decline takes it off the list when nothing arrived.
+                  </p>
+                  {pendingCash.length === 0 ? (
+                    <p className="muted">Nothing waiting right now.</p>
+                  ) : (
+                    <ul style={{ margin: '8px 0 0', paddingLeft: 0, listStyle: 'none' }}>
+                      {pendingCash.map((p) => (
+                        <li key={p.id} className="card" style={{ marginBottom: 8 }}>
+                          <div>
+                            <strong>{p.tier === 'cloudnine' ? 'Cloud Nine — $49' : 'Lit — $19'}</strong>
+                            {' · '}
+                            {p.name ?? p.email ?? 'a buyer'}
+                            {p.note ? ` · Cash App: ${p.note}` : ''}
+                          </div>
+                          <div className="muted" style={{ fontSize: 13 }}>
+                            {new Date(p.createdAt).toLocaleString()}
+                          </div>
+                          <div style={{ display: 'flex', gap: 8, marginTop: 8 }}>
+                            <button type="button" className="btn" onClick={() => void submitCashConfirm(p)} disabled={cashBusy}>
+                              Confirm — money arrived
+                            </button>
+                            <button type="button" className="btn secondary" onClick={() => void submitCashDecline(p)} disabled={cashBusy}>
+                              Decline
+                            </button>
+                          </div>
+                        </li>
+                      ))}
+                    </ul>
+                  )}
+                  {cashMsg && <p style={{ marginBottom: 0 }}>{cashMsg}</p>}
                 </>
               ) : premiumTier ? (
                 <>
@@ -1138,6 +1267,68 @@ export default function SettingsTab(props: {
                     )}
                   </div>
                   {cryptoNote && <p style={{ marginBottom: 0 }}>{cryptoNote}</p>}
+                  <h3 style={{ marginTop: 16 }}>Pay with Cash App</h3>
+                  <p className="muted" style={{ marginTop: 0 }}>
+                    Send it to <strong>{CASHAPP_TAG}</strong> in Cash App, then tap “I paid”
+                    below. The owner checks Cash App and confirms it, and your tier unlocks.
+                    Same prices, one-time.
+                  </p>
+                  <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap', alignItems: 'center' }}>
+                    <a className="btn secondary" href={CASHAPP_URL} target="_blank" rel="noreferrer">
+                      Open Cash App — {CASHAPP_TAG}
+                    </a>
+                    <button
+                      type="button"
+                      className="btn secondary"
+                      onClick={() => {
+                        try {
+                          void navigator.clipboard?.writeText(CASHAPP_TAG);
+                          setCashMsg(`Copied ${CASHAPP_TAG}.`);
+                        } catch {
+                          setCashMsg(`Copy did not work — the tag is ${CASHAPP_TAG}.`);
+                        }
+                      }}
+                    >
+                      Copy tag
+                    </button>
+                  </div>
+                  <input
+                    value={cashNote}
+                    onChange={(e) => setCashNote(e.target.value)}
+                    placeholder="Your Cash App name (so he knows it’s you)"
+                    autoCorrect="off"
+                    spellCheck={false}
+                    style={{ marginTop: 8, width: '100%' }}
+                    aria-label="Your Cash App name"
+                  />
+                  <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap', marginTop: 8 }}>
+                    {premiumTier !== 'lit' && premiumTier !== 'cloudnine' && (
+                      <button type="button" className="btn" onClick={() => void submitCashClaim('lit')} disabled={cashBusy}>
+                        I paid $19 — Lit
+                      </button>
+                    )}
+                    <button type="button" className="btn secondary" onClick={() => void submitCashClaim('cloudnine')} disabled={cashBusy}>
+                      I paid $49 — Cloud Nine
+                    </button>
+                    <button type="button" className="btn secondary" onClick={() => void refreshCashPayments()} disabled={cashBusy}>
+                      Check my payment
+                    </button>
+                  </div>
+                  {cashMsg && <p style={{ marginBottom: 0 }}>{cashMsg}</p>}
+                  {myCashPayments.length > 0 && (
+                    <ul style={{ margin: '8px 0 0', paddingLeft: 0, listStyle: 'none' }}>
+                      {myCashPayments.map((p) => (
+                        <li key={p.id} className="muted" style={{ marginBottom: 4 }}>
+                          {p.tier === 'cloudnine' ? 'Cloud Nine' : 'Lit'} —{' '}
+                          {p.status === 'confirmed'
+                            ? '✅ Confirmed, tier unlocked.'
+                            : p.status === 'declined'
+                              ? 'Declined — no payment was found. Send it and tap “I paid” again.'
+                              : '⏳ Waiting for the owner to confirm.'}
+                        </li>
+                      ))}
+                    </ul>
+                  )}
                 </>
               )}
             </section>
