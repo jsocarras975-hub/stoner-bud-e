@@ -1469,6 +1469,7 @@ export default function App() {
           lockSettings={lockSettings}
           onLockSettings={setLockSettings}
           biometric={bioStatus}
+          onSyncNow={() => void syncNow('manual')}
         />
       )}
       {tab === 'account' && (

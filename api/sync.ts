@@ -170,6 +170,18 @@ const STRAIN_REVIEWS_DDL = `create table if not exists strain_reviews (
 );
 create index if not exists strain_reviews_strain_id_idx on strain_reviews (strain_id)`;
 
+// Premium redeem codes (Stripe won't take this app, so premium is sold as
+// codes the owner hands out however he gets paid — Square on his site,
+// Cash App, crypto — and the buyer types the code into the app). One row
+// per code: the tier it unlocks, and who redeemed it (null = still good).
+const PREMIUM_CODES_DDL = `create table if not exists premium_codes (
+  code text not null primary key,
+  tier text not null check (tier in ('lit', 'cloudnine')),
+  used_by text references "user" ("id") on delete set null,
+  used_at timestamptz,
+  created_at timestamptz not null default CURRENT_TIMESTAMP
+)`;
+
 let deletedItemsEnsured = false;
 let chatTableEnsured = false;
 let playlistsTableEnsured = false;
@@ -235,6 +247,7 @@ async function ensureCommunityTables(pool: Pool): Promise<void> {
     await pool.query(COMMUNITY_COMMENTS_DDL);
     await pool.query(COMMUNITY_COMMENT_LIKES_DDL);
     await pool.query(STRAIN_REVIEWS_DDL);
+    await pool.query(PREMIUM_CODES_DDL);
     // The posts table predates comment_count (added with comments) — add
     // the column to tables created before it existed. No-op when present.
     await pool.query(
@@ -717,7 +730,120 @@ async function handleCommunity(
     return;
   }
 
+  // ---- Premium redeem codes (see PREMIUM_CODES_DDL) ----
+
+  if (action === 'premium_redeem') {
+    const raw = body.code;
+    if (typeof raw !== 'string' || raw.trim().length === 0) {
+      res.status(400).json({ ok: false, error: 'bad_community_body' });
+      return;
+    }
+    const code = raw.trim().toUpperCase();
+    const found = await pool.query<{ tier: string; used_by: string | null }>(
+      'select tier, used_by from premium_codes where code = $1',
+      [code],
+    );
+    const row = found.rows[0];
+    if (!row) {
+      res.status(400).json({ ok: false, error: 'invalid_code' });
+      return;
+    }
+    if (row.used_by !== null) {
+      res.status(400).json({ ok: false, error: 'already_used' });
+      return;
+    }
+    const tier = row.tier;
+    if (tier !== 'lit' && tier !== 'cloudnine') {
+      res.status(400).json({ ok: false, error: 'invalid_code' });
+      return;
+    }
+    // Do not downgrade: a Lit code cannot take Cloud Nine away, and an
+    // owner already has everything. The code stays unburned so it can
+    // still be given to someone else.
+    const current = await pool.query<{ data: Record<string, unknown> | null }>(
+      'select data from user_settings where user_id = $1',
+      [user.id],
+    );
+    const currentTier = current.rows[0]?.data?.premiumTier;
+    const rank = (t: unknown) => (t === 'owner' ? 3 : t === 'cloudnine' ? 2 : t === 'lit' ? 1 : 0);
+    if (rank(currentTier) >= rank(tier)) {
+      res.status(400).json({ ok: false, error: 'already_premium' });
+      return;
+    }
+    // Mark the code used and set the tier, in one transaction, so a code
+    // can never be redeemed twice.
+    const client = await pool.connect();
+    try {
+      await client.query('begin');
+      const claimed = await client.query(
+        `update premium_codes set used_by = $1, used_at = now()
+         where code = $2 and used_by is null`,
+        [user.id, code],
+      );
+      if ((claimed.rowCount ?? 0) === 0) {
+        await client.query('rollback');
+        res.status(400).json({ ok: false, error: 'already_used' });
+        return;
+      }
+      const data = { ...(current.rows[0]?.data ?? {}), premiumTier: tier };
+      await client.query(
+        `insert into user_settings (user_id, data, updated_at)
+         values ($1, $2, now())
+         on conflict (user_id) do update
+           set data = excluded.data, updated_at = excluded.updated_at`,
+        [user.id, JSON.stringify(data)],
+      );
+      await client.query('commit');
+    } catch {
+      await client.query('rollback').catch(() => {});
+      res.status(500).json({ ok: false, error: 'sync_failed' });
+      return;
+    } finally {
+      client.release();
+    }
+    res.status(200).json({ ok: true, tier });
+    return;
+  }
+
+  // Owner only: mint redeem codes to sell (tier + how many, max 50 at a
+  // time). Codes read BUDE-XXXX-XXXX from an alphabet with no lookalikes
+  // (no 0/O, 1/I, L) so they survive being read out loud or typed by hand.
+  if (action === 'premium_codes_create') {
+    if (!(await isOwner(pool, user.id))) {
+      res.status(403).json({ ok: false, error: 'not_owner' });
+      return;
+    }
+    const tier = body.tier;
+    const count = typeof body.count === 'number' ? Math.floor(body.count) : 0;
+    if ((tier !== 'lit' && tier !== 'cloudnine') || count < 1 || count > 50) {
+      res.status(400).json({ ok: false, error: 'bad_community_body' });
+      return;
+    }
+    const codes: string[] = [];
+    for (let i = 0; i < count; i++) {
+      codes.push(makeRedeemCode());
+    }
+    for (const code of codes) {
+      await pool.query(
+        'insert into premium_codes (code, tier) values ($1, $2) on conflict (code) do nothing',
+        [code, tier],
+      );
+    }
+    res.status(200).json({ ok: true, tier, codes });
+    return;
+  }
+
   res.status(400).json({ ok: false, error: 'bad_community_body' });
+}
+
+/** One redeem code: BUDE-XXXX-XXXX. */
+function makeRedeemCode(): string {
+  const alphabet = 'ABCDEFGHJKMNPQRSTUVWXYZ23456789';
+  let part = '';
+  for (let i = 0; i < 8; i++) {
+    part += alphabet[Math.floor(Math.random() * alphabet.length)];
+  }
+  return `BUDE-${part.slice(0, 4)}-${part.slice(4)}`;
 }
 
 type Req = ReqLike & { on?: unknown };

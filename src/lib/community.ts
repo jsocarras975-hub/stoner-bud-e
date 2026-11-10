@@ -48,7 +48,16 @@ export interface MyStrainReview {
 }
 
 export class CommunityError extends Error {
-  code: 'sign_in' | 'too_many_posts' | 'not_yours' | 'network' | 'other';
+  code:
+    | 'sign_in'
+    | 'too_many_posts'
+    | 'not_yours'
+    | 'network'
+    | 'invalid_code'
+    | 'already_used'
+    | 'already_premium'
+    | 'not_owner'
+    | 'other';
   constructor(code: CommunityError['code'], message?: string) {
     super(message ?? code);
     this.code = code;
@@ -91,6 +100,18 @@ function communityError(status: number, body: unknown): CommunityError {
   }
   if (status === 403 || code === 'not_yours') {
     return new CommunityError('not_yours', 'That post is not yours to delete.');
+  }
+  if (code === 'invalid_code') {
+    return new CommunityError('invalid_code', 'That code does not exist — check it and try again.');
+  }
+  if (code === 'already_used') {
+    return new CommunityError('already_used', 'That code was already used.');
+  }
+  if (code === 'already_premium') {
+    return new CommunityError('already_premium', 'You already have that tier or better — the code stays good for someone else.');
+  }
+  if (code === 'not_owner') {
+    return new CommunityError('not_owner', 'Only the owner can do that.');
   }
   return new CommunityError('other', 'That did not go through — try again.');
 }
@@ -249,4 +270,29 @@ export async function submitStrainReview(
     avg: typeof r?.avg === 'number' ? r.avg : 0,
     count: typeof r?.count === 'number' ? r.count : 0,
   };
+}
+
+/** Redeem a premium code (BUDE-XXXX-XXXX) to unlock Lit or Cloud Nine.
+ *  Throws CommunityError('invalid_code' | 'already_used' |
+ *  'already_premium' | 'sign_in' | 'network'). The server never downgrades
+ *  a tier, and a code that cannot apply stays unburned. */
+export async function redeemPremiumCode(code: string): Promise<{ tier: string }> {
+  const body = await communityCall('premium_redeem', { code });
+  const tier = typeof body.tier === 'string' ? body.tier : '';
+  if (tier !== 'lit' && tier !== 'cloudnine') {
+    throw new CommunityError('other', 'That did not go through — try again.');
+  }
+  return { tier };
+}
+
+/** Owner only: mint redeem codes to sell (tier + how many, max 50). */
+export async function generatePremiumCodes(
+  tier: 'lit' | 'cloudnine',
+  count: number,
+): Promise<{ tier: string; codes: string[] }> {
+  const body = await communityCall('premium_codes_create', { tier, count });
+  const codes = Array.isArray(body.codes)
+    ? (body.codes as unknown[]).filter((c): c is string => typeof c === 'string')
+    : [];
+  return { tier: typeof body.tier === 'string' ? body.tier : tier, codes };
 }

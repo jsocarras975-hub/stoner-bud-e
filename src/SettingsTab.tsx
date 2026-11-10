@@ -19,6 +19,7 @@ import type { VoiceSettings } from './voice';
 import { speakVoice, stopVoice } from './lib/voice-client';
 import { getKeyboardStatus, openKeyboardSettings, showKeyboardPicker } from './lib/keyboard';
 import type { KeyboardStatus } from './lib/keyboard';
+import { CommunityError, generatePremiumCodes, redeemPremiumCode } from './lib/community';
 import { Chip, ChipRow, Label, PageHead } from './bits';
 import type { Personalization, PremiumTier } from './lib/sync';
 import type { JournalEntry } from './journal';
@@ -88,12 +89,14 @@ export default function SettingsTab(props: {
   lockSettings: AppLockSettings | null;
   onLockSettings: (next: AppLockSettings | null) => void;
   biometric: BiometricStatus;
+  /** Pull the latest server state (used after a redeem unlocks a tier). */
+  onSyncNow: () => void;
 }) {
   const {
     theme, onTheme, user, onDeleteAccount, voice, onVoice, apiBase,
     premiumTier = null, personalization, onPersonalization,
     onClearChats, onClearJournal, journal, chats,
-    lockSettings, onLockSettings, biometric,
+    lockSettings, onLockSettings, biometric, onSyncNow,
   } = props;
   const [view, setView] = useState<SettingsView>('main');
   const [deleting, setDeleting] = useState(false);
@@ -109,6 +112,73 @@ export default function SettingsTab(props: {
   // Bud-E Keyboard (phone app only): whether it is enabled and whether it
   // is the keyboard currently in use. Refreshed when the section opens.
   const [keyboardStatus, setKeyboardStatus] = useState<KeyboardStatus | null>(null);
+  // Premium redeem codes (Stripe won't take this app, so premium is sold
+  // as codes): the buyer types one in below; the owner mints them here.
+  const [redeemCode, setRedeemCode] = useState('');
+  const [redeemNote, setRedeemNote] = useState('');
+  const [redeemBusy, setRedeemBusy] = useState(false);
+  const [genTier, setGenTier] = useState<'lit' | 'cloudnine'>('lit');
+  const [genCount, setGenCount] = useState(5);
+  const [genCodes, setGenCodes] = useState<string[]>([]);
+  const [genNote, setGenNote] = useState('');
+  const [genBusy, setGenBusy] = useState(false);
+
+  async function submitRedeem(): Promise<void> {
+    const code = redeemCode.trim();
+    if (!code || redeemBusy) return;
+    setRedeemBusy(true);
+    setRedeemNote('');
+    try {
+      const { tier } = await redeemPremiumCode(code);
+      setRedeemNote(
+        tier === 'cloudnine'
+          ? '☁️ Cloud Nine unlocked — welcome to the top shelf.'
+          : '🌿 Lit unlocked — extra voices, themes, and insights are yours.',
+      );
+      setRedeemCode('');
+      onSyncNow();
+    } catch (e) {
+      setRedeemNote(
+        e instanceof CommunityError
+          ? e.message
+          : 'That did not go through — check your connection and try again.',
+      );
+    } finally {
+      setRedeemBusy(false);
+    }
+  }
+
+  async function submitGenerate(): Promise<void> {
+    if (genBusy) return;
+    setGenBusy(true);
+    setGenNote('');
+    try {
+      const { codes } = await generatePremiumCodes(genTier, genCount);
+      setGenCodes(codes);
+      setGenNote(
+        codes.length === 0
+          ? 'No codes came back — try again.'
+          : `${codes.length} ${genTier === 'lit' ? 'Lit' : 'Cloud Nine'} code${codes.length === 1 ? '' : 's'} ready. Tap one to copy it.`,
+      );
+    } catch (e) {
+      setGenNote(
+        e instanceof CommunityError
+          ? e.message
+          : 'That did not go through — check your connection and try again.',
+      );
+    } finally {
+      setGenBusy(false);
+    }
+  }
+
+  function copyCode(code: string): void {
+    try {
+      void navigator.clipboard?.writeText(code);
+      setGenNote(`Copied ${code} — paste it where you sell it.`);
+    } catch {
+      setGenNote(`Copy did not work — the code is ${code}.`);
+    }
+  }
 
   useEffect(() => {
     if (view !== 'keyboard') return;
@@ -899,12 +969,66 @@ export default function SettingsTab(props: {
                     This tier is not for sale and never shows up for anyone else. It lives on
                     your account only.
                   </p>
+                  <h3 style={{ marginTop: 16 }}>Mint redeem codes</h3>
+                  <p className="muted" style={{ marginTop: 0 }}>
+                    Premium is sold as codes (Stripe won&apos;t take this app). Mint a batch,
+                    sell them however you get paid, and the buyer types the code in below to
+                    unlock. A code works once, for one person.
+                  </p>
+                  <div style={{ display: 'flex', gap: 8, alignItems: 'center', flexWrap: 'wrap' }}>
+                    <select
+                      value={genTier}
+                      onChange={(e) => setGenTier(e.target.value === 'cloudnine' ? 'cloudnine' : 'lit')}
+                      aria-label="Tier"
+                    >
+                      <option value="lit">Lit — $19</option>
+                      <option value="cloudnine">Cloud Nine — $49</option>
+                    </select>
+                    <select
+                      value={genCount}
+                      onChange={(e) => setGenCount(Number(e.target.value) || 5)}
+                      aria-label="How many"
+                    >
+                      {[1, 5, 10, 20, 50].map((n) => (
+                        <option key={n} value={n}>{n} code{n === 1 ? '' : 's'}</option>
+                      ))}
+                    </select>
+                    <button type="button" className="btn" onClick={() => void submitGenerate()} disabled={genBusy}>
+                      {genBusy ? 'Minting…' : 'Mint codes'}
+                    </button>
+                  </div>
+                  {genNote && <p style={{ marginBottom: 0 }}>{genNote}</p>}
+                  {genCodes.length > 0 && (
+                    <ul style={{ margin: '8px 0 0', paddingLeft: 0, listStyle: 'none' }}>
+                      {genCodes.map((code) => (
+                        <li key={code} style={{ marginBottom: 6 }}>
+                          <button
+                            type="button"
+                            className="btn secondary"
+                            onClick={() => copyCode(code)}
+                            style={{ fontFamily: 'monospace' }}
+                          >
+                            {code} — tap to copy
+                          </button>
+                        </li>
+                      ))}
+                    </ul>
+                  )}
                 </>
               ) : premiumTier ? (
-                <p>
-                  I&apos;m on <strong>{premiumTier === 'lit' ? 'Lit' : 'Cloud Nine'}</strong>. Extra
-                  voices, themes, and insights are unlocked.
-                </p>
+                <>
+                  <p>
+                    I&apos;m on <strong>{premiumTier === 'lit' ? 'Lit' : 'Cloud Nine'}</strong>. Extra
+                    voices, themes, and insights are unlocked.
+                  </p>
+                  {premiumTier === 'lit' && (
+                    <p className="muted">
+                      Got a Cloud Nine code? Redeem it below and it upgrades you — a Lit code
+                      can&apos;t take Cloud Nine away, and a code that doesn&apos;t apply stays good
+                      for someone else.
+                    </p>
+                  )}
+                </>
               ) : (
                 <>
                   <p>Unlock more with a one-time purchase. Nothing existing gets paywalled.</p>
@@ -919,16 +1043,34 @@ export default function SettingsTab(props: {
                       you.
                     </li>
                   </ul>
-                  <p className="muted">
-                    Checkout is switched off for now. Payments are not set up yet — cannabis-related
-                    businesses may need special approval from the processor before this can go live.
+                </>
+              )}
+              {premiumTier !== 'owner' && (
+                <>
+                  <h3 style={{ marginTop: 16 }}>Redeem a code</h3>
+                  <p className="muted" style={{ marginTop: 0 }}>
+                    Bought a code? Type it in — it unlocks right away. Codes look like
+                    BUDE-XXXX-XXXX.
                   </p>
-                  <button type="button" className="btn" disabled>
-                    Get Lit — $19 (coming soon)
-                  </button>
-                  <button type="button" className="btn secondary" style={{ marginLeft: 8 }} disabled>
-                    Get Cloud Nine — $49 (coming soon)
-                  </button>
+                  <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap' }}>
+                    <input
+                      value={redeemCode}
+                      onChange={(e) => setRedeemCode(e.target.value.toUpperCase())}
+                      onKeyDown={(e) => {
+                        if (e.key === 'Enter') void submitRedeem();
+                      }}
+                      placeholder="BUDE-XXXX-XXXX"
+                      autoCapitalize="characters"
+                      autoCorrect="off"
+                      spellCheck={false}
+                      style={{ flex: '1 1 160px', fontFamily: 'monospace' }}
+                      aria-label="Redeem code"
+                    />
+                    <button type="button" className="btn" onClick={() => void submitRedeem()} disabled={redeemBusy || redeemCode.trim() === ''}>
+                      {redeemBusy ? 'Checking…' : 'Redeem'}
+                    </button>
+                  </div>
+                  {redeemNote && <p style={{ marginBottom: 0 }}>{redeemNote}</p>}
                 </>
               )}
             </section>
