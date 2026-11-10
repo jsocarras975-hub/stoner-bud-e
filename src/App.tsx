@@ -1215,7 +1215,6 @@ export default function App() {
         declined={ageDeclined}
         onConfirm={confirmAge}
         onDecline={() => setAgeDeclined(true)}
-        onRetry={() => setAgeDeclined(false)}
       />
     );
   }
@@ -1639,13 +1638,10 @@ function AgeGate({
   declined,
   onConfirm,
   onDecline,
-  onRetry,
 }: {
   declined: boolean;
   onConfirm: () => void;
   onDecline: () => void;
-  /** Back to the birthdate form (a typo, not a bypass — the date is checked again). */
-  onRetry: () => void;
 }) {
   const [month, setMonth] = useState('');
   const [day, setDay] = useState('');
@@ -1701,13 +1697,9 @@ function AgeGate({
           <section className="card" aria-label="Adults only">
             <p className="eyebrow">21+ only</p>
             <h2 style={{ marginTop: 8 }}>This one is for adults.</h2>
-            <p className="muted">
-              Bud-E is only for people 21 and over. If that was a typo in the birthdate, you can
-              check it again.
+            <p className="muted" style={{ marginBottom: 0 }}>
+              Bud-E is only for people 21 and over.
             </p>
-            <button className="btn btn-block" onClick={onRetry}>
-              Check my birthdate again
-            </button>
           </section>
         ) : (
           <section className="card" aria-label="Enter your birthdate">
