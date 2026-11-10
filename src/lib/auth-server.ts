@@ -69,12 +69,18 @@ function buildAuth(pool: Pool, secret: string) {
       enabled: true,
       minPasswordLength: 8,
       requireEmailVerification: false,
-      // Forgot password: Better Auth builds the reset link and hands it
-      // here; the mailer sends it from the owner's Gmail. Until GMAIL_USER
-      // + GMAIL_APP_PASSWORD are set in Vercel, the hook throws and the
-      // form says the emails are not set up yet.
-      sendResetPassword: async ({ user, url }) => {
-        await sendResetPasswordEmail(user.email, url);
+      // Forgot password: Better Auth builds a reset link that points at
+      // {baseURL}/reset-password/{token}, but the auth handler lives under
+      // /api/auth/* and that root-level route 404s on Vercel (no rewrite
+      // reaches it). So ignore Better Auth's `url` and link straight to
+      // the app root with ?token= instead — App.tsx reads the token from
+      // the query string and shows the reset form. The mailer sends it
+      // from the owner's Gmail. Until GMAIL_USER + GMAIL_APP_PASSWORD are
+      // set in Vercel, the hook throws and the form says the emails are
+      // not set up yet.
+      sendResetPassword: async ({ user, token }) => {
+        const resetUrl = `${LIVE_ORIGIN}/?token=${token}`;
+        await sendResetPasswordEmail(user.email, resetUrl);
       },
     },
     // Change email: accounts never verify their email (see above), so the
