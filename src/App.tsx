@@ -2202,7 +2202,7 @@ function ChatTab({
               Chats
             </button>
             <button type="button" className="btn secondary" onClick={onOpenDriving} style={{ marginLeft: 8 }}>
-              🚗 Driving
+              🎙️ Hands Free
             </button>
           </div>
 

@@ -234,7 +234,7 @@ export default function DrivingMode(props: {
     <div
       className="driving-overlay"
       role="dialog"
-      aria-label="Driving mode"
+      aria-label="Hands Free"
       style={{
         position: 'fixed',
         inset: 0,
@@ -249,7 +249,7 @@ export default function DrivingMode(props: {
     >
       <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
         <h1 className="page-title" style={{ margin: 0 }}>
-          🚗 Driving mode
+          🎙️ Hands Free
         </h1>
         <button type="button" className="btn secondary" onClick={() => void stopDriving()}>
           ✕ Close
@@ -257,7 +257,7 @@ export default function DrivingMode(props: {
       </div>
       <p className="muted small" style={{ marginTop: 8 }}>
         Hands-free: Bud-E listens, answers out loud, then listens again. This talk is not saved to
-        your chats — it is just for the drive. Never look at the screen while the car is moving.
+        your chats — it is just for this session. Never look at the screen while the car is moving.
       </p>
 
       <p className="muted" style={{ marginTop: 12 }}>
@@ -293,7 +293,7 @@ export default function DrivingMode(props: {
           style={{ padding: '20px 16px', fontSize: '1.25rem', marginTop: 16 }}
           onClick={() => void startDriving()}
         >
-          ▶️ Start driving
+          ▶️ Start hands-free
         </button>
       ) : (
         <>
@@ -312,7 +312,7 @@ export default function DrivingMode(props: {
             style={{ padding: '16px', marginTop: 12 }}
             onClick={() => void stopDriving()}
           >
-            ■ Stop driving
+            ■ Stop
           </button>
         </>
       )}
