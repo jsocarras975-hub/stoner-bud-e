@@ -88,7 +88,7 @@ public class BudEKeyboardService extends InputMethodService {
     };
 
     private enum Mode { LETTERS, SYMBOLS, MEDIA }
-    private enum MediaTab { STICKERS, EMOJI }
+    private enum MediaTab { STICKERS, EMOJI, APPS }
 
     private Mode mode = Mode.LETTERS;
     private MediaTab mediaTab = MediaTab.STICKERS;
@@ -116,6 +116,10 @@ public class BudEKeyboardService extends InputMethodService {
             backspaceHandler.postDelayed(this, BACKSPACE_REPEAT_INTERVAL_MS);
         }
     };
+
+    /** The phone's launcher apps, for the Apps tab. Loaded once, lazily,
+     *  the first time the tab opens, then cached. */
+    private List<android.content.pm.ResolveInfo> launcherApps = null;
 
     // ------------------------------------------------------------------
     // InputMethodService
@@ -328,6 +332,7 @@ public class BudEKeyboardService extends InputMethodService {
         tabs.setOrientation(LinearLayout.HORIZONTAL);
         Button stickersTab = makeKey("Stickers", 1f);
         Button emojiTab = makeKey("Emoji", 1f);
+        Button appsTab = makeKey("Apps", 1f);
         stickersTab.setOnClickListener(v -> {
             v.performHapticFeedback(HapticFeedbackConstants.KEYBOARD_TAP);
             mediaTab = MediaTab.STICKERS;
@@ -338,15 +343,24 @@ public class BudEKeyboardService extends InputMethodService {
             mediaTab = MediaTab.EMOJI;
             showMode(Mode.MEDIA);
         });
+        appsTab.setOnClickListener(v -> {
+            v.performHapticFeedback(HapticFeedbackConstants.KEYBOARD_TAP);
+            mediaTab = MediaTab.APPS;
+            showMode(Mode.MEDIA);
+        });
         if (mediaTab == MediaTab.STICKERS) {
             stickersTab.setBackground(keyBackground(true));
             stickersTab.setTextColor(theme.accentInk);
-        } else {
+        } else if (mediaTab == MediaTab.EMOJI) {
             emojiTab.setBackground(keyBackground(true));
             emojiTab.setTextColor(theme.accentInk);
+        } else {
+            appsTab.setBackground(keyBackground(true));
+            appsTab.setTextColor(theme.accentInk);
         }
         tabs.addView(stickersTab);
         tabs.addView(emojiTab);
+        tabs.addView(appsTab);
         col.addView(tabs);
 
         ScrollView scroll = new ScrollView(this);
@@ -382,7 +396,7 @@ public class BudEKeyboardService extends InputMethodService {
                 params.setMargins(gap / 2, gap / 2, gap / 2, gap / 2);
                 grid.addView(btn, params);
             }
-        } else {
+        } else if (mediaTab == MediaTab.EMOJI) {
             for (String emoji : EMOJIS) {
                 Button btn = makeKey(emoji, 1f);
                 btn.setTextSize(22);
@@ -397,6 +411,53 @@ public class BudEKeyboardService extends InputMethodService {
                 params.columnSpec = GridLayout.spec(GridLayout.UNDEFINED, 1f);
                 params.setMargins(gap / 2, gap / 2, gap / 2, gap / 2);
                 grid.addView(btn, params);
+            }
+        } else {
+            // Apps: every launcher app on the phone, icon + name, tap to open.
+            List<android.content.pm.ResolveInfo> apps = getLauncherApps();
+            if (apps.isEmpty()) {
+                TextView empty = new TextView(this);
+                empty.setText("No apps found on this phone.");
+                empty.setTextColor(theme.muted);
+                empty.setTextSize(15);
+                empty.setGravity(Gravity.CENTER);
+                empty.setPadding(dp(8), dp(24), dp(8), dp(24));
+                grid.addView(empty);
+            }
+            for (android.content.pm.ResolveInfo info : apps) {
+                String packageName = info.activityInfo.packageName;
+                CharSequence label = info.loadLabel(getPackageManager());
+                Drawable icon = info.loadIcon(getPackageManager());
+                LinearLayout cell = new LinearLayout(this);
+                cell.setOrientation(LinearLayout.VERTICAL);
+                cell.setGravity(Gravity.CENTER_HORIZONTAL);
+                cell.setBackground(keyBackground(false));
+                cell.setPadding(dp(4), dp(8), dp(4), dp(8));
+                android.widget.ImageView iconView = new android.widget.ImageView(this);
+                iconView.setImageDrawable(icon);
+                LinearLayout.LayoutParams iconParams = new LinearLayout.LayoutParams(dp(40), dp(40));
+                cell.addView(iconView, iconParams);
+                TextView name = new TextView(this);
+                name.setText(label);
+                name.setTextColor(theme.text);
+                name.setTextSize(11);
+                name.setMaxLines(1);
+                name.setEllipsize(android.text.TextUtils.TruncateAt.END);
+                name.setGravity(Gravity.CENTER);
+                LinearLayout.LayoutParams nameParams = new LinearLayout.LayoutParams(
+                        ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.WRAP_CONTENT);
+                nameParams.topMargin = dp(4);
+                cell.addView(name, nameParams);
+                cell.setOnClickListener(v -> {
+                    v.performHapticFeedback(HapticFeedbackConstants.KEYBOARD_TAP);
+                    openApp(packageName);
+                });
+                GridLayout.LayoutParams params = new GridLayout.LayoutParams();
+                params.width = 0;
+                params.height = dp(72);
+                params.columnSpec = GridLayout.spec(GridLayout.UNDEFINED, 1f);
+                params.setMargins(gap / 2, gap / 2, gap / 2, gap / 2);
+                grid.addView(cell, params);
             }
         }
         scroll.addView(grid);
@@ -692,6 +753,40 @@ public class BudEKeyboardService extends InputMethodService {
     private void openBudEApp() {
         Intent intent = getPackageManager().getLaunchIntentForPackage(getPackageName());
         if (intent == null) return;
+        intent.addFlags(Intent.FLAG_ACTIVITY_NEW_TASK);
+        startActivity(intent);
+    }
+
+    /** Every app with a home-screen icon on this phone, A–Z by name.
+     *  Loaded once and cached. Needs the LAUNCHER <queries> entry in the
+     *  manifest (Android 11+ package visibility). */
+    private List<android.content.pm.ResolveInfo> getLauncherApps() {
+        if (launcherApps != null) return launcherApps;
+        List<android.content.pm.ResolveInfo> apps = new ArrayList<>();
+        try {
+            Intent main = new Intent(Intent.ACTION_MAIN);
+            main.addCategory(Intent.CATEGORY_LAUNCHER);
+            apps = getPackageManager().queryIntentActivities(main, 0);
+            final android.content.pm.PackageManager pm = getPackageManager();
+            java.util.Collections.sort(apps, (a, b) -> {
+                CharSequence la = a.loadLabel(pm);
+                CharSequence lb = b.loadLabel(pm);
+                return String.valueOf(la).compareToIgnoreCase(String.valueOf(lb));
+            });
+        } catch (Exception ignored) {
+            // No list — the Apps tab shows its empty message.
+        }
+        launcherApps = apps;
+        return launcherApps;
+    }
+
+    /** Open any app from the keyboard, the same way the leaf opens Bud-E. */
+    private void openApp(String packageName) {
+        Intent intent = getPackageManager().getLaunchIntentForPackage(packageName);
+        if (intent == null) {
+            Toast.makeText(this, "That app can't be opened from here.", Toast.LENGTH_SHORT).show();
+            return;
+        }
         intent.addFlags(Intent.FLAG_ACTIVITY_NEW_TASK);
         startActivity(intent);
     }

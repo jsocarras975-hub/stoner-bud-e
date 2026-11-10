@@ -16,6 +16,12 @@
             <data android:mimeType="vnd.android.cursor.dir/event" />
             <data android:scheme="content" android:host="com.android.calendar" />
         </intent>
+        <!-- The keyboard's Apps tab lists the phone's launcher apps so the
+             user can open any of them from the keyboard. -->
+        <intent>
+            <action android:name="android.intent.action.MAIN" />
+            <category android:name="android.intent.category.LAUNCHER" />
+        </intent>
     </queries>
 
     <application
