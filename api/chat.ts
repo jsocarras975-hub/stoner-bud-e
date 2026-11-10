@@ -27,15 +27,16 @@ const SEARCH_TOOL = { type: 'browser_search' } as const;
 // look at one. qwen/qwen3.8-27b is the free-tier vision model (up to 3
 // images per request, each counts as 2,048 input tokens). It only takes
 // images in — the answer is still text.
-// CAUTION: Groq's free tier for this preview model is about ONE photo a
-// minute — the second photo inside the same minute fails (proven live
-// 2026-11-09: call 1 worked, calls 2–3 failed, call after a 65s pause
+// CAUTION: Groq's free tier for these preview models is about ONE photo a
+// minute per model — the second photo inside the same minute fails (proven
+// live 2026-11-09: call 1 worked, calls 2–3 failed, call after a 65s pause
 // worked). Llama 4 Scout is NOT a fallback: Groq decommissioned it
-// 2026-07-17 (404 now) and qwen is their only vision model. So the
-// fallback is Gemini (callGeminiVision below) — the project's
-// GEMINI_API_KEY, free tier, far more generous. Groq first, Gemini when
-// Groq says no.
-const VISION_MODEL = 'qwen/qwen3.8-27b';
+// 2026-07-17 (404 now). qwen3.6-27b is a second Qwen vision model on Groq
+// (their named Scout replacement) with its own rate-limit bucket, so it is
+// tried second; Gemini (callGeminiVision below) is the third try — the
+// project's GEMINI_API_KEY, free tier, far more generous. Groq 3.8, then
+// Groq 3.6, then Gemini.
+const VISION_MODELS = ['qwen/qwen3.8-27b', 'qwen/qwen3.6-27b'];
 
 interface SourceLink {
   title: string;
@@ -494,7 +495,13 @@ export default async function handler(req: ReqLike, res: ResLike): Promise<void>
           break;
         }
       }
-      const vision = await callGroq(apiKey, VISION_MODEL, groqMessages, false, false);
+      // Try each vision model in turn (separate rate-limit buckets), then
+      // Gemini, so a second photo in the same minute still gets answered.
+      let vision: { reply: string; sources: SourceLink[] } | null = null;
+      for (const model of VISION_MODELS) {
+        vision = await callGroq(apiKey, model, groqMessages, false, false);
+        if (vision) break;
+      }
       if (vision) {
         res.status(200).json({
           ok: true,
