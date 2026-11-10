@@ -11,11 +11,10 @@ import android.widget.RemoteViews;
 
 /**
  * Bud-E's home-screen widget (4 wide, 2 tall): the stash line on top,
- * Talk / Open Bud-E, then Log / Stash / Tonight. Talk goes to the app,
- * which opens the voice session when Bud-E is the default assistant
- * (a plain ACTION_ASSIST intent cannot open the session — it just
- * resolves to an app). The other buttons open the app straight to that
- * tab. The widget never talks by itself; it only opens things.
+ * Talk / Open Bud-E, then Log / Stash / Tonight. Talk opens the bubble
+ * chat panel (MainActivity starts the bubble service and asks it to
+ * expand); the other buttons open the app straight to that tab. The
+ * widget never talks by itself; it only opens things.
  *
  * The stash line comes from SharedPreferences ("bude-widget"), written
  * by the app whenever the stash changes — a low jar wins the line, so
@@ -49,8 +48,8 @@ public class BudEWidgetProvider extends AppWidgetProvider {
             RemoteViews views = new RemoteViews(context.getPackageName(), R.layout.bud_e_widget);
             views.setTextViewText(R.id.widget_stash, line);
             views.setTextColor(R.id.widget_stash, color);
-            // Talk: the app opens the voice session when Bud-E is the
-            // default assistant, and the chat tab otherwise.
+            // Talk: the app starts the bubble service and opens the chat
+            // panel (the voice session is only for the notification now).
             views.setOnClickPendingIntent(R.id.widget_talk, tabIntent(context, 0, true, null));
             views.setOnClickPendingIntent(R.id.widget_open, tabIntent(context, 1, false, null));
             views.setOnClickPendingIntent(R.id.widget_log, tabIntent(context, 2, false, "journal"));
@@ -65,7 +64,7 @@ public class BudEWidgetProvider extends AppWidgetProvider {
         Intent intent = new Intent(context, MainActivity.class)
                 .addFlags(Intent.FLAG_ACTIVITY_NEW_TASK | Intent.FLAG_ACTIVITY_CLEAR_TOP);
         if (talk) {
-            intent.putExtra("bude_talk", true);
+            intent.putExtra("bude_bubble_chat", true);
         } else if (tab != null) {
             intent.putExtra("bude_tab", tab);
         }

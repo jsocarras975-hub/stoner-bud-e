@@ -43,12 +43,13 @@ public class BudEInteractionService extends VoiceInteractionService {
 
     /**
      * Ask the system to show Bud-E's voice session — the overlay that
-     * listens (the same one the power-button long-press opens). Only works
-     * when this service is running, i.e. Bud-E is the phone's default
-     * assistant. A plain ACTION_ASSIST intent cannot open the session (it
-     * just resolves to an app), which is why Talk goes through here.
-     * Returns false when there is no live service to ask, so the caller
-     * can fall back to opening the app instead.
+     * listens. Only works when this service is running, i.e. Bud-E is the
+     * phone's default assistant. A plain ACTION_ASSIST intent cannot open
+     * the session (it just resolves to an app), which is why Talk goes
+     * through here. Only the notification's Talk button uses this now:
+     * the widget Talk button and the power-button long-press open the
+     * bubble chat instead. Returns false when there is no live service
+     * to ask, so the caller can fall back to opening the app instead.
      */
     public static boolean showVoiceSession() {
         BudEInteractionService service = instance;
@@ -57,7 +58,11 @@ public class BudEInteractionService extends VoiceInteractionService {
             // Flag 1 = SHOW_WITH_ASSIST (opened the way the power-button
             // long-press opens it). The constant is hidden from the public
             // SDK, so the value is written out — it is stable AOSP API.
-            service.showSession(new android.os.Bundle(), 1);
+            // bude_voice marks this as an explicit voice request, so the
+            // session listens instead of handing off to the bubble chat.
+            android.os.Bundle args = new android.os.Bundle();
+            args.putBoolean("bude_voice", true);
+            service.showSession(args, 1);
             return true;
         } catch (Exception e) {
             Log.w(TAG, "showSession failed", e);

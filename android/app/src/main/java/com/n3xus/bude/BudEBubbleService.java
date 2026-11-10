@@ -56,6 +56,8 @@ import java.util.ArrayList;
 public class BudEBubbleService extends Service {
     public static final String PREFS = "bude-bubble";
     public static final String KEY_ENABLED = "enabled";
+    /** Start action: open the chat panel as soon as the service is up. */
+    public static final String ACTION_EXPAND_CHAT = "com.n3xus.bude.ACTION_EXPAND_CHAT";
     private static final int NOTIFICATION_ID = 1002;
     private static final String CHANNEL_ID = "bud-e-talk"; // same channel as the Talk notification
 
@@ -101,6 +103,17 @@ public class BudEBubbleService extends Service {
         }
     }
 
+    /** Start the service and open the chat panel once it is up. */
+    public static void startWithAction(Context context, String action) {
+        Intent intent = new Intent(context, BudEBubbleService.class);
+        intent.setAction(action);
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
+            context.startForegroundService(intent);
+        } else {
+            context.startService(intent);
+        }
+    }
+
     public static void stop(Context context) {
         context.stopService(new Intent(context, BudEBubbleService.class));
     }
@@ -131,6 +144,11 @@ public class BudEBubbleService extends Service {
 
     @Override
     public int onStartCommand(Intent intent, int flags, int startId) {
+        if (intent != null && ACTION_EXPAND_CHAT.equals(intent.getAction())) {
+            // The circle is up by now (onCreate runs first) — swap it for
+            // the chat panel. A no-op when the panel is already open.
+            expandChat();
+        }
         // If the system kills the service, bring the bubble back.
         return START_STICKY;
     }
