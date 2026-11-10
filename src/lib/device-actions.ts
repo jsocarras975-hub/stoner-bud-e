@@ -1,9 +1,10 @@
 // Stoner Bud-E — device actions: read the JSON action block out of a chat
 // reply and run it on the phone. The server only ever emits one of the
-// seven actions (see api/chat.ts ACTIONS_GUIDE). On the plain web there
-// is no phone to act on, so the block is stripped and the user gets a
-// plain note instead. Everything is guarded — a bad action, a missing
-// plugin, or a refused phone call never breaks the chat.
+// eleven actions (see api/chat.ts ACTIONS_GUIDE): seven phone actions and
+// four app actions (stash add/subtract, log a session, open a tab). On the
+// plain web there is no phone to act on, so the block is stripped and the
+// user gets a plain note instead. Everything is guarded — a bad action, a
+// missing plugin, or a refused phone call never breaks the chat.
 
 import { Capacitor, registerPlugin } from '@capacitor/core';
 import { isNativeApp } from './timer-notifications';
@@ -17,14 +18,33 @@ export type DeviceAction =
   | { action: 'call_contact'; name?: string; number?: string }
   | { action: 'text_contact'; name?: string; number?: string; message: string };
 
+/** Actions that change the app itself (stash, journal, navigation). */
+export type AppAction =
+  | { action: 'stash_add'; name: string; amount: number; unit: 'g' | 'mg' | 'pieces' }
+  | { action: 'stash_subtract'; name: string; amount: number; unit: 'g' | 'mg' | 'pieces' }
+  | { action: 'log_session'; strain: string; amount: number; unit: 'mg' | 'g'; method?: string }
+  | { action: 'open_tab'; tab: string };
+
+export type ChatAction = DeviceAction | AppAction;
+
+/** True when the action changes the app (stash, journal, navigation). */
+export function isAppAction(action: ChatAction): action is AppAction {
+  return (
+    action.action === 'stash_add' ||
+    action.action === 'stash_subtract' ||
+    action.action === 'log_session' ||
+    action.action === 'open_tab'
+  );
+}
+
 const ACTION_BLOCK_RE = /```action\s*\n?([\s\S]*?)\n?```/;
 
 function isInt(value: unknown): value is number {
   return typeof value === 'number' && Number.isFinite(value) && Math.floor(value) === value;
 }
 
-/** Validate the parsed JSON into one of the seven known actions, or null. */
-function cleanAction(value: unknown): DeviceAction | null {
+/** Validate the parsed JSON into one of the eleven known actions, or null. */
+function cleanAction(value: unknown): ChatAction | null {
   if (!value || typeof value !== 'object') return null;
   const rec = value as Record<string, unknown>;
   // Call/text target: a contact name, a number, or both (name wins).
@@ -39,6 +59,15 @@ function cleanAction(value: unknown): DeviceAction | null {
       out.number = rec.number.trim().slice(0, 40);
     }
     return out.name !== undefined || out.number !== undefined ? out : null;
+  };
+  // Stash amount: a positive number, in g, mg, or pieces.
+  const stashAmount = (
+    rec: Record<string, unknown>,
+  ): { amount: number; unit: 'g' | 'mg' | 'pieces' } | null => {
+    if (typeof rec.amount !== 'number' || !Number.isFinite(rec.amount)) return null;
+    if (rec.amount <= 0 || rec.amount > 100000) return null;
+    if (rec.unit !== 'g' && rec.unit !== 'mg' && rec.unit !== 'pieces') return null;
+    return { amount: rec.amount, unit: rec.unit };
   };
   switch (rec.action) {
     case 'set_alarm': {
@@ -97,8 +126,51 @@ function cleanAction(value: unknown): DeviceAction | null {
       if (typeof rec.message !== 'string' || rec.message.trim() === '') return null;
       return { action: 'text_contact', ...who, message: rec.message.trim().slice(0, 1000) };
     }
+    case 'stash_add':
+    case 'stash_subtract': {
+      if (typeof rec.name !== 'string' || rec.name.trim() === '') return null;
+      const amount = stashAmount(rec);
+      if (!amount) return null;
+      return { action: rec.action, name: rec.name.trim().slice(0, 100), ...amount };
+    }
+    case 'log_session': {
+      if (typeof rec.strain !== 'string' || rec.strain.trim() === '') return null;
+      if (typeof rec.amount !== 'number' || !Number.isFinite(rec.amount)) return null;
+      if (rec.amount <= 0 || rec.amount > 100000) return null;
+      if (rec.unit !== 'mg' && rec.unit !== 'g') return null;
+      const method =
+        typeof rec.method === 'string' &&
+        ['flower', 'edible', 'vape', 'dab', 'drink', 'other'].includes(rec.method)
+          ? rec.method
+          : undefined;
+      return {
+        action: 'log_session',
+        strain: rec.strain.trim().slice(0, 100),
+        amount: rec.amount,
+        unit: rec.unit,
+        ...(method ? { method } : {}),
+      };
+    }
+    case 'open_tab': {
+      if (typeof rec.tab !== 'string' || rec.tab.trim() === '') return null;
+      return { action: 'open_tab', tab: rec.tab.trim().slice(0, 30) };
+    }
     default:
       return null;
+  }
+}
+
+/**
+ * Parse + validate an app-action JSON string (relayed in from the bubble
+ * or voice chat through launch info). Null when it is not a known app
+ * action.
+ */
+export function parseAppAction(raw: string): AppAction | null {
+  try {
+    const action = cleanAction(JSON.parse(raw));
+    return action && isAppAction(action) ? action : null;
+  } catch {
+    return null;
   }
 }
 
@@ -109,12 +181,12 @@ function cleanAction(value: unknown): DeviceAction | null {
  */
 export function extractDeviceAction(reply: string): {
   text: string;
-  action: DeviceAction | null;
+  action: ChatAction | null;
 } {
   const match = ACTION_BLOCK_RE.exec(reply);
   if (!match) return { text: reply.trim(), action: null };
   const text = reply.replace(ACTION_BLOCK_RE, '').replace(/ {2,}/g, ' ').trim();
-  let action: DeviceAction | null = null;
+  let action: ChatAction | null = null;
   try {
     action = cleanAction(JSON.parse(match[1].trim()));
   } catch {
@@ -139,12 +211,13 @@ export function localIsoNow(): string {
 
 interface BudEActionsPlugin {
   execute(options: { action: DeviceAction }): Promise<{ ok: boolean; message: string }>;
-  getLaunchInfo(): Promise<{ tab?: string; sharedText?: string }>;
+  getLaunchInfo(): Promise<{ tab?: string; sharedText?: string; appAction?: string }>;
   getTalkNotification(): Promise<{ enabled?: boolean }>;
   setTalkNotification(options: { enabled: boolean }): Promise<{ enabled?: boolean }>;
   getAssistantStatus(): Promise<{ isAssistant?: boolean }>;
   openDefaultAppsSettings(): Promise<{ ok?: boolean }>;
   publishWidgetStash(options: { stashLine: string; lowLine: string }): Promise<{ ok?: boolean }>;
+  publishStashSummary(options: { summary: string }): Promise<{ ok?: boolean }>;
   getBubbleStatus(): Promise<{ enabled?: boolean; canDrawOverlays?: boolean }>;
   setBubbleEnabled(options: { enabled: boolean }): Promise<{ enabled?: boolean }>;
   openOverlaySettings(): Promise<{ ok?: boolean }>;
@@ -154,19 +227,20 @@ const BudEActions = registerPlugin<BudEActionsPlugin>('BudEActions');
 
 /**
  * One-shot launch info (a shortcut's tab, text shared in from another
- * app). The native side clears it on read, so it never fires twice.
- * Empty on the plain web.
+ * app, or an app action the bubble/voice chat asked for). The native side
+ * clears it on read, so it never fires twice. Empty on the plain web.
  */
-export async function getLaunchInfo(): Promise<{ tab: string; sharedText: string }> {
-  if (!isNativeApp()) return { tab: '', sharedText: '' };
+export async function getLaunchInfo(): Promise<{ tab: string; sharedText: string; appAction: string }> {
+  if (!isNativeApp()) return { tab: '', sharedText: '', appAction: '' };
   try {
     const res = await BudEActions.getLaunchInfo();
     return {
       tab: typeof res?.tab === 'string' ? res.tab : '',
       sharedText: typeof res?.sharedText === 'string' ? res.sharedText : '',
+      appAction: typeof res?.appAction === 'string' ? res.appAction : '',
     };
   } catch {
-    return { tab: '', sharedText: '' };
+    return { tab: '', sharedText: '', appAction: '' };
   }
 }
 
@@ -223,6 +297,20 @@ export async function publishWidgetStash(stashLine: string, lowLine: string): Pr
     await BudEActions.publishWidgetStash({ stashLine, lowLine });
   } catch {
     // Best effort — the widget just keeps its old line.
+  }
+}
+
+/**
+ * Write the stash summary the bubble and voice chats send to the server,
+ * so Bud-E knows what jars exist when the user asks it to change the
+ * stash. Best effort — without it, Bud-E just asks which jar.
+ */
+export async function publishStashSummary(summary: string): Promise<void> {
+  if (!isNativeApp()) return;
+  try {
+    await BudEActions.publishStashSummary({ summary });
+  } catch {
+    // Best effort — Bud-E just asks which jar.
   }
 }
 

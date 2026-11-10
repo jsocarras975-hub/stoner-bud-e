@@ -41,6 +41,13 @@ public final class BudEChatClient {
     }
 
     public static String ask(String text) {
+        return ask(null, text);
+    }
+
+    /** Same as {@link #ask(String)}, but the stash summary the app
+     *  published is sent along, so Bud-E knows what jars exist when the
+     *  user asks it to change the stash. */
+    public static String ask(android.content.Context context, String text) {
         JSONArray messages = new JSONArray();
         try {
             JSONObject message = new JSONObject();
@@ -50,7 +57,7 @@ public final class BudEChatClient {
         } catch (Exception e) {
             return null;
         }
-        return post(messages);
+        return post(messages, readStashSummary(context));
     }
 
     /** Same call, with the conversation so far — the bubble chat keeps
@@ -58,6 +65,12 @@ public final class BudEChatClient {
      *  session does. Each entry is {role, text}; roles are "user" or
      *  "assistant". */
     public static String askHistory(java.util.List<String[]> history) {
+        return askHistory(null, history);
+    }
+
+    /** Same as {@link #askHistory(java.util.List)}, but the stash summary
+     *  the app published is sent along. */
+    public static String askHistory(android.content.Context context, java.util.List<String[]> history) {
         JSONArray messages = new JSONArray();
         try {
             for (String[] entry : history) {
@@ -71,10 +84,30 @@ public final class BudEChatClient {
             return null;
         }
         if (messages.length() == 0) return null;
-        return post(messages);
+        return post(messages, readStashSummary(context));
+    }
+
+    /** Where the app publishes the stash summary for the native chats. */
+    public static final String STASH_PREFS = "bude-stash";
+    public static final String STASH_SUMMARY_KEY = "summary";
+
+    /** The stash summary the app published, or null when there is none. */
+    private static String readStashSummary(android.content.Context context) {
+        if (context == null) return null;
+        try {
+            String summary = context.getSharedPreferences(STASH_PREFS, android.content.Context.MODE_PRIVATE)
+                    .getString(STASH_SUMMARY_KEY, "");
+            return summary == null || summary.isEmpty() ? null : summary;
+        } catch (Exception e) {
+            return null;
+        }
     }
 
     private static String post(JSONArray messages) {
+        return post(messages, null);
+    }
+
+    private static String post(JSONArray messages, String stashSummary) {
         HttpURLConnection conn = null;
         try {
             conn = (HttpURLConnection) new URL(CHAT_URL).openConnection();
@@ -91,6 +124,11 @@ public final class BudEChatClient {
             // The server uses this to resolve "tomorrow at noon" and other
             // relative times into real dates for device actions.
             body.put("now", localIsoNow());
+            // What jars exist and how much is in each — so Bud-E can add
+            // to, take off, and log against the right jar.
+            if (stashSummary != null && !stashSummary.isEmpty()) {
+                body.put("stash", stashSummary);
+            }
 
             byte[] payload = body.toString().getBytes(StandardCharsets.UTF_8);
             try (OutputStream out = conn.getOutputStream()) {

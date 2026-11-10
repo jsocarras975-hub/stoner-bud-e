@@ -407,7 +407,7 @@ public class BudESession extends VoiceInteractionSession {
         network.execute(new Runnable() {
             @Override
             public void run() {
-                final String reply = BudEChatClient.ask(text);
+                final String reply = BudEChatClient.ask(getContext(), text);
                 mainHandler.post(new Runnable() {
                     @Override
                     public void run() {
@@ -425,7 +425,34 @@ public class BudESession extends VoiceInteractionSession {
                             JSONObject action = BudEActions.extractAction(reply);
                             String clean = BudEActions.stripActionBlock(reply);
                             String shown;
-                            if (action != null && BudEActions.isIntentAction(action)) {
+                            if (action != null && BudEActions.isAppAction(action)) {
+                                // App actions (stash, journal, navigation)
+                                // run in the app itself — the session has no
+                                // access to the app's state. Relay the action
+                                // to MainActivity, which stores it for the
+                                // web app to apply, then get out of the way
+                                // so the user can see the result.
+                                boolean relayed = false;
+                                try {
+                                    startAssistantActivity(
+                                            BudEActions.buildAppActionIntent(getContext(), action));
+                                    relayed = true;
+                                } catch (Exception e) {
+                                    // Fall through to the plain sentence.
+                                }
+                                shown = clean;
+                                replyView.setText(shown);
+                                setStatus("Here's what Bud-E says — tap the mic to ask more.");
+                                speak(shown);
+                                if (relayed) {
+                                    mainHandler.postDelayed(new Runnable() {
+                                        @Override
+                                        public void run() {
+                                            if (!destroyed) hide();
+                                        }
+                                    }, 3500);
+                                }
+                            } else if (action != null && BudEActions.isIntentAction(action)) {
                                 boolean relayed = false;
                                 try {
                                     startAssistantActivity(

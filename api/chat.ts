@@ -64,6 +64,8 @@ type Body = {
   messages?: ChatMessage[];
   session?: Partial<Session>;
   journal?: string;
+  /** Short stash summary, e.g. "Stash: Blue Dream 6.5g, Gelato 3.5g." */
+  stash?: string;
   persona?: string;
   memory?: string;
   /** Local wall-clock time from the client, ISO with offset (e.g. 2026-11-09T15:30:00-06:00). */
@@ -234,19 +236,19 @@ function localMidnightMillis(now: string | undefined): number | null {
   return Date.UTC(Number(m[1]), Number(m[2]) - 1, Number(m[3])) - offsetMs;
 }
 
-// Device actions — the phone can DO things, not just talk. When the user
-// asks for one of the five actions below, the reply ends with one short
+// Device + app actions — Bud-E can DO things, not just talk. When the user
+// asks for one of the eleven actions below, the reply ends with one short
 // spoken sentence saying what will happen, then a JSON action block the
 // app reads and runs. The app strips the block before showing or speaking
 // the reply, so the user only ever hears the sentence.
 const ACTIONS_GUIDE = (localTime: string, midnightMillis: number | null): string =>
-  `Device actions — you can do things on this phone, not just talk about them. The user's local time right now is ${localTime}. All times the user mentions are in their local time.\n` +
+  `Device actions — you can do things on this phone and in the Bud-E app, not just talk about them. The user's local time right now is ${localTime}. All times the user mentions are in their local time.\n` +
   (midnightMillis !== null
     ? `Today at local midnight is epoch ${midnightMillis}. Work out calendar event times from that anchor: tomorrow at noon is midnight + 36 hours, today at 3 PM is midnight + 15 hours. Double-check the date before you answer.\n`
     : '') +
-  `When the user asks for one of these seven things, end your reply with one short spoken sentence saying what will happen, then a JSON action block on its own lines, exactly like this:\n` +
+  `When the user asks for one of these eleven things, end your reply with one short spoken sentence saying what will happen, then a JSON action block on its own lines, exactly like this:\n` +
   '```action\n{"action":"set_alarm","hour":7,"minute":0,"label":"Wake up"}\n```\n' +
-  'The seven actions:\n' +
+  'The eleven actions:\n' +
   '- set_alarm {"action":"set_alarm","hour":0-23,"minute":0-59,"label":"optional"} — the phone opens the clock app with the alarm filled in; the user taps save there. Say something like "Opening your clock to set the alarm for 7 AM."\n' +
   '- set_timer {"action":"set_timer","seconds":600,"label":"optional"} — seconds is the total length. Say something like "Starting a 10 minute timer."\n' +
   '- set_reminder {"action":"set_reminder","minutes":30,"text":"water the plants"} — Bud-E buzzes them later with a notification. Say something like "I\'ll remind you in 30 minutes."\n' +
@@ -254,7 +256,11 @@ const ACTIONS_GUIDE = (localTime: string, midnightMillis: number | null): string
   '- flashlight {"action":"flashlight","on":true} — turn the flashlight on (true) or off (false). Say something like "Turning the flashlight on."\n' +
   '- call_contact {"action":"call_contact","name":"Ryan"} — the phone looks up the name in contacts and opens the dialer with their number filled in; it never calls silently. Use "number":"..." instead of "name" when the user says a number out loud. Never invent a number — if they only say a name, send the name. Say something like "Opening the dialer for Ryan."\n' +
   '- text_contact {"action":"text_contact","name":"Baby","message":"I\'ll be late"} — the phone looks up the name and opens the messaging app with the text filled in; it never sends silently. Use "number":"..." instead of "name" when the user says a number. Say something like "Opening your messages to text Baby."\n' +
-  'Rules: only emit an action block when the user asked for one of these seven AND every required field is clear from what they said. If anything is missing or unclear — no time for the alarm, no length for the timer, no reminder text, no title or time for the event, no name or number for a call or text, no message for a text — ask one short follow-up question instead and emit no action block. If several people share a name, the phone asks which one — just send the name. Never emit an action block for anything else: no other phone features. Never explain the JSON or mention it. The spoken sentence comes first, the action block last.';
+  '- stash_add {"action":"stash_add","name":"Blue Dream","amount":3.5,"unit":"g"} — add to a stash jar. unit is "g", "mg", or "pieces". The user\'s stash list is in the prompt when one was sent — match the jar by name, and work out the new total from it for the sentence ("Added 3.5g to Blue Dream — 10g in the jar now."). When there is no jar with that name, a new jar is started for it. Say something like "Added 3.5g to Blue Dream."\n' +
+  '- stash_subtract {"action":"stash_subtract","name":"Blue Dream","amount":1,"unit":"g"} — take off a stash jar. Never take a jar below zero — if the amount would empty it, the jar just runs out. Work out what is left from the stash list for the sentence ("Took 1g off Blue Dream — 5.5g left."). Say something like "Took 1g off Blue Dream."\n' +
+  '- log_session {"action":"log_session","strain":"Blue Dream","amount":0.5,"unit":"g","method":"flower"} — log a session in the journal. method is "flower", "edible", "vape", "dab", "drink", or "other" — include it only when the user says how they took it, otherwise leave it out. The jar is reduced by the same amount automatically. Work out what is left from the stash list for the sentence ("Logged 0.5g of Blue Dream — 6g left in the jar."). Say something like "Logged 0.5g of Blue Dream."\n' +
+  '- open_tab {"action":"open_tab","tab":"stash"} — open a part of the Bud-E app. tab is one of "tonight", "chat", "stash", "journal", "strains", "break", "dose", "music", "plan", "settings". Say something like "Opening your stash."\n' +
+  'Rules: only emit an action block when the user asked for one of these eleven AND every required field is clear from what they said. If anything is missing or unclear — no time for the alarm, no length for the timer, no reminder text, no title or time for the event, no name or number for a call or text, no message for a text, no jar name or amount for a stash change, no strain or amount for a session log, no tab for opening a part of the app — ask one short follow-up question instead and emit no action block. If several people share a name, the phone asks which one — just send the name. If the jar name does not match any jar in the stash list and the user is not clearly adding a new jar, ask which jar they mean instead of guessing. Amounts: "half a gram" is 0.5g, "500mg" is 500mg — send the amount in the unit the user said. Never emit an action block for anything else: no other phone features, no deleting, no account changes. Never explain the JSON or mention it. The spoken sentence comes first, the action block last.';
 
 async function callGroq(
   apiKey: string,
@@ -353,6 +359,9 @@ export default async function handler(req: ReqLike, res: ResLike): Promise<void>
     const memoryLine = body.memory?.trim()
       ? `Things you remember about this person:\n${body.memory.trim().slice(0, 800)}`
       : '';
+    const stashLine = body.stash?.trim()
+      ? `The user's stash right now: ${body.stash.trim().slice(0, 600)}`
+      : '';
     const systemPrompt = [
       BUD_E_SYSTEM_PROMPT.replace(/Bud-E/g, buddyName),
       persona?.tone ?? '',
@@ -360,6 +369,7 @@ export default async function handler(req: ReqLike, res: ResLike): Promise<void>
       lengthLine,
       styleLine,
       memoryLine,
+      stashLine,
       ACTIONS_GUIDE(localTimeText(body.now), localMidnightMillis(body.now)),
     ]
       .filter(Boolean)

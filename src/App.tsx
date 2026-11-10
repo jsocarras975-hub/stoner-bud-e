@@ -35,7 +35,7 @@ import {
   parseClock,
   pickRandom,
 } from './bude';
-import type { ChatMessage, Session } from './bude';
+import type { ChatMessage, Method, Session } from './bude';
 import StrainsTab from './StrainsTab';
 import MusicTab from './MusicTab';
 import TonightTab from './TonightTab';
@@ -46,9 +46,9 @@ import JournalTab from './JournalTab';
 import StashTab from './StashTab';
 import BreakTab from './BreakTab';
 import DoseTab from './DoseTab';
-import { JOURNAL_KEY, journalSummary } from './journal';
+import { JOURNAL_KEY, journalSummary, newEntryId } from './journal';
 import type { JournalEntry } from './journal';
-import { STASH_KEY, isRunningLow, lowNote } from './stash';
+import { STASH_KEY, isRunningLow, lowNote, stashSummary, withAmount } from './stash';
 import type { StashItem } from './stash';
 import AuthTab from './AuthTab';
 import { clearLocalSyncState, queueDeletion, uploadLocal, DEFAULT_PERSONALIZATION, cleanPersonalization } from './lib/sync';
@@ -58,7 +58,8 @@ import type { AuthUser } from './lib/auth-client';
 import { DEFAULT_VOICE_SETTINGS, cleanVoiceSettings } from './voice';
 import type { VoiceSettings } from './voice';
 import { speakVoice, startRecording, stopVoice, transcribeVoice, unlockAudio } from './lib/voice-client';
-import { executeDeviceAction, extractDeviceAction, getBubbleStatus, getLaunchInfo, isNative, localIsoNow, publishWidgetStash, setBubbleEnabled } from './lib/device-actions';
+import { executeDeviceAction, extractDeviceAction, getBubbleStatus, getLaunchInfo, isAppAction, isNative, localIsoNow, parseAppAction, publishStashSummary, publishWidgetStash, setBubbleEnabled } from './lib/device-actions';
+import type { AppAction } from './lib/device-actions';
 import type { ActiveRecording } from './lib/voice-client';
 import { TIMER_ALERTS, buzz, planAlerts, type PlannedAlert, type TimerAlert, type TimerAlertId } from './lib/timer-alerts';
 import {
@@ -279,6 +280,12 @@ export default function App() {
   });
   const [journal, setJournal] = useState<JournalEntry[]>(() => loadList(JOURNAL_KEY));
   const [stash, setStash] = useState<StashItem[]>(() => loadList(STASH_KEY));
+  // Fresh stash for chat actions: the launch-info effect runs with an old
+  // closure (it fires on focus), so it reads the ref, not the render's stash.
+  const stashRef = useRef(stash);
+  useEffect(() => {
+    stashRef.current = stash;
+  }, [stash]);
   const [user, setUser] = useState<AuthUser | null>(null);
   const [syncMessage, setSyncMessage] = useState('');
   // Guards the debounced sync effect while a server state is being applied,
@@ -355,6 +362,15 @@ export default function App() {
       } else if (isTab(info.tab)) {
         setTab(info.tab);
       }
+      // An app action relayed in from the bubble or voice chat (stash
+      // add/subtract, log a session). It applies the same way a chat
+      // action does; the correction line has nowhere to go here — the
+      // user is in the bubble/voice chat, which already showed Bud-E's
+      // sentence — so it is dropped.
+      if (info.appAction !== '') {
+        const appAction = parseAppAction(info.appAction);
+        if (appAction) void applyAppAction(appAction);
+      }
     };
     void applyLaunchInfo();
     window.addEventListener('focus', applyLaunchInfo);
@@ -409,6 +425,9 @@ export default function App() {
     if (key === lastWidgetStash.current) return;
     lastWidgetStash.current = key;
     void publishWidgetStash(stashLine, lowLine);
+    // The bubble and voice chats send this to the server so Bud-E knows
+    // what jars exist when the user asks it to change the stash.
+    void publishStashSummary(stashSummary(stash));
   }, [stash]);
 
   // Floating chat bubble: if it was left on, make sure its service is
@@ -441,6 +460,114 @@ export default function App() {
           : i,
       ),
     );
+  }
+
+  /** Find a stash jar by name (case-insensitive, trimmed). */
+  function findJar(items: StashItem[], name: string): StashItem | undefined {
+    const want = name.trim().toLowerCase();
+    return items.find((i) => i.name.trim().toLowerCase() === want);
+  }
+
+  /** Convert an amount between g and mg; pieces never convert. */
+  function toUnit(
+    amount: number,
+    from: 'g' | 'mg' | 'pieces',
+    to: 'g' | 'mg' | 'pieces',
+  ): number | null {
+    if (from === to) return amount;
+    if (from === 'pieces' || to === 'pieces') return null;
+    return from === 'g' ? amount * 1000 : amount / 1000;
+  }
+
+  /**
+   * Run one app action from a chat reply (or from the bubble/voice chat,
+   * relayed through launch info) and return a plain-words correction
+   * when Bud-E's sentence does not stand — a jar that was not found, or
+   * one that ran out. Null means the sentence stands. Everything goes
+   * through the normal setters, so Neon sync picks it up.
+   */
+  function applyAppAction(action: AppAction): string | null {
+    const items = stashRef.current;
+    switch (action.action) {
+      case 'stash_add': {
+        const jar = findJar(items, action.name);
+        if (!jar) {
+          // A new jar: flower by default, warn under nothing.
+          const fresh: StashItem = {
+            id: `${Date.now().toString(36)}-${Math.random().toString(36).slice(2, 10)}`,
+            name: action.name.trim(),
+            form: 'flower',
+            amount: action.amount,
+            unit: action.unit,
+            thcPct: '',
+            lowAt: 0,
+            startedAt: action.amount,
+          };
+          setStash([...items, fresh]);
+          return null;
+        }
+        const added = toUnit(action.amount, action.unit, jar.unit);
+        if (added === null) {
+          return `I couldn't add that — the ${jar.name} jar is counted in ${jar.unit}, not ${action.unit}.`;
+        }
+        const total = Math.round((jar.amount + added) * 100) / 100;
+        setStash(items.map((i) => (i.id === jar.id ? withAmount(i, total) : i)));
+        return null;
+      }
+      case 'stash_subtract': {
+        const jar = findJar(items, action.name);
+        if (!jar) {
+          return `I couldn't find a jar called ${action.name} — check the name?`;
+        }
+        const taken = toUnit(action.amount, action.unit, jar.unit);
+        if (taken === null) {
+          return `I couldn't take that off — the ${jar.name} jar is counted in ${jar.unit}, not ${action.unit}.`;
+        }
+        const left = Math.max(0, Math.round((jar.amount - taken) * 100) / 100);
+        setStash(items.map((i) => (i.id === jar.id ? { ...i, amount: left } : i)));
+        if (left <= 0 && jar.amount > 0) {
+          return `That used up the last of the ${jar.name} jar — it's out now.`;
+        }
+        return null;
+      }
+      case 'log_session': {
+        const entry: JournalEntry = {
+          id: newEntryId(),
+          date: new Date().toISOString(),
+          method: (action.method as Method | undefined) ?? 'flower',
+          strain: action.strain.trim(),
+          amount: String(action.amount),
+          unit: action.unit,
+          rating: 0,
+          note: '',
+          change: '',
+        };
+        setJournal((j) => [entry, ...j]);
+        // Logging a session means it was used — take it off the matching
+        // jar, the way the user asked (match by strain, convert g↔mg,
+        // never below 0, 'pieces' jars untouched).
+        if (entry.strain.trim() === '') return null;
+        const jar = findJar(items, entry.strain);
+        if (!jar) return null;
+        const taken = toUnit(action.amount, action.unit, jar.unit);
+        if (taken === null || taken <= 0) return null;
+        const left = Math.max(0, Math.round((jar.amount - taken) * 100) / 100);
+        setStash(items.map((i) => (i.id === jar.id ? { ...i, amount: left } : i)));
+        if (left <= 0 && jar.amount > 0) {
+          return `That used up the last of the ${jar.name} jar — it's out now.`;
+        }
+        return null;
+      }
+      case 'open_tab': {
+        if (isTab(action.tab)) {
+          setTab(action.tab);
+          return null;
+        }
+        return `I don't have a part of the app called ${action.tab}.`;
+      }
+      default:
+        return null;
+    }
   }
 
   const BREAK_KEY = 'bude-break-v1';
@@ -726,6 +853,8 @@ export default function App() {
           setShowChatList={setShowChatList}
           setSource={setSource}
           journalNote={journalSummary(journal)}
+          stashNote={stashSummary(stash)}
+          onAppAction={applyAppAction}
           prefill={pendingQuestion}
           onPrefillUsed={() => setPendingQuestion(null)}
           onGoTonight={() => setTab('tonight')}
@@ -961,6 +1090,8 @@ function ChatTab({
   setShowChatList,
   setSource,
   journalNote,
+  stashNote,
+  onAppAction,
   prefill,
   onPrefillUsed,
   onGoTonight,
@@ -977,6 +1108,8 @@ function ChatTab({
   setShowChatList: (show: boolean) => void;
   setSource: (s: Source) => void;
   journalNote: string;
+  stashNote: string;
+  onAppAction: (action: AppAction) => string | null;
   prefill: string | null;
   onPrefillUsed: () => void;
   onGoTonight: () => void;
@@ -1169,6 +1302,7 @@ function ChatTab({
           },
           ...(memory ? { memory } : {}),
           ...(journalNote !== '' ? { journal: journalNote } : {}),
+          ...(stashNote !== '' ? { stash: stashNote } : {}),
         }),
       });
       const data: unknown = await res.json();
@@ -1186,13 +1320,18 @@ function ChatTab({
           ? (data as { sources?: unknown }).sources
           : undefined;
       if (typeof reply === 'string' && reply.trim() !== '') {
-        // Device actions: the server may end the reply with a JSON action
-        // block (see api/chat.ts). Strip it, run it on the phone, and show
-        // the user only the spoken sentence plus what actually happened.
+        // Actions: the server may end the reply with a JSON action block
+        // (see api/chat.ts). Strip it, run it, and show the user only the
+        // spoken sentence plus what actually happened. App actions (stash,
+        // journal, navigation) run in the app itself; phone actions run
+        // through the native plugin.
         const { text: cleanText, action } = extractDeviceAction(reply);
         let finalText = cleanText;
         if (action) {
-          if (isNative()) {
+          if (isAppAction(action)) {
+            const note = onAppAction(action);
+            if (note) finalText = `${cleanText}\n\n${note}`;
+          } else if (isNative()) {
             const done = await executeDeviceAction(action);
             if (!done.ok) {
               finalText = `${cleanText}\n\nI couldn't do that one — ${done.message}`;

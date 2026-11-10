@@ -159,7 +159,12 @@ public class BudEBubbleService extends Service {
         params = new WindowManager.LayoutParams(
                 size, size,
                 WindowManager.LayoutParams.TYPE_APPLICATION_OVERLAY,
-                WindowManager.LayoutParams.FLAG_NOT_FOCUSABLE,
+                // FLAG_LAYOUT_NO_LIMITS is what lets the bubble slide
+                // partially off-screen when it is parked at an edge — without
+                // it the system clamps the window to the display and the
+                // parked bubble just sits fully visible at the edge.
+                WindowManager.LayoutParams.FLAG_NOT_FOCUSABLE
+                        | WindowManager.LayoutParams.FLAG_LAYOUT_NO_LIMITS,
                 android.graphics.PixelFormat.TRANSLUCENT);
         params.gravity = Gravity.TOP | Gravity.START;
         params.x = dp(16);
@@ -524,7 +529,7 @@ public class BudEBubbleService extends Service {
         chatWaiting = true;
         renderMessages();
         new Thread(() -> {
-            final String reply = BudEChatClient.askHistory(new ArrayList<>(chatHistory));
+            final String reply = BudEChatClient.askHistory(this, new ArrayList<>(chatHistory));
             handler.post(() -> onChatReply(reply));
         }).start();
     }
@@ -543,15 +548,25 @@ public class BudEBubbleService extends Service {
     }
 
     /**
-     * The reply's spoken sentence, with any device action run the same way
-     * the voice session runs it: actions that open another app (alarm,
-     * timer, calendar, call, text) go through MainActivity, and the panel
-     * gets out of the way so the opened app is visible; the rest run
-     * right here (reminders, flashlight).
+     * The reply's spoken sentence, with any action run the same way the
+     * voice session runs it: app actions (stash, journal, navigation) go
+     * through MainActivity to the web app, and the panel gets out of the
+     * way so the app is visible; actions that open another app (alarm,
+     * timer, calendar, call, text) go through MainActivity too; the rest
+     * run right here (reminders, flashlight).
      */
     private String handleReplyActions(String reply) {
         JSONObject action = BudEActions.extractAction(reply);
         String clean = BudEActions.stripActionBlock(reply);
+        if (action != null && BudEActions.isAppAction(action)) {
+            try {
+                startActivity(BudEActions.buildAppActionIntent(this, action));
+                collapseToBubble();
+                return clean;
+            } catch (Exception e) {
+                return clean + " The phone could not open that.";
+            }
+        }
         if (action != null && BudEActions.isIntentAction(action)) {
             try {
                 startActivity(BudEActions.buildRelayIntent(this, action));

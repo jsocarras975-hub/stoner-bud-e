@@ -174,6 +174,26 @@ public final class BudEActions {
         return intent;
     }
 
+    /** True when the action changes the app itself (stash, journal,
+     *  navigation) instead of the phone. Those go through MainActivity to
+     *  the web app; they never run natively. */
+    public static boolean isAppAction(JSONObject action) {
+        if (action == null) return false;
+        String kind = action.optString("action", "");
+        return "stash_add".equals(kind) || "stash_subtract".equals(kind)
+                || "log_session".equals(kind) || "open_tab".equals(kind);
+    }
+
+    /** Explicit intent for MainActivity carrying an app-action JSON block.
+     *  The extra key is BudELaunchInfo's, so MainActivity's capture stores
+     *  it for the web app to read once and run. */
+    public static Intent buildAppActionIntent(Context context, JSONObject action) {
+        Intent intent = new Intent(context, MainActivity.class);
+        intent.addFlags(Intent.FLAG_ACTIVITY_NEW_TASK | Intent.FLAG_ACTIVITY_CLEAR_TOP);
+        intent.putExtra(BudELaunchInfo.EXTRA_APP_ACTION, action.toString());
+        return intent;
+    }
+
     /**
      * Handle a full chat reply: extract any action, run it, and return the
      * text to show/speak plus what happened. When there is no action the

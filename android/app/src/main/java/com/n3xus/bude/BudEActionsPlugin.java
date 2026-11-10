@@ -89,6 +89,7 @@ public class BudEActionsPlugin extends Plugin {
         JSObject res = new JSObject();
         res.put("tab", info.optString("tab", ""));
         res.put("sharedText", info.optString("sharedText", ""));
+        res.put("appAction", info.optString("appAction", ""));
         call.resolve(res);
     }
 
@@ -123,6 +124,22 @@ public class BudEActionsPlugin extends Plugin {
                 .putString(BudEWidgetProvider.KEY_LOW_LINE, lowLine)
                 .apply();
         BudEWidgetProvider.updateAllWidgets(context);
+        call.resolve(new JSObject().put("ok", true));
+    }
+
+    /**
+     * Publish the stash summary the bubble and voice chats send to the
+     * server, so Bud-E knows what jars exist when the user asks it to
+     * change the stash. The native chat clients read it from here.
+     */
+    @PluginMethod
+    public void publishStashSummary(PluginCall call) {
+        String summary = call.getString("summary", "");
+        Context context = getContext();
+        context.getSharedPreferences(BudEChatClient.STASH_PREFS, Context.MODE_PRIVATE)
+                .edit()
+                .putString(BudEChatClient.STASH_SUMMARY_KEY, summary)
+                .apply();
         call.resolve(new JSObject().put("ok", true));
     }
 

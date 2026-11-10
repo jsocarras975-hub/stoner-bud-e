@@ -25,6 +25,18 @@ export function newStashId(): string {
   return `${Date.now().toString(36)}-${Math.random().toString(36).slice(2, 10)}`;
 }
 
+/**
+ * Short plain-words summary of the stash, for chat context (so Bud-E
+ * knows what jars exist and how much is in each). Returns '' when the
+ * stash is empty. Kept under ~300 chars.
+ */
+export function stashSummary(items: StashItem[]): string {
+  if (items.length === 0) return '';
+  const bits = items.map((i) => `${i.name} ${i.amount}${i.unit}`);
+  const text = `Stash: ${bits.join(', ')}.`;
+  return text.length > 300 ? `${text.slice(0, 297)}…` : text;
+}
+
 // ---------------------------------------------------------------------------
 // Running low — one rule, used by the jar card, the Stash summary, and the
 // Tonight nudge, so all three always agree.
