@@ -54,6 +54,9 @@ public class BudEInteractionService extends VoiceInteractionService {
     public static boolean showVoiceSession() {
         BudEInteractionService service = instance;
         if (service == null) return false;
+        // App lock: while Bud-E is locked, the voice overlay stays shut —
+        // the caller falls back to opening the app, which shows the lock.
+        if (BudEBiometricPlugin.isLocked(service)) return false;
         try {
             // Flag 1 = SHOW_WITH_ASSIST (opened the way the power-button
             // long-press opens it). The constant is hidden from the public

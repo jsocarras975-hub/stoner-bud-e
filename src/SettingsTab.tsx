@@ -22,6 +22,16 @@ import type { Personalization, PremiumTier } from './lib/sync';
 import type { JournalEntry } from './journal';
 import type { SyncedChatConversation } from './lib/sync';
 import { getAssistantStatus, getBubbleStatus, getTalkNotification, isNative, openDefaultAppsSettings, openOverlaySettings, setBubbleEnabled, setTalkNotification } from './lib/device-actions';
+import PinPad from './PinPad';
+import {
+  generateSalt,
+  hashPin,
+  saveLockSettings,
+  verifyPin,
+  PIN_LENGTH,
+  type AppLockSettings,
+  type BiometricStatus,
+} from './lib/applock';
 
 // 'main' is the menu. The rest open one section. The '-doc' views are the
 // legal documents, reached from the About & legal section.
@@ -33,6 +43,7 @@ type SettingsView =
   | 'display'
   | 'voice'
   | 'premium'
+  | 'lock'
   | 'data'
   | 'about'
   | 'about-doc'
@@ -50,6 +61,7 @@ const SECTION_TITLES: Record<
   display: 'Display',
   voice: 'Voice',
   premium: 'Premium',
+  lock: 'App lock',
   data: 'Privacy & data',
   about: 'About & legal',
 };
@@ -69,11 +81,15 @@ export default function SettingsTab(props: {
   onClearJournal: () => void;
   journal: JournalEntry[];
   chats: SyncedChatConversation[];
+  lockSettings: AppLockSettings | null;
+  onLockSettings: (next: AppLockSettings | null) => void;
+  biometric: BiometricStatus;
 }) {
   const {
     theme, onTheme, user, onDeleteAccount, voice, onVoice, apiBase,
     premiumTier = null, personalization, onPersonalization,
     onClearChats, onClearJournal, journal, chats,
+    lockSettings, onLockSettings, biometric,
   } = props;
   const [view, setView] = useState<SettingsView>('main');
   const [deleting, setDeleting] = useState(false);
@@ -86,6 +102,115 @@ export default function SettingsTab(props: {
   // Floating chat bubble (phone app only).
   const [bubble, setBubble] = useState<boolean | null>(null);
   const [bubbleNote, setBubbleNote] = useState<string | null>(null);
+  // App lock (PIN + fingerprint/face). lockFlow drives the PIN pad steps:
+  // set → confirm, change → verify → new → confirm, remove → verify.
+  const [lockFlow, setLockFlow] = useState<
+    null | 'set' | 'set-confirm' | 'change-verify' | 'change-new' | 'change-confirm' | 'remove-verify'
+  >(null);
+  const [pendingPin, setPendingPin] = useState('');
+  const [lockNote, setLockNote] = useState('');
+  const [lockError, setLockError] = useState(false);
+  const [lockBusy, setLockBusy] = useState(false);
+
+  // Clear the wrong-PIN shake shortly after it shows.
+  useEffect(() => {
+    if (!lockError) return;
+    const id = window.setTimeout(() => setLockError(false), 600);
+    return () => window.clearTimeout(id);
+  }, [lockError]);
+
+  function cancelLockFlow(): void {
+    setLockFlow(null);
+    setPendingPin('');
+    setLockNote('');
+    setLockError(false);
+  }
+
+  async function submitLockPin(pin: string): Promise<void> {
+    if (lockBusy || !lockFlow) return;
+    setLockBusy(true);
+    try {
+      if (lockFlow === 'set') {
+        setPendingPin(pin);
+        setLockFlow('set-confirm');
+        setLockNote('Enter it again to confirm.');
+      } else if (lockFlow === 'set-confirm') {
+        if (pin !== pendingPin) {
+          setLockError(true);
+          setPendingPin('');
+          setLockFlow('set');
+          setLockNote("They didn't match — pick a PIN again.");
+          return;
+        }
+        const salt = generateSalt();
+        const pinHash = await hashPin(pin, salt);
+        const next: AppLockSettings = {
+          pinHash,
+          salt,
+          biometric: false,
+          graceSec: lockSettings?.graceSec ?? 0,
+        };
+        saveLockSettings(next);
+        onLockSettings(next);
+        setLockFlow(null);
+        setPendingPin('');
+        setLockNote('PIN set — the app locks when you open it.');
+      } else if (lockFlow === 'change-verify' || lockFlow === 'remove-verify') {
+        if (!lockSettings) return;
+        const ok = await verifyPin(pin, lockSettings);
+        if (!ok) {
+          setLockError(true);
+          setLockNote('Wrong PIN — try again.');
+          return;
+        }
+        if (lockFlow === 'remove-verify') {
+          onLockSettings(null);
+          setLockFlow(null);
+          setLockNote('Lock removed.');
+        } else {
+          setLockFlow('change-new');
+          setLockNote('Pick a new 4-digit PIN.');
+        }
+      } else if (lockFlow === 'change-new') {
+        setPendingPin(pin);
+        setLockFlow('change-confirm');
+        setLockNote('Enter the new PIN again.');
+      } else if (lockFlow === 'change-confirm') {
+        if (!lockSettings) return;
+        if (pin !== pendingPin) {
+          setLockError(true);
+          setPendingPin('');
+          setLockFlow('change-new');
+          setLockNote("They didn't match — pick a new PIN again.");
+          return;
+        }
+        const salt = generateSalt();
+        const pinHash = await hashPin(pin, salt);
+        const next: AppLockSettings = { ...lockSettings, pinHash, salt };
+        saveLockSettings(next);
+        onLockSettings(next);
+        setLockFlow(null);
+        setPendingPin('');
+        setLockNote('PIN changed.');
+      }
+    } finally {
+      setLockBusy(false);
+    }
+  }
+
+  function setBiometric(on: boolean): void {
+    if (!lockSettings) return;
+    const next: AppLockSettings = { ...lockSettings, biometric: on };
+    saveLockSettings(next);
+    onLockSettings(next);
+  }
+
+  function setGraceSec(sec: number): void {
+    if (!lockSettings) return;
+    const next: AppLockSettings = { ...lockSettings, graceSec: sec };
+    saveLockSettings(next);
+    onLockSettings(next);
+  }
 
   // Stop a voice preview when leaving Settings.
   useEffect(() => () => stopVoice(), []);
@@ -299,6 +424,15 @@ export default function SettingsTab(props: {
                 <span>
                   <strong>Premium</strong>
                   <span className="muted">{tierName ?? 'Not unlocked'}</span>
+                </span>
+                <span aria-hidden>›</span>
+              </button>
+              <button type="button" className="legal-row" onClick={() => setView('lock')}>
+                <span>
+                  <strong>App lock</strong>
+                  <span className="muted">
+                    {lockSettings ? 'PIN on · tap to change' : 'PIN or fingerprint — off'}
+                  </span>
                 </span>
                 <span aria-hidden>›</span>
               </button>
@@ -713,6 +847,137 @@ export default function SettingsTab(props: {
                     Get Cloud Nine — $49 (coming soon)
                   </button>
                 </>
+              )}
+            </section>
+          )}
+
+          {view === 'lock' && (
+            <section className="card" aria-label="App lock">
+              <p className="muted" style={{ marginTop: 0 }}>
+                Lock Bud-E on this phone, so nobody opening the app sees your stuff.
+                The PIN never leaves this phone. Forgot it? The lock screen can sign
+                you out and wipe this phone&apos;s copy — your stuff is saved on your
+                account, so signing back in brings it back.
+              </p>
+              {lockFlow ? (
+                <>
+                  <p style={{ marginTop: 0 }}>
+                    <strong>
+                      {lockFlow === 'set' && 'Pick a 4-digit PIN.'}
+                      {lockFlow === 'set-confirm' && 'Enter it again to confirm.'}
+                      {lockFlow === 'change-verify' && 'Enter your current PIN first.'}
+                      {lockFlow === 'change-new' && 'Pick a new 4-digit PIN.'}
+                      {lockFlow === 'change-confirm' && 'Enter the new PIN again.'}
+                      {lockFlow === 'remove-verify' && 'Enter your PIN to remove the lock.'}
+                    </strong>
+                  </p>
+                  <PinPad
+                    length={PIN_LENGTH}
+                    onComplete={(pin) => {
+                      void submitLockPin(pin);
+                    }}
+                    error={lockError}
+                    disabled={lockBusy}
+                  />
+                  <div style={{ marginTop: 12 }}>
+                    <button type="button" className="btn secondary" onClick={cancelLockFlow}>
+                      Cancel
+                    </button>
+                  </div>
+                </>
+              ) : lockSettings ? (
+                <>
+                  <p style={{ marginTop: 0 }}>
+                    <strong>PIN is on.</strong>{' '}
+                    <span className="muted">The app asks for it when you open it.</span>
+                  </p>
+                  <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap' }}>
+                    <button
+                      type="button"
+                      className="btn secondary"
+                      onClick={() => {
+                        setLockFlow('change-verify');
+                        setLockNote('');
+                      }}
+                    >
+                      Change PIN
+                    </button>
+                    <button
+                      type="button"
+                      className="btn secondary"
+                      onClick={() => {
+                        setLockFlow('remove-verify');
+                        setLockNote('');
+                      }}
+                    >
+                      Remove lock
+                    </button>
+                  </div>
+                  <h3 style={{ marginTop: 20, marginBottom: 8 }}>Fingerprint / face</h3>
+                  {!isNative() ? (
+                    <p className="muted">
+                      Biometrics need the Bud-E phone app — on the web, the PIN is the lock.
+                    </p>
+                  ) : !biometric.available ? (
+                    <p className="muted">
+                      {biometric.reason === 'none_enrolled'
+                        ? 'No fingerprint or face is set up on this phone yet — set one up in the phone’s Settings, then come back here.'
+                        : biometric.reason === 'no_hardware'
+                          ? 'This phone has no fingerprint or face sensor.'
+                          : 'Fingerprint / face isn’t available on this phone right now.'}
+                    </p>
+                  ) : (
+                    <label style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
+                      <input
+                        type="checkbox"
+                        checked={lockSettings.biometric}
+                        onChange={(e) => setBiometric(e.target.checked)}
+                      />
+                      <span>
+                        Unlock with {biometric.type === 'face' ? 'your face' : 'your fingerprint'}
+                      </span>
+                    </label>
+                  )}
+                  <h3 style={{ marginTop: 20, marginBottom: 8 }}>Lock when I leave the app</h3>
+                  <ChipRow>
+                    {[
+                      { sec: 0, label: 'Right away' },
+                      { sec: 60, label: 'After 1 minute' },
+                      { sec: 300, label: 'After 5 minutes' },
+                    ].map((opt) => (
+                      <Chip
+                        key={opt.sec}
+                        on={lockSettings.graceSec === opt.sec}
+                        onClick={() => setGraceSec(opt.sec)}
+                        ariaPressed={lockSettings.graceSec === opt.sec}
+                      >
+                        {opt.label}
+                      </Chip>
+                    ))}
+                  </ChipRow>
+                </>
+              ) : (
+                <>
+                  <p style={{ marginTop: 0 }}>
+                    <strong>No lock right now.</strong>{' '}
+                    <span className="muted">Anyone opening the app sees Bud-E.</span>
+                  </p>
+                  <button
+                    type="button"
+                    className="btn"
+                    onClick={() => {
+                      setLockFlow('set');
+                      setLockNote('');
+                    }}
+                  >
+                    Set a PIN
+                  </button>
+                </>
+              )}
+              {lockNote && (
+                <p className="muted" role="status" style={{ marginTop: 12, marginBottom: 0 }}>
+                  {lockNote}
+                </p>
               )}
             </section>
           )}

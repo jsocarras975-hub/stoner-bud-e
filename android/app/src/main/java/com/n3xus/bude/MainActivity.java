@@ -13,6 +13,7 @@ public class MainActivity extends BridgeActivity {
     public void onCreate(Bundle savedInstanceState) {
         // App-local native plugins must be registered before the bridge loads.
         registerPlugin(BudEActionsPlugin.class);
+        registerPlugin(BudEBiometricPlugin.class);
         super.onCreate(savedInstanceState);
         // Shortcuts, the widget, and shares from other apps arrive as the
         // launch intent — stash what they asked for so the web app can

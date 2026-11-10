@@ -306,6 +306,12 @@ public class BudEBubbleService extends Service {
     /** Tap the bubble: swap the circle for the chat panel. */
     private void expandChat() {
         if (chatOpen) return;
+        // App lock: while Bud-E is locked, the bubble stays a circle — the
+        // chat panel never opens. The user unlocks in the app itself.
+        if (BudEBiometricPlugin.isLocked(this)) {
+            Toast.makeText(this, "Bud-E is locked — open the app to unlock", Toast.LENGTH_LONG).show();
+            return;
+        }
         chatOpen = true;
         if (chatPanel == null) buildChatPanel();
         if (bubble != null) {

@@ -45,6 +45,16 @@ import StrainsTab from './StrainsTab';
 import MusicTab from './MusicTab';
 import TonightTab from './TonightTab';
 import SettingsTab from './SettingsTab';
+import LockScreen from './LockScreen';
+import {
+  biometricStatus,
+  clearLockSettings,
+  hasPin,
+  loadLockSettings,
+  publishLockState,
+  type AppLockSettings,
+  type BiometricStatus,
+} from './lib/applock';
 import { AGE_GATE_KEY, THEME_KEY, isThemeId, loadTheme } from './theme';
 import type { ThemeId } from './theme';
 import JournalTab from './JournalTab';
@@ -408,6 +418,20 @@ export default function App() {
   const [vibe, setVibe] = useState<Vibe>(() => load(VIBE_KEY, DEFAULT_VIBE));
   const [voice, setVoice] = useState<VoiceSettings>(() => loadVoiceSettings());
   const [premiumTier, setPremiumTier] = useState<PremiumTier>(null);
+  // App lock (PIN + fingerprint/face). locked starts true when a PIN is
+  // set, so opening the app asks for it. bioStatus is the phone's
+  // biometric availability, read once and refreshed when the app comes
+  // back to the front.
+  const [lockSettings, setLockSettings] = useState<AppLockSettings | null>(() =>
+    loadLockSettings(),
+  );
+  const [locked, setLocked] = useState<boolean>(() => hasPin(loadLockSettings()));
+  const [bioStatus, setBioStatus] = useState<BiometricStatus>({
+    available: false,
+    type: 'none',
+    reason: 'web',
+  });
+  const backgroundedAt = useRef<number>(0);
   const [personalization, setPersonalization] = useState<Personalization>(() => {
     try {
       const raw = localStorage.getItem('bude-personalization-v1');
@@ -676,6 +700,55 @@ export default function App() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [journal, stash, chats, playlists, session, vibe, voice, theme, user, isOnline]);
 
+  // App lock: read the phone's biometric availability once, and refresh it
+  // when the app comes back to the front (the user may have enrolled a
+  // fingerprint while the app was in the background).
+  useEffect(() => {
+    let cancelled = false;
+    const refresh = () => {
+      void biometricStatus().then((s) => {
+        if (!cancelled) setBioStatus(s);
+      });
+    };
+    refresh();
+    window.addEventListener('focus', refresh);
+    return () => {
+      cancelled = true;
+      window.removeEventListener('focus', refresh);
+    };
+  }, []);
+
+  // App lock: when the app goes to the background, note the time; when it
+  // comes back, lock it if it was away longer than the grace period. A
+  // grace of 0 locks right away.
+  useEffect(() => {
+    const onVisibility = () => {
+      if (document.hidden) {
+        backgroundedAt.current = Date.now();
+        return;
+      }
+      const settings = loadLockSettings();
+      if (!hasPin(settings)) return;
+      const awayMs = Date.now() - (backgroundedAt.current || Date.now());
+      if (awayMs >= (settings.graceSec ?? 0) * 1000) {
+        setLocked(true);
+      }
+    };
+    document.addEventListener('visibilitychange', onVisibility);
+    return () => document.removeEventListener('visibilitychange', onVisibility);
+  }, []);
+
+  // Tell the native side (bubble, voice session) whether the app is locked,
+  // so those entry points stay shut while it is. If the PIN is removed,
+  // there is nothing to lock, so unlock.
+  useEffect(() => {
+    void publishLockState(locked);
+  }, [locked]);
+
+  useEffect(() => {
+    if (!hasPin(lockSettings)) setLocked(false);
+  }, [lockSettings]);
+
   function deductFromStash(stashId: string, amount: number, unit: 'mg' | 'g'): void {
     setStash((items) =>
       items.map((i) =>
@@ -940,6 +1013,48 @@ export default function App() {
     setVibe(DEFAULT_VIBE);
     setTab('tonight');
     setSyncMessage('Your account is deleted. This device is back to fresh, signed-out Bud-E.');
+  }
+
+  /**
+   * Forgot-PIN reset (from the lock screen): the only way back in without
+   * the PIN. Signs out and wipes this phone's copy of Bud-E — journal,
+   * stash, chats, playlists, session, vibe, break, sync state, and the
+   * lock itself. Nothing is deleted from the account: signing back in
+   * brings the synced stuff back. The account is NOT deleted (unlike
+   * handleAccountDeleted above).
+   */
+  async function handleForgotPin(): Promise<void> {
+    try {
+      await signOut();
+    } catch {
+      // The session may already be dead — the wipe below still runs.
+    }
+    setUser(null);
+    clearLocalSyncState();
+    clearLockSettings();
+    try {
+      localStorage.removeItem(JOURNAL_KEY);
+      localStorage.removeItem(STASH_KEY);
+      localStorage.removeItem(TRANSCRIPT_KEY);
+      localStorage.removeItem(CHATS_KEY);
+      localStorage.removeItem(PLAYLISTS_KEY);
+      localStorage.removeItem(SESSION_KEY);
+      localStorage.removeItem(VIBE_KEY);
+      localStorage.removeItem(BREAK_KEY);
+    } catch {
+      // Storage blocked — the state reset below still clears the screen.
+    }
+    setLockSettings(null);
+    setLocked(false);
+    setJournal([]);
+    setStash([]);
+    setChats([]);
+    setPlaylists([]);
+    setCurrentChatId(null);
+    setSession(DEFAULT_SESSION);
+    setVibe(DEFAULT_VIBE);
+    setTab('tonight');
+    setSyncMessage('Lock reset — sign in to get your stuff back.');
   }
 
   function askAboutStrain(name: string): void {
@@ -1217,6 +1332,9 @@ export default function App() {
           onClearJournal={() => setJournal([])}
           journal={journal}
           chats={chats}
+          lockSettings={lockSettings}
+          onLockSettings={setLockSettings}
+          biometric={bioStatus}
         />
       )}
       {tab === 'account' && (
@@ -1344,6 +1462,17 @@ export default function App() {
           </nav>
         </div>
       </div>
+
+      {/* App lock — a full-screen cover over the whole app (the app stays
+          mounted underneath, so music keeps playing). */}
+      {locked && lockSettings && (
+        <LockScreen
+          lockSettings={lockSettings}
+          biometric={bioStatus}
+          onUnlock={() => setLocked(false)}
+          onForgotPin={handleForgotPin}
+        />
+      )}
     </div>
   );
 }
