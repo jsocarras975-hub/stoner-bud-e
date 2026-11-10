@@ -53,6 +53,10 @@ import java.util.ArrayList;
  * bubble is on. Needs "draw over other apps" allowed for Bud-E; the
  * Settings toggle opens that page when it isn't. A reboot brings the
  * bubble back (BudEBootReceiver), and the app re-asserts it on launch.
+ *
+ * Drag the bubble to the left or right edge and let go to park it off
+ * to the side — only a small tab stays out, so it is out of the way but
+ * still there. Tap the tab to open the chat, or drag it back out.
  */
 public class BudEBubbleService extends Service {
     public static final String PREFS = "bude-bubble";
@@ -72,6 +76,12 @@ public class BudEBubbleService extends Service {
     private int downX;
     private int downY;
     private boolean moved;
+    /** Parked off to the side: -1 left edge, 0 not parked, 1 right edge. */
+    private int dockedSide;
+    /** How much of the bubble stays visible when parked. */
+    private static final int DOCK_PEEK_DP = 18;
+    /** How close to an edge a drop must be to park there. */
+    private static final int DOCK_ZONE_DP = 48;
 
     // In-bubble chat: one panel, shown in place of the circle.
     private LinearLayout chatPanel;
@@ -208,6 +218,9 @@ public class BudEBubbleService extends Service {
     private boolean onBubbleTouch(View view, MotionEvent event) {
         switch (event.getAction()) {
             case MotionEvent.ACTION_DOWN:
+                // Parked off to the side: pull it back out first, so the
+                // full bubble is there for the tap or the drag.
+                if (dockedSide != 0) undock();
                 downRawX = event.getRawX();
                 downRawY = event.getRawY();
                 downX = params.x;
@@ -233,6 +246,9 @@ public class BudEBubbleService extends Service {
                 cancelLongPress();
                 if (!moved) {
                     expandChat();
+                } else {
+                    // Let go near an edge: park it off to the side.
+                    tryDock();
                 }
                 return true;
             case MotionEvent.ACTION_CANCEL:
@@ -241,6 +257,36 @@ public class BudEBubbleService extends Service {
             default:
                 return false;
         }
+    }
+
+    /** Dropped near the left or right edge: slide mostly off-screen, with
+     *  just a tab sticking out to pull it back. Anywhere else, it stays
+     *  where it was dropped. */
+    private void tryDock() {
+        int screenWidth = getResources().getDisplayMetrics().widthPixels;
+        int size = dp(64);
+        int peek = dp(DOCK_PEEK_DP);
+        int zone = dp(DOCK_ZONE_DP);
+        if (params.x < zone) {
+            params.x = -(size - peek);
+            dockedSide = -1;
+        } else if (params.x + size > screenWidth - zone) {
+            params.x = screenWidth - peek;
+            dockedSide = 1;
+        } else {
+            dockedSide = 0;
+            return;
+        }
+        windowManager.updateViewLayout(bubble, params);
+    }
+
+    /** Pull a parked bubble back onto the screen, at the edge it was parked on. */
+    private void undock() {
+        int screenWidth = getResources().getDisplayMetrics().widthPixels;
+        int size = dp(64);
+        params.x = dockedSide < 0 ? dp(16) : screenWidth - size - dp(16);
+        dockedSide = 0;
+        windowManager.updateViewLayout(bubble, params);
     }
 
     private void cancelLongPress() {
@@ -565,7 +611,7 @@ public class BudEBubbleService extends Service {
         return new NotificationCompat.Builder(this, CHANNEL_ID)
                 .setSmallIcon(R.mipmap.ic_launcher)
                 .setContentTitle("Bud-E bubble is on")
-                .setContentText("Tap the bubble to chat. Long-press it to hide it.")
+                .setContentText("Tap the bubble to chat. Drag it to the edge to park it, long-press to hide it.")
                 .setContentIntent(open)
                 .setOngoing(true)
                 .build();
