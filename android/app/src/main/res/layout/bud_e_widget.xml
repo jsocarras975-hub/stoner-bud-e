@@ -22,11 +22,9 @@
             android:id="@+id/widget_leaf"
             android:layout_width="36dp"
             android:layout_height="36dp"
-            android:background="@drawable/bud_e_bubble_bg"
             android:contentDescription="Bud-E"
-            android:padding="8dp"
             android:scaleType="fitCenter"
-            android:src="@drawable/ic_bud_leaf" />
+            android:src="@drawable/bud_e_bubble_icon" />
 
         <TextView
             android:id="@+id/widget_title"
