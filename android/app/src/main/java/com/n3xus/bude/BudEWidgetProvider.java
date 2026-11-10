@@ -25,6 +25,7 @@ public class BudEWidgetProvider extends AppWidgetProvider {
     public static final String PREFS = "bude-widget";
     public static final String KEY_STASH_LINE = "stashLine";
     public static final String KEY_LOW_LINE = "lowLine";
+    public static final String KEY_WEATHER = "weatherTemp";
 
     /** Re-render every Bud-E widget now (called after the stash is published). */
     public static void updateAllWidgets(Context context) {
@@ -44,11 +45,13 @@ public class BudEWidgetProvider extends AppWidgetProvider {
         boolean showingLow = lowLine != null && !lowLine.isEmpty();
         String line = showingLow ? lowLine : stashLine;
         int color = showingLow ? 0xFFFFB020 : 0xFFF2F0EB;
+        String weather = prefs.getString(KEY_WEATHER, "—°F");
 
         for (int id : widgetIds) {
             RemoteViews views = new RemoteViews(context.getPackageName(), R.layout.bud_e_widget);
             views.setTextViewText(R.id.widget_stash, line);
             views.setTextColor(R.id.widget_stash, color);
+            views.setTextViewText(R.id.widget_weather, weather);
             // Talk: start the bubble service and open the chat panel
             // directly — the app itself never opens, so the panel floats
             // over whatever he was doing. (The voice session is only for

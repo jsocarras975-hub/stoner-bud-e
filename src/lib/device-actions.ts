@@ -237,6 +237,7 @@ interface BudEActionsPlugin {
   publishWidgetStash(options: { stashLine: string; lowLine: string }): Promise<{ ok?: boolean }>;
   publishStashSummary(options: { summary: string }): Promise<{ ok?: boolean }>;
   publishMusicState(options: { title: string; artist: string; playing: boolean; hasTrack: boolean }): Promise<{ ok?: boolean }>;
+  publishWeather(options: { temp: string }): Promise<{ ok?: boolean }>;
   getBubbleStatus(): Promise<{ enabled?: boolean; canDrawOverlays?: boolean }>;
   setBubbleEnabled(options: { enabled: boolean }): Promise<{ enabled?: boolean }>;
   openOverlaySettings(): Promise<{ ok?: boolean }>;
@@ -343,6 +344,19 @@ export async function publishMusicState(title: string, artist: string, playing: 
   if (!isNativeApp()) return;
   try {
     await BudEActions.publishMusicState({ title, artist, playing, hasTrack });
+  } catch {
+    // Best effort — the widget just keeps its old line.
+  }
+}
+
+/**
+ * Write the local temperature for the main widget's time + weather line
+ * (e.g. "72°F"). Best effort — the widget just keeps its old line.
+ */
+export async function publishWeather(temp: string): Promise<void> {
+  if (!isNativeApp()) return;
+  try {
+    await BudEActions.publishWeather({ temp });
   } catch {
     // Best effort — the widget just keeps its old line.
   }

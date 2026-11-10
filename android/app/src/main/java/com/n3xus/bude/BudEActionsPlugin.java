@@ -152,6 +152,24 @@ public class BudEActionsPlugin extends Plugin {
     }
 
     /**
+     * Publish the local temperature for the main widget's time + weather
+     * line (e.g. "72°F"). The widget re-renders from the same
+     * "bude-widget" preferences. The app fetches the weather (Open-Meteo,
+     * San Antonio) when it opens and every half hour while it is open.
+     */
+    @PluginMethod
+    public void publishWeather(PluginCall call) {
+        String temp = call.getString("temp", "—°F");
+        Context context = getContext();
+        context.getSharedPreferences(BudEWidgetProvider.PREFS, Context.MODE_PRIVATE)
+                .edit()
+                .putString(BudEWidgetProvider.KEY_WEATHER, temp)
+                .apply();
+        BudEWidgetProvider.updateAllWidgets(context);
+        call.resolve(new JSObject().put("ok", true));
+    }
+
+    /**
      * Publish the stash summary the bubble and voice chats send to the
      * server, so Bud-E knows what jars exist when the user asks it to
      * change the stash. The native chat clients read it from here.

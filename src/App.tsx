@@ -73,7 +73,7 @@ import type { AuthUser } from './lib/auth-client';
 import { DEFAULT_VOICE_SETTINGS, cleanVoiceSettings } from './voice';
 import type { VoiceSettings } from './voice';
 import { speakVoice, startRecording, stopVoice, transcribeVoice, unlockAudio } from './lib/voice-client';
-import { executeDeviceAction, extractDeviceAction, getBubbleStatus, getLaunchInfo, isAppAction, isImageSearchAction, isNative, localIsoNow, parseAppAction, publishMusicState, publishStashSummary, publishWidgetStash, setBubbleEnabled } from './lib/device-actions';
+import { executeDeviceAction, extractDeviceAction, getBubbleStatus, getLaunchInfo, isAppAction, isImageSearchAction, isNative, localIsoNow, parseAppAction, publishMusicState, publishStashSummary, publishWeather, publishWidgetStash, setBubbleEnabled } from './lib/device-actions';
 import type { AppAction } from './lib/device-actions';
 import type { ActiveRecording } from './lib/voice-client';
 import { TIMER_ALERTS, buzz, planAlerts, type PlannedAlert, type TimerAlert, type TimerAlertId } from './lib/timer-alerts';
@@ -733,6 +733,36 @@ export default function App() {
       currentTrack !== null,
     );
   }, [currentTrack, isPlaying]);
+  // Widget time + weather line (phone app only): the temperature comes
+  // from Open-Meteo for San Antonio (free, no key) and is published to
+  // the widget. Fetched when the app opens and every half hour while it
+  // is open — the widget shows the last published temperature in
+  // between, so it can go stale if the app is not opened for a while.
+  useEffect(() => {
+    if (!isNative()) return;
+    let cancelled = false;
+    const fetchWeather = async () => {
+      try {
+        const res = await fetch(
+          'https://api.open-meteo.com/v1/forecast?latitude=29.4241&longitude=-98.4936&current=temperature_2m&temperature_unit=fahrenheit&timezone=America%2FChicago',
+        );
+        if (!res.ok) return;
+        const data: unknown = await res.json();
+        const temp = (data as { current?: { temperature_2m?: unknown } }).current?.temperature_2m;
+        if (typeof temp !== 'number' || cancelled) return;
+        await publishWeather(`${Math.round(temp)}°F`);
+      } catch {
+        // Offline or the weather service is down — the widget just
+        // keeps the last temperature it had.
+      }
+    };
+    void fetchWeather();
+    const id = window.setInterval(fetchWeather, 30 * 60 * 1000);
+    return () => {
+      cancelled = true;
+      window.clearInterval(id);
+    };
+  }, []);
 
   // Home-screen widget stash line (phone app only): the totals, plus
   // the first jar running low — the warning is the line that matters,
