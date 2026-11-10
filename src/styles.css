@@ -1626,6 +1626,15 @@ button {
   background: var(--card-2);
 }
 
+/* The sticker image on a face-up card — fills the card, keeps its shape. */
+.memory-sticker {
+  width: 92%;
+  height: 92%;
+  object-fit: contain;
+  pointer-events: none;
+  user-select: none;
+}
+
 .score-big {
   font-size: 2.2rem;
   font-weight: 800;

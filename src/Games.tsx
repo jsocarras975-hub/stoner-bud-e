@@ -351,11 +351,13 @@ export function GuessTheStrain() {
 
 // ---------------------------------------------------------------------------
 // Memory Match — flip cards, match the pairs. Fewest moves wins.
-// All 12 pairs are marijuana-themed: leaf, herb, seedling, smoke, fire,
-// edibles, the flavors (grape, blueberry, lemon), the night, and the fog.
+// The faces are his sticker sheet (public/stickers/match-01..20.png, cut
+// from the sheet he sent and made transparent) — 20 stickers, and each game
+// picks 12 at random, so the set is different every time.
 // ---------------------------------------------------------------------------
 
-const MATCH_FACES = ['🍃', '🌿', '🌱', '💨', '🔥', '🍪', '🧁', '🍇', '🫐', '🍋', '🌙', '😶‍🌫️'];
+const MATCH_IMAGES = Array.from({ length: 20 }, (_, i) => `/stickers/match-${String(i + 1).padStart(2, '0')}.png`);
+const MATCH_PAIR_COUNT = 12;
 
 interface MatchCard {
   key: number;
@@ -364,7 +366,8 @@ interface MatchCard {
 }
 
 function buildDeck(): MatchCard[] {
-  const pairs = [...MATCH_FACES, ...MATCH_FACES];
+  const picked = shuffle(MATCH_IMAGES).slice(0, MATCH_PAIR_COUNT);
+  const pairs = [...picked, ...picked];
   return shuffle(pairs).map((face, i) => ({ key: i, face, matched: false }));
 }
 
@@ -416,7 +419,7 @@ export function MemoryMatch() {
     <section className="card" aria-label="Memory match">
       <h2 className="tool-title">Memory match</h2>
       <p className="muted small">
-        Flip two cards — match all {MATCH_FACES.length} pairs. Moves: {moves}
+        Flip two cards — match all {MATCH_PAIR_COUNT} pairs. Moves: {moves}
         {done ? ` · Done in ${moves} moves!` : ''}
       </p>
       {done ? (
@@ -443,9 +446,13 @@ export function MemoryMatch() {
                 type="button"
                 className={'memory-card' + (faceUp ? ' up' : '') + (card.matched ? ' matched' : '')}
                 onClick={() => flip(card.key)}
-                aria-label={faceUp ? card.face : 'Face-down card'}
+                aria-label={faceUp ? 'Sticker card' : 'Face-down card'}
               >
-                {faceUp ? card.face : '🍃'}
+                {faceUp ? (
+                  <img src={card.face} alt="" draggable={false} className="memory-sticker" />
+                ) : (
+                  '🍃'
+                )}
               </button>
             );
           })}
