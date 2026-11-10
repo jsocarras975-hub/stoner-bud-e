@@ -1,4 +1,4 @@
-// Stoner Bud-E — Community board. One shared wall for every Bud-E user:
+// Stoner Bud-E — Group Sesh board. One shared wall for every Bud-E user:
 // short posts (high thoughts, strain shout-outs, munchie ideas), a leaf to
 // like, a flag to report, and delete for your own posts (or any post if you
 // are the owner). Sign-in required — the board is tied to accounts, not
@@ -143,9 +143,9 @@ export default function Community({ user }: { user: AuthUser | null }) {
   if (!user) {
     return (
       <div>
-        <PageHead title="Community" sub="One board, every Bud-E user." />
+        <PageHead title="Group Sesh" sub="One board, every Bud-E user." />
         <section className="card">
-          <p style={{ fontWeight: 700 }}>Sign in to join the board.</p>
+          <p style={{ fontWeight: 700 }}>Sign in to join the Group Sesh.</p>
           <p className="muted">
             The community is tied to accounts, so posts have a name on them and the owner can
             keep it friendly. Sign in from the You tab, then come back here.
@@ -157,7 +157,7 @@ export default function Community({ user }: { user: AuthUser | null }) {
 
   return (
     <div>
-      <PageHead title="Community" sub="One board, every Bud-E user. Be kind — it is shared." />
+      <PageHead title="Group Sesh" sub="One board, every Bud-E user. Be kind — it is shared." />
       <section className="card" aria-label="Posting as">
         <label className="small" htmlFor="community-name" style={{ display: 'block', marginBottom: 4 }}>
           Posting as

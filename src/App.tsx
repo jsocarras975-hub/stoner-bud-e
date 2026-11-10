@@ -2599,7 +2599,7 @@ const TOOL_DEFS: { id: ToolId; name: string; detail: string; icon: React.ReactNo
   },
   {
     id: 'community',
-    name: 'Community',
+    name: 'Group Sesh',
     detail: 'One board, every Bud-E user',
     icon: <Users size={20} aria-hidden />,
   },
