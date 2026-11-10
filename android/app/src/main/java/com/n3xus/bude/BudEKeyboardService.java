@@ -286,6 +286,7 @@ public class BudEKeyboardService extends InputMethodService {
     private View buildLettersView() {
         LinearLayout col = new LinearLayout(this);
         col.setOrientation(LinearLayout.VERTICAL);
+        col.addView(makeKeyRow(new String[]{"1", "2", "3", "4", "5", "6", "7", "8", "9", "0"}, false));
         col.addView(makeKeyRow(new String[]{"q", "w", "e", "r", "t", "y", "u", "i", "o", "p"}, true));
         col.addView(makeKeyRow(new String[]{"a", "s", "d", "f", "g", "h", "j", "k", "l"}, true));
         // Row 3: shift + letters + backspace.
