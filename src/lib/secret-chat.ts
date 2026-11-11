@@ -32,6 +32,18 @@ export function markSecretUnlocked(): void {
   }
 }
 
+// Tell the server this user figured out the secret, so the room is served
+// to them from then on. The server enforces the secret — the feed and
+// posting both require this unlock.
+export async function unlockSecretServer(): Promise<void> {
+  try {
+    await communityCall('secret_unlock');
+  } catch {
+    // Best-effort — the room still opens from the local flag, and the next
+    // open retries the server unlock.
+  }
+}
+
 function isMessage(value: unknown): value is SecretMessage {
   return (
     typeof value === 'object' &&

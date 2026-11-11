@@ -47,7 +47,7 @@ import { setKeyboardTheme } from './lib/keyboard';
 import StrainsTab from './StrainsTab';
 import Community from './Community';
 import SecretChat from './SecretChat';
-import { isSecretUnlocked, markSecretUnlocked } from './lib/secret-chat';
+import { isSecretUnlocked, markSecretUnlocked, unlockSecretServer } from './lib/secret-chat';
 import MusicTab from './MusicTab';
 import TonightTab from './TonightTab';
 import SettingsTab from './SettingsTab';
@@ -429,9 +429,14 @@ export default function App() {
   const [secretUnlocked, setSecretUnlocked] = useState<boolean>(() => isSecretUnlocked());
 
   useEffect(() => {
-    if (tab === 'secret' && !secretUnlocked) {
-      markSecretUnlocked();
-      setSecretUnlocked(true);
+    if (tab === 'secret') {
+      // Unlock it server-side too, so the room is only served to users who
+      // figured out the secret — not just hidden in the UI.
+      void unlockSecretServer();
+      if (!secretUnlocked) {
+        markSecretUnlocked();
+        setSecretUnlocked(true);
+      }
     }
   }, [tab, secretUnlocked]);
   const [theme, setTheme] = useState<ThemeId>(() => loadTheme());

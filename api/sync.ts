@@ -173,6 +173,14 @@ const SECRET_MESSAGES_DDL = `create table if not exists secret_messages (
 );
 create index if not exists secret_messages_created_at_idx on secret_messages (created_at desc)`;
 
+// Secret unlocks: one row per user who figured out the gesture. The room
+// is only served to users with a row here — the server enforces the secret,
+// it is not just hidden in the UI.
+const SECRET_UNLOCKS_DDL = `create table if not exists secret_unlocks (
+  user_id text not null primary key references "user" ("id") on delete cascade,
+  unlocked_at timestamptz not null default CURRENT_TIMESTAMP
+)`;
+
 const STRAIN_REVIEWS_DDL = `create table if not exists strain_reviews (
   user_id text not null references "user" ("id") on delete cascade,
   strain_id text not null,
@@ -276,6 +284,7 @@ async function ensureCommunityTables(pool: Pool): Promise<void> {
     await pool.query(COMMUNITY_COMMENTS_DDL);
     await pool.query(COMMUNITY_COMMENT_LIKES_DDL);
     await pool.query(SECRET_MESSAGES_DDL);
+    await pool.query(SECRET_UNLOCKS_DDL);
     await pool.query(STRAIN_REVIEWS_DDL);
     await pool.query(PREMIUM_CODES_DDL);
     await pool.query(CASHAPP_PAYMENTS_DDL);
@@ -468,7 +477,32 @@ async function handleCommunity(
   // Secret live chat room — the hidden room only users who figured out the
   // J + S gesture ever see. Newest first; the client polls for the live
   // feel. Same 280-char cap and 10/hour limit as board posts.
+  // The unlock is enforced server-side: the feed and posting both require
+  // a row in secret_unlocks, so the room is genuinely only available to
+  // users who figured out the secret — not just hidden in the UI.
+  if (action === 'secret_unlock') {
+    await pool.query(
+      `insert into secret_unlocks (user_id) values ($1)
+       on conflict (user_id) do nothing`,
+      [user.id],
+    );
+    res.status(200).json({ ok: true, unlocked: true });
+    return;
+  }
+
+  async function secretUnlocked(): Promise<boolean> {
+    const r = await pool.query<{ n: string }>(
+      `select count(*) as n from secret_unlocks where user_id = $1`,
+      [user.id],
+    );
+    return Number(r.rows[0]?.n ?? 0) > 0;
+  }
+
   if (action === 'secret_feed') {
+    if (!(await secretUnlocked())) {
+      res.status(403).json({ ok: false, error: 'secret_locked' });
+      return;
+    }
     const rows = await pool.query<{
       id: string;
       user_id: string;
@@ -499,6 +533,10 @@ async function handleCommunity(
   }
 
   if (action === 'secret_post') {
+    if (!(await secretUnlocked())) {
+      res.status(403).json({ ok: false, error: 'secret_locked' });
+      return;
+    }
     const displayName =
       typeof body.displayName === 'string' ? body.displayName.trim().slice(0, MAX_DISPLAY_NAME_CHARS) : '';
     const text = typeof body.body === 'string' ? body.body.trim() : '';
