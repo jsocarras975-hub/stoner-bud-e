@@ -485,7 +485,8 @@ public class BudEKeyboardService extends InputMethodService {
             showMode(mode == Mode.MEDIA ? Mode.LETTERS : Mode.MEDIA);
         });
         row.addView(mediaKey);
-        Button space = makeKey("space", 3.4f);
+        Button space = makeKey("\uD83C\uDF43  Bud-E  \uD83C\uDF43", 3.4f);
+        space.setTextSize(16);
         space.setOnClickListener(v -> {
             v.performHapticFeedback(HapticFeedbackConstants.KEYBOARD_TAP);
             onSpace();
