@@ -439,6 +439,8 @@ function formatCountdown(totalSeconds: number): string {
 
 export default function App() {
   const [tab, setTab] = useState<Tab>('chat');
+  // Mood for the floating Bud-E avatar (reported up from the chat tab).
+  const [floatMood, setFloatMood] = useState<BudEMood>('idle');
   // Secret live chat room: once a user figures out the J + S gesture it
   // stays in their app (More menu) from then on.
   const [secretUnlocked, setSecretUnlocked] = useState<boolean>(() => isSecretUnlocked());
@@ -1550,6 +1552,7 @@ export default function App() {
           onDeleteChat={(id) => queueDeletion('chat', id)}
           personalization={personalization}
           onOpenDriving={() => setDrivingOpen(true)}
+          onAvatarMood={setFloatMood}
         />
       )}
       {tab === 'tools' && (
@@ -1874,6 +1877,19 @@ export default function App() {
             </button>
           </nav>
         </div>
+
+        {/* Floating Bud-E — he bobs there on every screen except the chat
+            itself, and tapping him opens the chat. */}
+        {tab !== 'chat' && (
+          <button
+            type="button"
+            className="bude-avatar-float"
+            onClick={() => setTab('chat')}
+            aria-label="Open chat with Bud-E"
+          >
+            <BudEAvatar mood={floatMood} />
+          </button>
+        )}
       </div>
 
       {/* App lock — a full-screen cover over the whole app (the app stays
@@ -2141,6 +2157,7 @@ function ChatTab({
   onDeleteChat,
   personalization,
   onOpenDriving,
+  onAvatarMood,
 }: {
   session: Session;
   chats: SyncedChatConversation[];
@@ -2161,6 +2178,8 @@ function ChatTab({
   personalization: Personalization;
   /** Open hands-free driving mode. */
   onOpenDriving: () => void;
+  /** Report the avatar mood up so the floating avatar can match it. */
+  onAvatarMood?: (mood: BudEMood) => void;
 }) {
   const current = chats.find((c) => c.id === currentChatId) ?? null;
   const transcript = current?.messages ?? [];
@@ -2199,6 +2218,10 @@ function ChatTab({
       : avatarHappy
         ? 'happy'
         : 'idle';
+  // Tell the floating avatar what mood Bud-E is in.
+  useEffect(() => {
+    onAvatarMood?.(avatarMood);
+  }, [avatarMood]);
   // Tap-to-talk mic state.
   const [recording, setRecording] = useState(false);
   const [voiceNote, setVoiceNote] = useState('');
@@ -2656,18 +2679,15 @@ function ChatTab({
       ) : (
         <>
         <div className="chat-topbar">
-          <div style={{ display: 'flex', alignItems: 'center', gap: 12, minWidth: 0 }}>
-            <BudEAvatar mood={avatarMood} />
-            <div style={{ minWidth: 0 }}>
-              <h1 className="page-title" style={{ margin: 0 }}>Buddy</h1>
-              <p className="page-sub" style={{ marginBottom: 0 }}>
-                {sending
-                  ? 'Bud-E is thinking…'
-                  : speakingIdx !== null
-                    ? 'Bud-E is speaking…'
-                    : 'Ask anything — Bud-E answers with your session in mind.'}
-              </p>
-            </div>
+          <div style={{ minWidth: 0 }}>
+            <h1 className="page-title" style={{ margin: 0 }}>Buddy</h1>
+            <p className="page-sub" style={{ marginBottom: 0 }}>
+              {sending
+                ? 'Bud-E is thinking…'
+                : speakingIdx !== null
+                  ? 'Bud-E is speaking…'
+                  : 'Ask anything — Bud-E answers with your session in mind.'}
+            </p>
           </div>
           <div style={{ display: 'flex', gap: 8, flexShrink: 0 }}>
             <button type="button" className="btn" onClick={() => setShowChatList(true)}>

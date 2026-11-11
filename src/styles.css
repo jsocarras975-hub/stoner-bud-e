@@ -1192,6 +1192,44 @@ button {
   animation: bude-shine 2.4s ease-in-out infinite;
 }
 
+/* Floating Bud-E — he bobs in the corner on every screen except the
+ * chat itself, glowing a little, and tapping him opens the chat. The
+ * float animation lives on the button; the mood animation (bob/dance/
+ * happy) lives on the avatar inside, so the two compose. Sits above
+ * the bottom nav and the music mini-player. */
+.bude-avatar-float {
+  position: fixed;
+  right: 14px;
+  bottom: 150px;
+  z-index: 900;
+  width: 72px;
+  height: 72px;
+  border-radius: 50%;
+  border: 2px solid rgba(163, 230, 53, 0.7);
+  background: radial-gradient(circle at 35% 30%, #1d3a1a, #0b1a0b 70%);
+  box-shadow: 0 8px 24px rgba(0, 0, 0, 0.55), 0 0 18px rgba(163, 230, 53, 0.35);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 0;
+  cursor: pointer;
+  animation: bude-float 3.2s ease-in-out infinite;
+}
+
+.bude-avatar-float:active {
+  transform: scale(0.94);
+}
+
+.bude-avatar-float .bude-avatar {
+  width: 64px;
+  height: 64px;
+}
+
+@keyframes bude-float {
+  0%, 100% { transform: translateY(0); }
+  50% { transform: translateY(-7px); }
+}
+
 /* Joint ember — a slow glow pulse at the lit tip. */
 .bude-ember {
   animation: bude-ember 1.6s ease-in-out infinite;
