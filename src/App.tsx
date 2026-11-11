@@ -1878,12 +1878,11 @@ export default function App() {
           </nav>
         </div>
 
-        {/* Floating Bud-E — he bobs there on every screen, and tapping
-            him opens the chat. On the chat tab he sits higher, above the
-            typing box, so he never covers it. */}
+        {/* Floating Bud-E — he bobs at the top center of the screen,
+            and tapping him opens the chat. */}
         <button
           type="button"
-          className={`bude-avatar-float${tab === 'chat' ? ' bude-avatar-float-chat' : ''}`}
+          className="bude-avatar-float"
           onClick={() => setTab('chat')}
           aria-label="Open chat with Bud-E"
         >
