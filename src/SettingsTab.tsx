@@ -23,6 +23,7 @@ import { speakVoice, stopVoice } from './lib/voice-client';
 import { getKeyboardStatus, openKeyboardSettings, showKeyboardPicker } from './lib/keyboard';
 import type { KeyboardStatus } from './lib/keyboard';
 import { CommunityError, generatePremiumCodes, redeemPremiumCode } from './lib/community';
+import { exportDataJson } from './lib/export-data';
 import { checkCryptoCharge, createCryptoCheckout, getPendingChargeId } from './lib/crypto-checkout';
 import {
   CASHAPP_TAG,
@@ -345,6 +346,8 @@ export default function SettingsTab(props: {
   >(null);
   const [pendingPin, setPendingPin] = useState('');
   const [lockNote, setLockNote] = useState('');
+  const [exporting, setExporting] = useState(false);
+  const [exportNote, setExportNote] = useState<string | null>(null);
   const [lockError, setLockError] = useState(false);
   const [lockBusy, setLockBusy] = useState(false);
 
@@ -1513,21 +1516,23 @@ export default function SettingsTab(props: {
                 type="button"
                 className="btn secondary btn-block"
                 style={{ marginTop: 8 }}
+                disabled={exporting}
                 onClick={() => {
-                  const blob = new Blob(
-                    [JSON.stringify({ journal, chats, personalization }, null, 2)],
-                    { type: 'application/json' },
-                  );
-                  const url = URL.createObjectURL(blob);
-                  const a = document.createElement('a');
-                  a.href = url;
-                  a.download = 'bude-export.json';
-                  a.click();
-                  URL.revokeObjectURL(url);
+                  setExporting(true);
+                  setExportNote(null);
+                  exportDataJson({ journal, chats, personalization })
+                    .then(() => setExportNote('Done — pick where to save or send it.'))
+                    .catch(() => setExportNote('Export did not go through — try again.'))
+                    .finally(() => setExporting(false));
                 }}
               >
-                Export my data
+                {exporting ? 'Exporting…' : 'Export my data'}
               </button>
+              {exportNote && (
+                <p className="muted" role="status" style={{ marginTop: 12, marginBottom: 0 }}>
+                  {exportNote}
+                </p>
+              )}
             </section>
           )}
 
@@ -1541,6 +1546,9 @@ export default function SettingsTab(props: {
                 <p className="muted" style={{ marginBottom: 0 }}>
                   Your chat always stays on this device. When you are signed in, your journal, stash, and
                   settings sync to your account so they follow you — nothing else leaves this phone.
+                </p>
+                <p className="muted" style={{ marginBottom: 0 }}>
+                  Built by N3xUs Konc3pt&apos;z. Some things in here are only found, never told.
                 </p>
               </section>
               <section className="card" aria-label="Legal">

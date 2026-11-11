@@ -2,7 +2,16 @@
 // secret you figure out earns a badge on your profile. Locked badges stay
 // hidden so they stay secret. Stored on-device only.
 
-export type BadgeId = 'secret-finder' | 'vault-raider' | 'four-twenty' | 'lit-up' | 'code-breaker';
+export type BadgeId =
+  | 'secret-finder'
+  | 'vault-raider'
+  | 'four-twenty'
+  | 'lit-up'
+  | 'code-breaker'
+  | 'say-hi'
+  | 'chill-out'
+  | 'munchies'
+  | 'go-getter';
 
 export const BADGES: { id: BadgeId; emoji: string; name: string; detail: string }[] = [
   { id: 'secret-finder', emoji: '🤫', name: 'Secret Finder', detail: 'Found the Secret Room.' },
@@ -10,6 +19,10 @@ export const BADGES: { id: BadgeId; emoji: string; name: string; detail: string 
   { id: 'four-twenty', emoji: '🌿', name: '4:20', detail: 'Found the deeper 420 Room.' },
   { id: 'lit-up', emoji: '💡', name: 'Lit Up', detail: 'Turned on Lit Mode.' },
   { id: 'code-breaker', emoji: '🔓', name: 'Code Breaker', detail: 'Cracked a hidden code.' },
+  { id: 'say-hi', emoji: '👋', name: 'Say Hi', detail: 'Found the secret Hi.' },
+  { id: 'chill-out', emoji: '😌', name: 'Chill Out', detail: 'Found the hidden Chill screen.' },
+  { id: 'munchies', emoji: '🍕', name: 'Munchies', detail: 'Found the Munchies Room.' },
+  { id: 'go-getter', emoji: '🚀', name: 'Go Getter', detail: 'Found the hidden Go screen.' },
 ];
 
 const BADGES_KEY = 'bude-secret-badges';

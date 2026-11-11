@@ -71,6 +71,26 @@ export default function FourTwentyChat({ user }: { user: { name: string } | null
     window.setTimeout(() => setNameSaved(false), 2000);
   }
 
+  async function handleRoomAction(kind: 'wave' | 'highfive'): Promise<void> {
+    if (posting) return;
+    setPosting(true);
+    setError(null);
+    try {
+      const displayName = getDisplayName('Buddy');
+      const text =
+        kind === 'wave'
+          ? `👋 ${displayName} waved at the room`
+          : `✋ ${displayName} high-fived the room`;
+      const created = await postFourTwentyMessage(text);
+      setMessages((prev) => [...prev, created]);
+      stickToBottom.current = true;
+    } catch (e) {
+      setError(e instanceof CommunityError ? e.message : 'That did not go through — try again.');
+    } finally {
+      setPosting(false);
+    }
+  }
+
   return (
     <section>
       <p className="eyebrow">🌿 420 · live · deeper secret</p>
@@ -136,6 +156,14 @@ export default function FourTwentyChat({ user }: { user: { name: string } | null
         />
         <button type="button" className="btn" onClick={() => void handlePost()} disabled={posting || draft.trim() === ''}>
           Send
+        </button>
+      </div>
+      <div style={{ display: 'flex', gap: 8, marginTop: 8 }}>
+        <button type="button" className="btn secondary" onClick={() => void handleRoomAction('wave')} disabled={posting}>
+          👋 Wave
+        </button>
+        <button type="button" className="btn secondary" onClick={() => void handleRoomAction('highfive')} disabled={posting}>
+          ✋ High five
         </button>
       </div>
     </section>

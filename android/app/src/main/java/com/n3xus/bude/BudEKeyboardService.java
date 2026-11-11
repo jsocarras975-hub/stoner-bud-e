@@ -119,15 +119,21 @@ public class BudEKeyboardService extends InputMethodService {
 
     /** Secret hold gestures: hold two keys together for 3 seconds.
      *  J+S opens the Secret Room, B+E the hidden Strain Vault, 4+2 the
-     *  420 Room, L+T toggles Lit Mode. Both keys must stay down the
-     *  whole time. "lit" is a toggle, not a tab — the app reads it from
-     *  the launch tab and switches Lit Mode on/off. */
+     *  420 Room, L+T toggles Lit Mode, H+I says Hi, C+H opens Chill,
+     *  M+U opens the Munchies Room, G+O opens Go (quick actions).
+     *  Both keys must stay down the whole time. "lit" is a toggle, not
+     *  a tab — the app reads it from the launch tab and switches Lit
+     *  Mode on/off. */
     private static final long GESTURE_HOLD_MS = 3000;
     private static final String[][] GESTURE_PAIRS = {
         {"j", "s", "secret"},
         {"b", "e", "vault"},
         {"4", "2", "fourtwenty"},
         {"l", "t", "lit"},
+        {"h", "i", "hi"},
+        {"c", "h", "chill"},
+        {"m", "u", "munchies"},
+        {"g", "o", "go"},
     };
     private final java.util.Set<String> gestureDown = new java.util.HashSet<>();
     /** Release-clicks to swallow after a gesture fires, so the held keys

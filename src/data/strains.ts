@@ -292,7 +292,7 @@ export const STRAINS: Strain[] = [
       { name: 'Linalool', note: 'Floral and lavender-like — the soft, mellow finish.' },
     ],
     blurb:
-      'Sweet and creamy like dessert, with a happy, giggly lift that settles into a cozy relax — a crowd favorite for a reason.',
+      'Sweet and creamy like dessert, with a happy, giggly lift that settles into a cozy relax — a crowd favorite for a reason. Some say the flavor is the code.',
   },
 ];
 

@@ -90,6 +90,26 @@ export default function SecretChat({ user }: { user: { name: string } | null }) 
     }
   }
 
+  async function handleRoomAction(kind: 'wave' | 'highfive'): Promise<void> {
+    if (posting) return;
+    setPosting(true);
+    setError(null);
+    try {
+      const displayName = getDisplayName('Buddy');
+      const text =
+        kind === 'wave'
+          ? `👋 ${displayName} waved at the room`
+          : `✋ ${displayName} high-fived the room`;
+      const created = await postSecretMessage(text);
+      setMessages((prev) => [...prev, created]);
+      stickToBottom.current = true;
+    } catch (e) {
+      setError(e instanceof CommunityError ? e.message : 'That did not go through — try again.');
+    } finally {
+      setPosting(false);
+    }
+  }
+
   function handleCode(): void {
     const result = redeemSecretCode(code);
     setCodeMessage(result ?? 'Not a code — keep looking.');
@@ -165,6 +185,12 @@ export default function SecretChat({ user }: { user: { name: string } | null }) 
       <div style={{ display: 'flex', gap: 8, marginTop: 8 }}>
         <button type="button" className="btn secondary" onClick={() => void handlePassIt()} disabled={posting}>
           🍃 Pass it
+        </button>
+        <button type="button" className="btn secondary" onClick={() => void handleRoomAction('wave')} disabled={posting}>
+          👋 Wave
+        </button>
+        <button type="button" className="btn secondary" onClick={() => void handleRoomAction('highfive')} disabled={posting}>
+          ✋ High five
         </button>
       </div>
       <div style={{ marginTop: 16 }}>

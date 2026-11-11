@@ -49,9 +49,15 @@ import Community from './Community';
 import SecretChat from './SecretChat';
 import Vault from './Vault';
 import FourTwentyChat from './FourTwentyChat';
+import Hi from './Hi';
+import Chill from './Chill';
+import Go from './Go';
+import MunchiesChat from './MunchiesChat';
 import { isSecretUnlocked, markSecretUnlocked, unlockSecretServer } from './lib/secret-chat';
 import { isVaultUnlocked, markVaultUnlocked } from './lib/vault';
 import { isFourTwentyUnlocked, markFourTwentyUnlocked, unlockFourTwentyServer } from './lib/fourtwenty-chat';
+import { isMunchiesUnlocked, markMunchiesUnlocked, unlockMunchiesServer } from './lib/munchies-chat';
+import { isSectionUnlocked, markSectionUnlocked } from './lib/hidden-sections';
 import { BADGES, earnBadge, getBadges } from './lib/badges';
 import { isLitMode, markLitModeUnlocked, setLitMode, toggleLitMode } from './lib/lit-mode';
 import { isOwnerTier } from './lib/sync';
@@ -157,7 +163,7 @@ function apiUrl(): string {
   return `${apiBase()}/chat`;
 }
 
-type Tab = 'tonight' | 'chat' | 'tools' | 'plan' | 'strains' | 'music' | 'journal' | 'stash' | 'break' | 'dose' | 'settings' | 'account' | 'secret' | 'vault' | 'fourtwenty';
+type Tab = 'tonight' | 'chat' | 'tools' | 'plan' | 'strains' | 'music' | 'journal' | 'stash' | 'break' | 'dose' | 'settings' | 'account' | 'secret' | 'vault' | 'fourtwenty' | 'hi' | 'chill' | 'munchies' | 'go';
 type Source = 'live' | 'fallback' | null;
 
 /** True when a string from the native side names a real tab. */
@@ -166,7 +172,8 @@ function isTab(value: string): value is Tab {
     value === 'tonight' || value === 'chat' || value === 'tools' || value === 'plan' ||
     value === 'strains' || value === 'music' || value === 'journal' || value === 'stash' ||
     value === 'break' || value === 'dose' || value === 'settings' || value === 'account' ||
-    value === 'secret' || value === 'vault' || value === 'fourtwenty'
+    value === 'secret' || value === 'vault' || value === 'fourtwenty' ||
+    value === 'hi' || value === 'chill' || value === 'munchies' || value === 'go'
   );
 }
 
@@ -474,6 +481,56 @@ export default function App() {
       }
     }
   }, [tab, fourtwentyUnlocked]);
+
+  // Munchies Room (M+U): a live chat for snack ideas. Once found it stays.
+  const [munchiesUnlocked, setMunchiesUnlocked] = useState<boolean>(() => isMunchiesUnlocked());
+
+  useEffect(() => {
+    if (tab === 'munchies') {
+      void unlockMunchiesServer();
+      earnBadge('munchies');
+      if (!munchiesUnlocked) {
+        markMunchiesUnlocked();
+        setMunchiesUnlocked(true);
+      }
+    }
+  }, [tab, munchiesUnlocked]);
+
+  // Hidden one-off sections (H+I Hi, C+H Chill, G+O Go). Once found they
+  // stay in the app (More menu).
+  const [hiUnlocked, setHiUnlocked] = useState<boolean>(() => isSectionUnlocked('hi'));
+  const [chillUnlocked, setChillUnlocked] = useState<boolean>(() => isSectionUnlocked('chill'));
+  const [goUnlocked, setGoUnlocked] = useState<boolean>(() => isSectionUnlocked('go'));
+
+  useEffect(() => {
+    if (tab === 'hi') {
+      earnBadge('say-hi');
+      if (!hiUnlocked) {
+        markSectionUnlocked('hi');
+        setHiUnlocked(true);
+      }
+    }
+  }, [tab, hiUnlocked]);
+
+  useEffect(() => {
+    if (tab === 'chill') {
+      earnBadge('chill-out');
+      if (!chillUnlocked) {
+        markSectionUnlocked('chill');
+        setChillUnlocked(true);
+      }
+    }
+  }, [tab, chillUnlocked]);
+
+  useEffect(() => {
+    if (tab === 'go') {
+      earnBadge('go-getter');
+      if (!goUnlocked) {
+        markSectionUnlocked('go');
+        setGoUnlocked(true);
+      }
+    }
+  }, [tab, goUnlocked]);
 
   // Lit Mode (L+T): the glowing look. Once found it stays unlocked, and the
   // app remembers whether it is on.
@@ -1589,6 +1646,10 @@ export default function App() {
       {tab === 'secret' && <SecretChat user={user} />}
       {tab === 'vault' && <Vault onAskAboutStrain={askAboutStrain} />}
       {tab === 'fourtwenty' && <FourTwentyChat user={user} />}
+      {tab === 'hi' && <Hi />}
+      {tab === 'chill' && <Chill />}
+      {tab === 'munchies' && <MunchiesChat user={user} />}
+      {tab === 'go' && <Go onGo={(next) => setTab(next)} />}
         </div>
 
         {moreOpen && (
@@ -1710,6 +1771,62 @@ export default function App() {
                 >
                   <span aria-hidden>🌿</span>
                   <span>420 Room</span>
+                </button>
+              )}
+              {(munchiesUnlocked || ownerAccess) && (
+                <button
+                  type="button"
+                  role="menuitem"
+                  className="more-item"
+                  onClick={() => {
+                    setTab('munchies');
+                    setMoreOpen(false);
+                  }}
+                >
+                  <span aria-hidden>🍕</span>
+                  <span>Munchies</span>
+                </button>
+              )}
+              {(hiUnlocked || ownerAccess) && (
+                <button
+                  type="button"
+                  role="menuitem"
+                  className="more-item"
+                  onClick={() => {
+                    setTab('hi');
+                    setMoreOpen(false);
+                  }}
+                >
+                  <span aria-hidden>👋</span>
+                  <span>Hi</span>
+                </button>
+              )}
+              {(chillUnlocked || ownerAccess) && (
+                <button
+                  type="button"
+                  role="menuitem"
+                  className="more-item"
+                  onClick={() => {
+                    setTab('chill');
+                    setMoreOpen(false);
+                  }}
+                >
+                  <span aria-hidden>😌</span>
+                  <span>Chill</span>
+                </button>
+              )}
+              {(goUnlocked || ownerAccess) && (
+                <button
+                  type="button"
+                  role="menuitem"
+                  className="more-item"
+                  onClick={() => {
+                    setTab('go');
+                    setMoreOpen(false);
+                  }}
+                >
+                  <span aria-hidden>🚀</span>
+                  <span>Go</span>
                 </button>
               )}
             </div>

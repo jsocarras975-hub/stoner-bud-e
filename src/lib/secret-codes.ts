@@ -7,6 +7,8 @@ import { earnBadge } from './badges';
 const CODES: Record<string, string> = {
   PURPLE: 'You cracked the Vault code. 🗝️',
   LIT420: 'You cracked the 420 code. 🌿',
+  GELATO: 'You cracked the Gelato code. 🍦',
+  N3XUS: 'You cracked the N3xUs code. ✨',
 };
 
 const REDEEMED_KEY = 'bude-codes-redeemed';

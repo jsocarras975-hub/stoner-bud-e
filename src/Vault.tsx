@@ -43,6 +43,22 @@ const VAULT_STRAINS: {
     effects: 'Energetic, buzzy, all aboard',
     note: 'Strong. Newer folks should start small.',
   },
+  {
+    name: 'Blueberry Muffin',
+    type: 'Indica',
+    thc: 'THC about 18–22%',
+    flavors: 'Blueberry, sweet dough, vanilla',
+    effects: 'Cozy, calm, sleepy — like fresh muffins',
+    note: 'Smells like a bakery. Tastes like one too.',
+  },
+  {
+    name: 'Lemon Haze',
+    type: 'Sativa',
+    thc: 'THC about 19–24%',
+    flavors: 'Lemon, citrus, sweet',
+    effects: 'Bright, happy, talkative',
+    note: 'Sunshine in a jar.',
+  },
 ];
 
 export default function Vault({ onAskAboutStrain }: { onAskAboutStrain: (strain: string) => void }) {
