@@ -57,6 +57,7 @@ export class CommunityError extends Error {
     | 'already_used'
     | 'already_premium'
     | 'not_owner'
+    | 'secret_locked'
     | 'other';
   constructor(code: CommunityError['code'], message?: string) {
     super(message ?? code);
