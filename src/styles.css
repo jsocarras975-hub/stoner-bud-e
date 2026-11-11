@@ -1225,6 +1225,12 @@ button {
   height: 64px;
 }
 
+/* On the chat tab he sits higher, above the typing box and the quick
+ * replies, so he floats over the messages and never covers the input. */
+.bude-avatar-float-chat {
+  bottom: 260px;
+}
+
 @keyframes bude-float {
   0%, 100% { transform: translateY(0); }
   50% { transform: translateY(-7px); }

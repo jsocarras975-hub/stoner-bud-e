@@ -1878,18 +1878,17 @@ export default function App() {
           </nav>
         </div>
 
-        {/* Floating Bud-E — he bobs there on every screen except the chat
-            itself, and tapping him opens the chat. */}
-        {tab !== 'chat' && (
-          <button
-            type="button"
-            className="bude-avatar-float"
-            onClick={() => setTab('chat')}
-            aria-label="Open chat with Bud-E"
-          >
-            <BudEAvatar mood={floatMood} />
-          </button>
-        )}
+        {/* Floating Bud-E — he bobs there on every screen, and tapping
+            him opens the chat. On the chat tab he sits higher, above the
+            typing box, so he never covers it. */}
+        <button
+          type="button"
+          className={`bude-avatar-float${tab === 'chat' ? ' bude-avatar-float-chat' : ''}`}
+          onClick={() => setTab('chat')}
+          aria-label="Open chat with Bud-E"
+        >
+          <BudEAvatar mood={floatMood} />
+        </button>
       </div>
 
       {/* App lock — a full-screen cover over the whole app (the app stays
