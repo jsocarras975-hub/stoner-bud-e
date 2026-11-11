@@ -100,6 +100,7 @@ export interface Personalization {
   accent: 'default' | 'lime' | 'amber' | 'rose' | 'sky';
   voiceSpeed: 'slow' | 'normal' | 'fast';
   preferredUnit: 'mg' | 'g';
+  avatarSize: 'normal' | 'big' | 'huge';
 }
 
 export const DEFAULT_PERSONALIZATION: Personalization = {
@@ -115,6 +116,7 @@ export const DEFAULT_PERSONALIZATION: Personalization = {
   accent: 'default',
   voiceSpeed: 'normal',
   preferredUnit: 'mg',
+  avatarSize: 'normal',
 };
 
 export function cleanPersonalization(raw: unknown): Personalization {
@@ -133,6 +135,7 @@ export function cleanPersonalization(raw: unknown): Personalization {
   if (p.accent === 'default' || p.accent === 'lime' || p.accent === 'amber' || p.accent === 'rose' || p.accent === 'sky') base.accent = p.accent;
   if (p.voiceSpeed === 'slow' || p.voiceSpeed === 'normal' || p.voiceSpeed === 'fast') base.voiceSpeed = p.voiceSpeed;
   if (p.preferredUnit === 'mg' || p.preferredUnit === 'g') base.preferredUnit = p.preferredUnit;
+  if (p.avatarSize === 'normal' || p.avatarSize === 'big' || p.avatarSize === 'huge') base.avatarSize = p.avatarSize;
   return base;
 }
 

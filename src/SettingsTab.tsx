@@ -775,6 +775,17 @@ export default function SettingsTab(props: {
                   </p>
                 </div>
               )}
+              <div style={{ marginTop: 16 }}>
+                <Label>Bud-E avatar size</Label>
+                <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap' }}>
+                  <Chip on={personalization.avatarSize === 'normal'} onClick={() => onPersonalization({ ...personalization, avatarSize: 'normal' })}>Normal</Chip>
+                  <Chip on={personalization.avatarSize === 'big'} onClick={() => onPersonalization({ ...personalization, avatarSize: 'big' })}>Big</Chip>
+                  <Chip on={personalization.avatarSize === 'huge'} onClick={() => onPersonalization({ ...personalization, avatarSize: 'huge' })}>Huge</Chip>
+                </div>
+                <p className="muted" style={{ marginTop: 6, marginBottom: 0 }}>
+                  How big the floating Bud-E at the top of the screen is.
+                </p>
+              </div>
             </section>
           )}
 

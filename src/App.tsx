@@ -869,6 +869,7 @@ export default function App() {
     document.documentElement.setAttribute('data-text', personalization.textSize);
     document.documentElement.setAttribute('data-motion', personalization.reduceMotion ? 'reduce' : 'full');
     document.documentElement.setAttribute('data-accent', personalization.accent);
+    document.documentElement.setAttribute('data-avatar', personalization.avatarSize);
   }, [personalization]);
   useEffect(() => save(JOURNAL_KEY, journal), [journal]);
   useEffect(() => save(STASH_KEY, stash), [stash]);
