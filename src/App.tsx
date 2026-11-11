@@ -478,10 +478,6 @@ export default function App() {
   // Lit Mode (L+T): the glowing look. Once found it stays unlocked, and the
   // app remembers whether it is on.
   const [litMode, setLitModeState] = useState<boolean>(() => isLitMode());
-
-  // The owner account gets every secret feature and section, no gesture
-  // needed — the server enforces the same bypass for the rooms.
-  const ownerAccess = isOwnerTier(premiumTier);
   const [theme, setTheme] = useState<ThemeId>(() => loadTheme());
   const [ageConfirmed, setAgeConfirmed] = useState<boolean>(() => {
     try {
@@ -524,6 +520,10 @@ export default function App() {
   const [vibe, setVibe] = useState<Vibe>(() => load(VIBE_KEY, DEFAULT_VIBE));
   const [voice, setVoice] = useState<VoiceSettings>(() => loadVoiceSettings());
   const [premiumTier, setPremiumTier] = useState<PremiumTier>(null);
+
+  // The owner account gets every secret feature and section, no gesture
+  // needed — the server enforces the same bypass for the rooms.
+  const ownerAccess = isOwnerTier(premiumTier);
   // App lock (PIN + fingerprint/face). locked starts true when a PIN is
   // set, so opening the app asks for it. bioStatus is the phone's
   // biometric availability, read once and refreshed when the app comes
