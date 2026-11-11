@@ -53,6 +53,7 @@ import Hi from './Hi';
 import Chill from './Chill';
 import Go from './Go';
 import MunchiesChat from './MunchiesChat';
+import BudEAvatar, { type BudEMood } from './BudEAvatar';
 import { isSecretUnlocked, markSecretUnlocked, unlockSecretServer } from './lib/secret-chat';
 import { isVaultUnlocked, markVaultUnlocked } from './lib/vault';
 import { isFourTwentyUnlocked, markFourTwentyUnlocked, unlockFourTwentyServer } from './lib/fourtwenty-chat';
@@ -2177,6 +2178,27 @@ function ChatTab({
   const bottomRef = useRef<HTMLDivElement>(null);
   // Which Bud-E message is being read out loud right now (null = none).
   const [speakingIdx, setSpeakingIdx] = useState<number | null>(null);
+  // Happy bounce: when a new Bud-E message lands, the avatar does one
+  // happy bounce, then settles back to its idle bob.
+  const [avatarHappy, setAvatarHappy] = useState(false);
+  const budMsgCount = transcript.filter((m) => m.role !== 'user').length;
+  const prevBudMsgCount = useRef(budMsgCount);
+  useEffect(() => {
+    if (budMsgCount > prevBudMsgCount.current) {
+      setAvatarHappy(true);
+      const id = window.setTimeout(() => setAvatarHappy(false), 700);
+      prevBudMsgCount.current = budMsgCount;
+      return () => window.clearTimeout(id);
+    }
+    prevBudMsgCount.current = budMsgCount;
+  }, [budMsgCount]);
+  const avatarMood: BudEMood = sending
+    ? 'thinking'
+    : speakingIdx !== null
+      ? 'speaking'
+      : avatarHappy
+        ? 'happy'
+        : 'idle';
   // Tap-to-talk mic state.
   const [recording, setRecording] = useState(false);
   const [voiceNote, setVoiceNote] = useState('');
@@ -2635,11 +2657,18 @@ function ChatTab({
         <>
         <div className="chat-scroll" role="log" aria-live="polite">
           <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-            <div>
-              <h1 className="page-title">Buddy</h1>
-              <p className="page-sub" style={{ marginBottom: 0 }}>
-                Ask anything — Bud-E answers with your session in mind.
-              </p>
+            <div style={{ display: 'flex', alignItems: 'center', gap: 12 }}>
+              <BudEAvatar mood={avatarMood} />
+              <div>
+                <h1 className="page-title">Buddy</h1>
+                <p className="page-sub" style={{ marginBottom: 0 }}>
+                  {sending
+                    ? 'Bud-E is thinking…'
+                    : speakingIdx !== null
+                      ? 'Bud-E is speaking…'
+                      : 'Ask anything — Bud-E answers with your session in mind.'}
+                </p>
+              </div>
             </div>
             <button type="button" className="btn" onClick={() => setShowChatList(true)}>
               Chats
