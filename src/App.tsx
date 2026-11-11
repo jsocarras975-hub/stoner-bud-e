@@ -187,8 +187,8 @@ const IDLE_TIMER: TimerState = { status: 'idle', remainingSec: 0, totalSec: 0 };
 /** Bottom-nav destinations (6 slots: 5 tabs + More). Log and Plan live
  *  inside Tools now; every tab is still reachable. */
 const NAV_ITEMS: { id: Tab; label: string; icon: typeof Moon }[] = [
-  { id: 'tonight', label: 'Tonight', icon: Moon },
   { id: 'chat', label: 'Buddy', icon: MessageCircle },
+  { id: 'tonight', label: 'Tonight', icon: Moon },
   { id: 'stash', label: 'Stash', icon: Package },
   { id: 'tools', label: 'Tools', icon: LayoutGrid },
   { id: 'account', label: 'You', icon: UserRound },
@@ -430,7 +430,7 @@ function formatCountdown(totalSeconds: number): string {
 }
 
 export default function App() {
-  const [tab, setTab] = useState<Tab>('tonight');
+  const [tab, setTab] = useState<Tab>('chat');
   const [theme, setTheme] = useState<ThemeId>(() => loadTheme());
   const [ageConfirmed, setAgeConfirmed] = useState<boolean>(() => {
     try {
