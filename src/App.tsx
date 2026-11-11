@@ -53,7 +53,8 @@ import { isSecretUnlocked, markSecretUnlocked, unlockSecretServer } from './lib/
 import { isVaultUnlocked, markVaultUnlocked } from './lib/vault';
 import { isFourTwentyUnlocked, markFourTwentyUnlocked, unlockFourTwentyServer } from './lib/fourtwenty-chat';
 import { BADGES, earnBadge, getBadges } from './lib/badges';
-import { isLitMode, markLitModeUnlocked, toggleLitMode } from './lib/lit-mode';
+import { isLitMode, markLitModeUnlocked, setLitMode, toggleLitMode } from './lib/lit-mode';
+import { isOwnerTier } from './lib/sync';
 import MusicTab from './MusicTab';
 import TonightTab from './TonightTab';
 import SettingsTab from './SettingsTab';
@@ -477,6 +478,10 @@ export default function App() {
   // Lit Mode (L+T): the glowing look. Once found it stays unlocked, and the
   // app remembers whether it is on.
   const [litMode, setLitModeState] = useState<boolean>(() => isLitMode());
+
+  // The owner account gets every secret feature and section, no gesture
+  // needed — the server enforces the same bypass for the rooms.
+  const ownerAccess = isOwnerTier(premiumTier);
   const [theme, setTheme] = useState<ThemeId>(() => loadTheme());
   const [ageConfirmed, setAgeConfirmed] = useState<boolean>(() => {
     try {
@@ -1553,6 +1558,8 @@ export default function App() {
           onLockSettings={setLockSettings}
           biometric={bioStatus}
           onSyncNow={() => void syncNow('manual')}
+          litMode={litMode}
+          onLitMode={(on) => { setLitMode(on); setLitModeState(on); }}
         />
       )}
       {tab === 'account' && (
@@ -1566,11 +1573,11 @@ export default function App() {
             stocked={stash.filter((i) => i.amount > 0).length}
             onGoSettings={() => setTab('settings')}
           />
-          {getBadges().length > 0 && (
+          {(ownerAccess || getBadges().length > 0) && (
             <section className="card" aria-label="Secret badges">
               <p className="eyebrow">🏅 Secret badges</p>
               <p className="muted">Things you found that most people never will.</p>
-              {BADGES.filter((b) => getBadges().includes(b.id)).map((b) => (
+              {(ownerAccess ? BADGES : BADGES.filter((b) => getBadges().includes(b.id))).map((b) => (
                 <p key={b.id} style={{ margin: '6px 0' }}>
                   {b.emoji} <strong>{b.name}</strong> — {b.detail}
                 </p>
@@ -1663,7 +1670,7 @@ export default function App() {
                   </button>
                 );
               })}
-              {secretUnlocked && (
+              {(secretUnlocked || ownerAccess) && (
                 <button
                   type="button"
                   role="menuitem"
@@ -1677,7 +1684,7 @@ export default function App() {
                   <span>Secret</span>
                 </button>
               )}
-              {vaultUnlocked && (
+              {(vaultUnlocked || ownerAccess) && (
                 <button
                   type="button"
                   role="menuitem"
@@ -1691,7 +1698,7 @@ export default function App() {
                   <span>Vault</span>
                 </button>
               )}
-              {fourtwentyUnlocked && (
+              {(fourtwentyUnlocked || ownerAccess) && (
                 <button
                   type="button"
                   role="menuitem"

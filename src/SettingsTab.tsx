@@ -13,6 +13,7 @@ import { THEMES } from './theme';
 import type { ThemeId } from './theme';
 import { isVaultUnlocked } from './lib/vault';
 import { isFourTwentyUnlocked } from './lib/fourtwenty-chat';
+import { isLitModeUnlocked } from './lib/lit-mode';
 import { APP_VERSION, COPYRIGHT, getLegalDoc } from './legal';
 import type { LegalDoc } from './legal';
 import type { AuthUser } from './lib/auth-client';
@@ -104,12 +105,16 @@ export default function SettingsTab(props: {
   biometric: BiometricStatus;
   /** Pull the latest server state (used after a redeem unlocks a tier). */
   onSyncNow: () => void;
+  /** Lit Mode (the glowing look) — the owner and anyone who found it can toggle it here. */
+  litMode: boolean;
+  onLitMode: (on: boolean) => void;
 }) {
   const {
     theme, onTheme, user, onDeleteAccount, voice, onVoice, apiBase,
     premiumTier = null, personalization, onPersonalization,
     onClearChats, onClearJournal, journal, chats,
     lockSettings, onLockSettings, biometric, onSyncNow,
+    litMode, onLitMode,
   } = props;
   const [view, setView] = useState<SettingsView>('main');
   const [deleting, setDeleting] = useState(false);
@@ -709,7 +714,7 @@ export default function SettingsTab(props: {
             <section className="card" aria-label="Appearance">
               <p className="muted">Swap the whole garden. It stays on this phone.</p>
               <div className="theme-grid">
-                {THEMES.filter((item) => !item.secret || (item.secret === 'vault' && isVaultUnlocked())).map((item) => {
+                {THEMES.filter((item) => !item.secret || premiumTier === 'owner' || (item.secret === 'vault' && isVaultUnlocked())).map((item) => {
                   const locked =
                     (item.premium && !premiumTier) ||
                     (item.ownerOnly && premiumTier !== 'owner');
@@ -740,6 +745,32 @@ export default function SettingsTab(props: {
                   );
                 })}
               </div>
+              {(premiumTier === 'owner' || isLitModeUnlocked()) && (
+                <div style={{ marginTop: 16 }}>
+                  <Label>Lit Mode</Label>
+                  <div className="unit-toggle">
+                    <button
+                      type="button"
+                      aria-pressed={litMode}
+                      className={litMode ? 'on' : ''}
+                      onClick={() => onLitMode(true)}
+                    >
+                      On
+                    </button>
+                    <button
+                      type="button"
+                      aria-pressed={!litMode}
+                      className={!litMode ? 'on' : ''}
+                      onClick={() => onLitMode(false)}
+                    >
+                      Off
+                    </button>
+                  </div>
+                  <p className="muted" style={{ marginTop: 6, marginBottom: 0 }}>
+                    The glowing look. You can also switch it with the keyboard.
+                  </p>
+                </div>
+              )}
             </section>
           )}
 
@@ -1010,7 +1041,7 @@ export default function SettingsTab(props: {
               <p className="muted">Pick how Bud-E sounds, and whether it talks back out loud.</p>
               <Label>Buddy voice</Label>
               <ChipRow>
-                {PERSONAS.filter((p) => !p.secret || (p.secret === 'fourtwenty' && isFourTwentyUnlocked())).map((p) => {
+                {PERSONAS.filter((p) => !p.secret || premiumTier === 'owner' || (p.secret === 'fourtwenty' && isFourTwentyUnlocked())).map((p) => {
                   // Secret personas (DJ) are gated by the secret, not by
                   // premium — finding the 420 Room is what unlocks them.
                   const locked =

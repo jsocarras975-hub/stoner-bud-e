@@ -518,7 +518,9 @@ async function handleCommunity(
   }
 
   if (action === 'secret_feed') {
-    if (!(await secretUnlocked())) {
+    // The owner always gets in — no gesture needed for the owner account.
+    const allowed = (await secretUnlocked()) || (await isOwner(pool, user.id));
+    if (!allowed) {
       res.status(403).json({ ok: false, error: 'secret_locked' });
       return;
     }
@@ -552,7 +554,8 @@ async function handleCommunity(
   }
 
   if (action === 'secret_post') {
-    if (!(await secretUnlocked())) {
+    const allowed = (await secretUnlocked()) || (await isOwner(pool, user.id));
+    if (!allowed) {
       res.status(403).json({ ok: false, error: 'secret_locked' });
       return;
     }
@@ -621,11 +624,10 @@ async function handleCommunity(
   }
 
   if (action === 'fourtwenty_feed') {
-    if (!(await secretUnlocked())) {
-      res.status(403).json({ ok: false, error: 'secret_locked' });
-      return;
-    }
-    if (!(await fourtwentyUnlocked())) {
+    // The owner always gets in — no gesture needed for the owner account.
+    const allowed =
+      ((await secretUnlocked()) && (await fourtwentyUnlocked())) || (await isOwner(pool, user.id));
+    if (!allowed) {
       res.status(403).json({ ok: false, error: 'fourtwenty_locked' });
       return;
     }
@@ -659,11 +661,9 @@ async function handleCommunity(
   }
 
   if (action === 'fourtwenty_post') {
-    if (!(await secretUnlocked())) {
-      res.status(403).json({ ok: false, error: 'secret_locked' });
-      return;
-    }
-    if (!(await fourtwentyUnlocked())) {
+    const allowed =
+      ((await secretUnlocked()) && (await fourtwentyUnlocked())) || (await isOwner(pool, user.id));
+    if (!allowed) {
       res.status(403).json({ ok: false, error: 'fourtwenty_locked' });
       return;
     }
