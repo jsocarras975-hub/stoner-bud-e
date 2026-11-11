@@ -519,7 +519,7 @@ p {
 .bottom-nav {
   display: grid;
   grid-template-columns: repeat(6, 1fr);
-  padding: 6px 4px 14px;
+  padding: 4px 4px 8px;
   border-top: 1px solid var(--line);
   background: var(--surface);
 }
@@ -529,15 +529,15 @@ p {
   flex-direction: column;
   align-items: center;
   justify-content: center;
-  gap: 4px;
-  min-height: 60px;
+  gap: 2px;
+  min-height: 44px;
   min-width: 0;
   padding: 0 2px;
   border: none;
-  border-radius: 16px;
+  border-radius: 14px;
   background: transparent;
   color: var(--muted);
-  font-size: 0.8rem;
+  font-size: 0.7rem;
   font-weight: 600;
 }
 
