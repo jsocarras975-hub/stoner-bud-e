@@ -621,6 +621,19 @@ button {
 .brand-text {
   flex: 1;
   min-width: 0;
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  line-height: 1.25;
+}
+
+.brand-word {
+  font-family: var(--font-display);
+  font-weight: 600;
+  letter-spacing: 0.01em;
+  font-size: 1.1rem;
+  line-height: 1.2;
+  white-space: nowrap;
 }
 
 .brand-who {
@@ -629,12 +642,23 @@ button {
   white-space: nowrap;
   overflow: hidden;
   text-overflow: ellipsis;
+  max-width: 100%;
 }
 
 .header-actions {
   display: flex;
   gap: 8px;
   align-items: center;
+  flex-shrink: 0;
+}
+
+/* The status badge in the header stays on one line so it never crowds
+   the brand name into a wrap. */
+.app-header .badge {
+  white-space: nowrap;
+  max-width: 140px;
+  overflow: hidden;
+  text-overflow: ellipsis;
 }
 
 .brand-btn {
@@ -646,6 +670,8 @@ button {
   gap: 10px;
   text-align: left;
   color: var(--text);
+  flex: 1 1 auto;
+  min-width: 0;
 }
 
 /* Live AI / Offline buddy badge — compact, sits in the header. */
