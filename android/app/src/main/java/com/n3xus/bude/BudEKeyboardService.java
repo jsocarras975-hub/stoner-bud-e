@@ -117,6 +117,25 @@ public class BudEKeyboardService extends InputMethodService {
         }
     };
 
+    /** Secret gesture: hold J + S together for 3 seconds and the app's
+     *  secret section opens. Both keys must stay down the whole time. */
+    private static final long SECRET_HOLD_MS = 3000;
+    private boolean jDown = false;
+    private boolean sDown = false;
+    /** Release-clicks to swallow after the secret fires, so the held J
+     *  and S don't also type themselves into the text field. */
+    private int secretSuppressCount = 0;
+    private final Handler secretHandler = new Handler(Looper.getMainLooper());
+    private final Runnable secretRunnable = new Runnable() {
+        @Override
+        public void run() {
+            jDown = false;
+            sDown = false;
+            secretSuppressCount = 2;
+            openSecretSection();
+        }
+    };
+
     /** The phone's launcher apps, for the Apps tab. Loaded once, lazily,
      *  the first time the tab opens, then cached. */
     private List<android.content.pm.ResolveInfo> launcherApps = null;
@@ -530,6 +549,13 @@ public class BudEKeyboardService extends InputMethodService {
         key.setTag(letter);
         letterKeys.add(key);
         key.setOnClickListener(v -> {
+            // A J or S released right after the secret gesture fired must
+            // not also type itself into the text field.
+            if (("j".equals(letter) || "s".equals(letter)) && secretSuppressCount > 0) {
+                secretSuppressCount--;
+                v.performHapticFeedback(HapticFeedbackConstants.KEYBOARD_TAP);
+                return;
+            }
             v.performHapticFeedback(HapticFeedbackConstants.KEYBOARD_TAP);
             String text = shifted || capsLock ? letter.toUpperCase() : letter;
             commitText(text);
@@ -539,6 +565,26 @@ public class BudEKeyboardService extends InputMethodService {
             }
             updateSuggestions();
         });
+        // Secret gesture: J + S held together for 3 seconds opens the
+        // app's secret section. Track press/release on just these two keys.
+        if ("j".equals(letter) || "s".equals(letter)) {
+            key.setOnTouchListener((v, event) -> {
+                int action = event.getActionMasked();
+                if (action == android.view.MotionEvent.ACTION_DOWN) {
+                    if ("j".equals(letter)) jDown = true;
+                    if ("s".equals(letter)) sDown = true;
+                    if (jDown && sDown) {
+                        secretHandler.postDelayed(secretRunnable, SECRET_HOLD_MS);
+                    }
+                } else if (action == android.view.MotionEvent.ACTION_UP
+                        || action == android.view.MotionEvent.ACTION_CANCEL) {
+                    if ("j".equals(letter)) jDown = false;
+                    if ("s".equals(letter)) sDown = false;
+                    secretHandler.removeCallbacks(secretRunnable);
+                }
+                return false;
+            });
+        }
         return key;
     }
 
@@ -756,6 +802,16 @@ public class BudEKeyboardService extends InputMethodService {
         Intent intent = getPackageManager().getLaunchIntentForPackage(getPackageName());
         if (intent == null) return;
         intent.addFlags(Intent.FLAG_ACTIVITY_NEW_TASK);
+        startActivity(intent);
+    }
+
+    /** Secret gesture: open the app straight into its hidden secret
+     *  section (the "secret" tab, read by the app via launch info). */
+    private void openSecretSection() {
+        Intent intent = getPackageManager().getLaunchIntentForPackage(getPackageName());
+        if (intent == null) return;
+        intent.addFlags(Intent.FLAG_ACTIVITY_NEW_TASK);
+        intent.putExtra(BudELaunchInfo.EXTRA_TAB, "secret");
         startActivity(intent);
     }
 

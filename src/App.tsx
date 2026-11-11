@@ -148,7 +148,7 @@ function apiUrl(): string {
   return `${apiBase()}/chat`;
 }
 
-type Tab = 'tonight' | 'chat' | 'tools' | 'plan' | 'strains' | 'music' | 'journal' | 'stash' | 'break' | 'dose' | 'settings' | 'account';
+type Tab = 'tonight' | 'chat' | 'tools' | 'plan' | 'strains' | 'music' | 'journal' | 'stash' | 'break' | 'dose' | 'settings' | 'account' | 'secret';
 type Source = 'live' | 'fallback' | null;
 
 /** True when a string from the native side names a real tab. */
@@ -156,7 +156,8 @@ function isTab(value: string): value is Tab {
   return (
     value === 'tonight' || value === 'chat' || value === 'tools' || value === 'plan' ||
     value === 'strains' || value === 'music' || value === 'journal' || value === 'stash' ||
-    value === 'break' || value === 'dose' || value === 'settings' || value === 'account'
+    value === 'break' || value === 'dose' || value === 'settings' || value === 'account' ||
+    value === 'secret'
   );
 }
 
@@ -1501,6 +1502,28 @@ export default function App() {
           stocked={stash.filter((i) => i.amount > 0).length}
           onGoSettings={() => setTab('settings')}
         />
+      )}
+      {tab === 'secret' && (
+        <section>
+          <p className="eyebrow">🤫 Secret</p>
+          <h1>You found it.</h1>
+          <p className="muted">
+            Hold J + S together for 3 seconds on the Bud-E keyboard and this opens.
+            Only you know it&rsquo;s here.
+          </p>
+          <div className="card">
+            <p className="eyebrow">🌿 Hidden strain</p>
+            <h2>Purple Punch</h2>
+            <p className="muted">Indica · THC about 18–22%</p>
+            <p>
+              Grape candy and berry — a heavy, sleepy relaxer. The one strain
+              that doesn&rsquo;t live in the main guide.
+            </p>
+            <button type="button" className="btn" onClick={() => askAboutStrain('Purple Punch')}>
+              💬 Ask Bud-E about it
+            </button>
+          </div>
+        </section>
       )}
         </div>
 
