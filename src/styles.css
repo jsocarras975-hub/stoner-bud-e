@@ -1256,6 +1256,22 @@ button {
   50% { transform: translateY(-4px); }
 }
 
+/* The exhale — every ~7 seconds he blows out a puff. It appears at the
+ * mouth, drifts up and away, grows, and fades, then waits for the next one. */
+.bude-puff {
+  opacity: 0;
+  animation: bude-puff 7s ease-out infinite;
+  transform-origin: center;
+  transform-box: fill-box;
+}
+
+@keyframes bude-puff {
+  0%, 12% { transform: translate(0, 0) scale(0.6); opacity: 0; }
+  18% { transform: translate(-2px, -3px) scale(0.9); opacity: 0.65; }
+  45% { transform: translate(-14px, -16px) scale(1.5); opacity: 0.35; }
+  70%, 100% { transform: translate(-22px, -24px) scale(1.9); opacity: 0; }
+}
+
 @keyframes bude-bob {
   0%, 100% { transform: translateY(0) rotate(0deg); }
   50% { transform: translateY(-5px) rotate(-1.5deg); }

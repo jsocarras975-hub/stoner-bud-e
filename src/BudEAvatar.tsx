@@ -48,6 +48,14 @@ export default function BudEAvatar({ mood = 'idle' }: { mood?: BudEMood }) {
         <circle cx="92" cy="54" r="4" fill="#ffffff" opacity="0" className="bude-smoke bude-smoke-1" />
         <circle cx="96" cy="46" r="5" fill="#ffffff" opacity="0" className="bude-smoke bude-smoke-2" />
         <circle cx="90" cy="38" r="6" fill="#ffffff" opacity="0" className="bude-smoke bude-smoke-3" />
+        {/* Every once in a while he blows out a puff — a soft cloud from
+            the mouth that drifts up and away and fades. */}
+        <g className="bude-puff" fill="#f5f5f5">
+          <circle cx="54" cy="74" r="5" />
+          <circle cx="60" cy="70" r="6" />
+          <circle cx="48" cy="70" r="4.5" />
+          <circle cx="56" cy="66" r="4" />
+        </g>
         {/* A laptop in front — Bud-E is sitting at it, looking things up
             and doing what was asked. The screen shows a search bar with a
             blinking cursor; while he is thinking it shows loading dots. */}
