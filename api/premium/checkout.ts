@@ -30,7 +30,6 @@
 import { getPool, getSessionUser } from '../../src/lib/auth-server.ts';
 import { isPreflight, readJsonBody, setCorsHeaders } from '../../src/lib/cors.ts';
 import type { ReqLike, ResLike } from '../../src/lib/cors.ts';
-import { clientIp, rateLimited } from '../../src/lib/rate-limit.ts';
 
 type Req = ReqLike & { on?: unknown; url?: string };
 type Res = ResLike & { headersSent?: boolean };
@@ -150,13 +149,6 @@ export default async function handler(req: Req, res: Res): Promise<void> {
         await verifyAndGrant(apiKey, chargeId).catch(() => {});
       }
       res.status(200).json({ ok: true });
-      return;
-    }
-
-    // ---- Rate limit the signed-in checkout path (not webhooks — those
-    // come from Coinbase). Caps charge-creation abuse per IP. ----
-    if (rateLimited(`checkout:${clientIp(req)}`, 30, 60_000)) {
-      res.status(429).json({ ok: false, error: 'rate_limited' });
       return;
     }
 

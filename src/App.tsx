@@ -1,4 +1,4 @@
-import { lazy, Suspense, useEffect, useRef, useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import {
   ArrowLeft,
   BookOpen,
@@ -44,32 +44,18 @@ import {
 } from './bude';
 import type { ChatImage, ChatMessage, Method, Session, TriviaQuestion } from './bude';
 import { setKeyboardTheme } from './lib/keyboard';
-// Heavy tabs load on demand so the first paint stays small — the home
-// (Tonight) and chat screens stay in the main bundle.
-const StrainsTab = lazy(() => import('./StrainsTab'));
-const Community = lazy(() => import('./Community'));
-const MusicTab = lazy(() => import('./MusicTab'));
-const SettingsTab = lazy(() => import('./SettingsTab'));
-const DrivingMode = lazy(() => import('./DrivingMode'));
-const LockScreen = lazy(() => import('./LockScreen'));
-const JournalTab = lazy(() => import('./JournalTab'));
-const StashTab = lazy(() => import('./StashTab'));
-const BreakTab = lazy(() => import('./BreakTab'));
-const DoseTab = lazy(() => import('./DoseTab'));
-const GuessTheStrain = lazy(() =>
-  import('./Games').then((m) => ({ default: m.GuessTheStrain })),
-);
-const MemoryMatch = lazy(() =>
-  import('./Games').then((m) => ({ default: m.MemoryMatch })),
-);
-const WouldYouRather = lazy(() =>
-  import('./Games').then((m) => ({ default: m.WouldYouRather })),
-);
+import StrainsTab from './StrainsTab';
+import Community from './Community';
+import MusicTab from './MusicTab';
 import TonightTab from './TonightTab';
+import SettingsTab from './SettingsTab';
+import DrivingMode from './DrivingMode';
 import UpdateModal from './UpdateModal';
 import { checkForUpdate } from './lib/update-check';
 import type { UpdateInfo } from './lib/update-check';
+import { GuessTheStrain, MemoryMatch, WouldYouRather } from './Games';
 import { tasteSummary } from './lib/taste';
+import LockScreen from './LockScreen';
 import {
   biometricStatus,
   clearLockSettings,
@@ -81,6 +67,10 @@ import {
 } from './lib/applock';
 import { AGE_GATE_KEY, THEME_KEY, isThemeId, loadTheme } from './theme';
 import type { ThemeId } from './theme';
+import JournalTab from './JournalTab';
+import StashTab from './StashTab';
+import BreakTab from './BreakTab';
+import DoseTab from './DoseTab';
 import { JOURNAL_KEY, journalSummary, newEntryId } from './journal';
 import type { JournalEntry } from './journal';
 import { STASH_KEY, isRunningLow, lowNote, stashSummary, withAmount } from './stash';
@@ -187,8 +177,8 @@ const IDLE_TIMER: TimerState = { status: 'idle', remainingSec: 0, totalSec: 0 };
 /** Bottom-nav destinations (6 slots: 5 tabs + More). Log and Plan live
  *  inside Tools now; every tab is still reachable. */
 const NAV_ITEMS: { id: Tab; label: string; icon: typeof Moon }[] = [
-  { id: 'chat', label: 'Buddy', icon: MessageCircle },
   { id: 'tonight', label: 'Tonight', icon: Moon },
+  { id: 'chat', label: 'Buddy', icon: MessageCircle },
   { id: 'stash', label: 'Stash', icon: Package },
   { id: 'tools', label: 'Tools', icon: LayoutGrid },
   { id: 'account', label: 'You', icon: UserRound },
@@ -430,7 +420,7 @@ function formatCountdown(totalSeconds: number): string {
 }
 
 export default function App() {
-  const [tab, setTab] = useState<Tab>('chat');
+  const [tab, setTab] = useState<Tab>('tonight');
   const [theme, setTheme] = useState<ThemeId>(() => loadTheme());
   const [ageConfirmed, setAgeConfirmed] = useState<boolean>(() => {
     try {
@@ -1399,14 +1389,6 @@ export default function App() {
             </p>
           )}
 
-      {/* Lazy tabs load here — a short loading card while the chunk arrives. */}
-      <Suspense
-        fallback={
-          <div className="card">
-            <p className="muted">Loading…</p>
-          </div>
-        }
-      >
       {tab === 'tonight' && (
         <TonightTab
           session={session}
@@ -1520,7 +1502,6 @@ export default function App() {
           onGoSettings={() => setTab('settings')}
         />
       )}
-      </Suspense>
         </div>
 
         {moreOpen && (
@@ -1639,30 +1620,26 @@ export default function App() {
       {/* App lock — a full-screen cover over the whole app (the app stays
           mounted underneath, so music keeps playing). */}
       {locked && lockSettings && (
-        <Suspense fallback={null}>
-          <LockScreen
-            lockSettings={lockSettings}
-            biometric={bioStatus}
-            onUnlock={() => setLocked(false)}
-            onForgotPin={handleForgotPin}
-          />
-        </Suspense>
+        <LockScreen
+          lockSettings={lockSettings}
+          biometric={bioStatus}
+          onUnlock={() => setLocked(false)}
+          onForgotPin={handleForgotPin}
+        />
       )}
 
       {/* Hands-free driving mode — full-screen overlay over the whole app. */}
       {drivingOpen && (
-        <Suspense fallback={null}>
-          <DrivingMode
-            apiBase={apiBase()}
-            persona={voice.persona}
-            session={session}
-            journalNote={[journalSummary(journal), tasteSummary(journal)].filter(Boolean).join(' ')}
-            stashNote={stashSummary(stash)}
-            personalization={personalization}
-            onAppAction={applyAppAction}
-            onClose={() => setDrivingOpen(false)}
-          />
-        </Suspense>
+        <DrivingMode
+          apiBase={apiBase()}
+          persona={voice.persona}
+          session={session}
+          journalNote={[journalSummary(journal), tasteSummary(journal)].filter(Boolean).join(' ')}
+          stashNote={stashSummary(stash)}
+          personalization={personalization}
+          onAppAction={applyAppAction}
+          onClose={() => setDrivingOpen(false)}
+        />
       )}
 
       {/* New-version pop-up — what's new, Download, Dismiss. */}

@@ -1,234 +1,180 @@
-/* Stoner Bud-E — clean modern design system (v1.2 remake).
-   Professional, calm, and consistent. One accent, refined neutrals,
-   generous spacing, and soft elevation instead of heavy borders.
+/* Stoner Bud-E — night-garden theme (tokens from the Grok night-garden app).
    Themes switch via html[data-theme]: night (default), day, ember, moon,
-   plus premium forest and sunset, plus owner-only kartoon.
-   Every component class name is kept so existing screens keep working. */
+   plus premium forest and sunset, plus owner-only kartoon. */
 
 * {
   box-sizing: border-box;
 }
 
-/* ---------- Design tokens ---------- */
-
-/* Night (default) — refined deep neutral with a fresh leaf accent. */
+/* Night garden (default) — exact Grok tokens. */
 :root,
 html[data-theme='night'] {
   color-scheme: dark;
-  --bg: #0b0e0b;
-  --glow: #16241a;
-  --surface: #10140f;
-  --card: #161c16;
-  --card-2: #1d251d;
-  --line: rgba(255, 255, 255, 0.09);
-  --line-strong: rgba(255, 255, 255, 0.16);
-  --text: #f2f5f0;
-  --muted: #9aa79b;
-  --muted-2: #7c8a7d;
-  --accent: #a3e635;
-  --accent-ink: #1a2e05;
-  --accent-soft: rgba(163, 230, 53, 0.12);
-  --danger: #fda4a4;
-  --danger-bg: rgba(253, 164, 164, 0.12);
-  --warn: #fbbf24;
-  --warn-bg: rgba(251, 191, 36, 0.12);
-  --shadow-sm: 0 1px 2px rgba(0, 0, 0, 0.35);
-  --shadow-md: 0 8px 24px rgba(0, 0, 0, 0.35);
+  --bg: #07110c;
+  --glow: #1a3d24;
+  --surface: #0e1913;
+  --card: #163024;
+  --card-2: #1d3b2b;
+  --line: #2f6844;
+  --text: #f3f6ea;
+  --muted: #b7cbb0;
+  --accent: #c6f25c;
+  --accent-ink: #142107;
+  --danger: #ffb0a4;
+  --danger-bg: #3c2420;
+  --warn: #f5c542;
   /* Aliases so existing components keep working. */
   --bg-soft: var(--surface);
   --card-soft: var(--card-2);
+  --accent-soft: var(--accent);
   --accent-dark: var(--accent);
-  --radius: 1rem;
-  --radius-sm: 0.75rem;
-  --radius-lg: 1.25rem;
+  --radius: 1.25rem;
   --font-sans: "Outfit", ui-sans-serif, system-ui, -apple-system, "Segoe UI", Roboto, sans-serif;
   --font-display: "Fraunces", Georgia, "Times New Roman", serif;
 }
 
 html[data-theme='day'] {
   color-scheme: light;
-  --bg: #f6f7f4;
-  --glow: #e6efe0;
-  --surface: #ffffff;
-  --card: #ffffff;
-  --card-2: #f1f4ee;
-  --line: rgba(15, 25, 15, 0.1);
-  --line-strong: rgba(15, 25, 15, 0.18);
-  --text: #17211a;
-  --muted: #5c6b5e;
-  --muted-2: #85938a;
-  --accent: #3f7d2c;
-  --accent-ink: #ffffff;
-  --accent-soft: rgba(63, 125, 44, 0.1);
-  --danger: #b91c1c;
-  --danger-bg: rgba(185, 28, 28, 0.08);
-  --warn: #92400e;
-  --warn-bg: rgba(146, 64, 14, 0.08);
-  --shadow-sm: 0 1px 2px rgba(15, 25, 15, 0.08);
-  --shadow-md: 0 8px 24px rgba(15, 25, 15, 0.12);
+  --bg: #f4f1e4;
+  --glow: #d5e6c4;
+  --surface: #fbf8ef;
+  --card: #e7f0dc;
+  --card-2: #d5e4c4;
+  --line: #8eae78;
+  --text: #142107;
+  --muted: #3e5340;
+  --accent: #1f5c28;
+  --accent-ink: #f7f3e6;
+  --danger: #8a2a22;
+  --danger-bg: #f6ddd8;
+  --warn: #7a5c00;
 }
 
 html[data-theme='ember'] {
   color-scheme: dark;
-  --bg: #120d09;
-  --glow: #2a1a10;
-  --surface: #181009;
-  --card: #211709;
-  --card-2: #2b1e10;
-  --line: rgba(255, 255, 255, 0.09);
-  --line-strong: rgba(255, 255, 255, 0.16);
-  --text: #f8f1e6;
-  --muted: #c9b69e;
-  --muted-2: #a08a70;
+  --bg: #140c08;
+  --glow: #3d2214;
+  --surface: #1c120c;
+  --card: #2c1a12;
+  --card-2: #3c2418;
+  --line: #8a5430;
+  --text: #f8efe4;
+  --muted: #d4bba6;
   --accent: #f0a04b;
   --accent-ink: #1c0e06;
-  --accent-soft: rgba(240, 160, 75, 0.12);
-  --danger: #fda4a4;
-  --danger-bg: rgba(253, 164, 164, 0.12);
-  --warn: #fbbf24;
-  --warn-bg: rgba(251, 191, 36, 0.12);
-  --shadow-sm: 0 1px 2px rgba(0, 0, 0, 0.35);
-  --shadow-md: 0 8px 24px rgba(0, 0, 0, 0.35);
+  --danger: #ffb0a4;
+  --danger-bg: #3c2420;
+  --warn: #f5c542;
 }
 
 html[data-theme='moon'] {
   color-scheme: dark;
-  --bg: #0a0f14;
-  --glow: #12233a;
-  --surface: #0e151d;
-  --card: #141f2a;
-  --card-2: #1a2938;
-  --line: rgba(255, 255, 255, 0.09);
-  --line-strong: rgba(255, 255, 255, 0.16);
+  --bg: #070d14;
+  --glow: #16304a;
+  --surface: #0d1722;
+  --card: #152433;
+  --card-2: #1c3044;
+  --line: #3d6480;
   --text: #eef4f8;
-  --muted: #a8bccb;
-  --muted-2: #7e94a6;
+  --muted: #b7c9d6;
   --accent: #7ddec8;
   --accent-ink: #04221c;
-  --accent-soft: rgba(125, 222, 200, 0.12);
-  --danger: #fda4a4;
-  --danger-bg: rgba(253, 164, 164, 0.12);
-  --warn: #fbbf24;
-  --warn-bg: rgba(251, 191, 36, 0.12);
-  --shadow-sm: 0 1px 2px rgba(0, 0, 0, 0.35);
-  --shadow-md: 0 8px 24px rgba(0, 0, 0, 0.35);
+  --danger: #ffb0a4;
+  --danger-bg: #3c2428;
+  --warn: #f5c542;
 }
 
 /* Premium (Lit+): Deep forest — darker greens, quieter. */
 html[data-theme='forest'] {
   color-scheme: dark;
-  --bg: #060b08;
+  --bg: #040a07;
   --glow: #0e2418;
-  --surface: #0a120d;
-  --card: #101b14;
-  --card-2: #16241b;
-  --line: rgba(255, 255, 255, 0.09);
-  --line-strong: rgba(255, 255, 255, 0.16);
-  --text: #e9f1e6;
+  --surface: #08130d;
+  --card: #0f2218;
+  --card-2: #163024;
+  --line: #2a5a3e;
+  --text: #e8f0e4;
   --muted: #9ab39a;
-  --muted-2: #74856f;
   --accent: #8bc34a;
   --accent-ink: #0a1406;
-  --accent-soft: rgba(139, 195, 74, 0.12);
-  --danger: #fda4a4;
-  --danger-bg: rgba(253, 164, 164, 0.12);
-  --warn: #fbbf24;
-  --warn-bg: rgba(251, 191, 36, 0.12);
-  --shadow-sm: 0 1px 2px rgba(0, 0, 0, 0.35);
-  --shadow-md: 0 8px 24px rgba(0, 0, 0, 0.35);
+  --danger: #ffb0a4;
+  --danger-bg: #2c1c18;
+  --warn: #f5c542;
 }
 
 /* Premium (Lit+): Sunset — warm oranges and pinks. */
 html[data-theme='sunset'] {
   color-scheme: dark;
-  --bg: #120a0e;
-  --glow: #3a1a24;
-  --surface: #180e13;
-  --card: #221219;
-  --card-2: #2e1823;
-  --line: rgba(255, 255, 255, 0.09);
-  --line-strong: rgba(255, 255, 255, 0.16);
+  --bg: #14080c;
+  --glow: #4a1e28;
+  --surface: #1c0e14;
+  --card: #2c1620;
+  --card-2: #3c202c;
+  --line: #a05060;
   --text: #f8eee8;
-  --muted: #cfaeaa;
-  --muted-2: #a58681;
+  --muted: #d4b8b0;
   --accent: #ff8a65;
   --accent-ink: #1c0c08;
-  --accent-soft: rgba(255, 138, 101, 0.12);
-  --danger: #fda4a4;
-  --danger-bg: rgba(253, 164, 164, 0.12);
-  --warn: #fbbf24;
-  --warn-bg: rgba(251, 191, 36, 0.12);
-  --shadow-sm: 0 1px 2px rgba(0, 0, 0, 0.35);
-  --shadow-md: 0 8px 24px rgba(0, 0, 0, 0.35);
+  --danger: #ffb0a4;
+  --danger-bg: #3c2428;
+  --warn: #f5c542;
 }
 
 /* Owner only: Kartoon — deep purple night, Bud-E lime accent. */
 html[data-theme='kartoon'] {
   color-scheme: dark;
   --bg: #0d0618;
-  --glow: #241344;
-  --surface: #120a22;
-  --card: #1a0f30;
-  --card-2: #241640;
-  --line: rgba(255, 255, 255, 0.1);
-  --line-strong: rgba(255, 255, 255, 0.18);
+  --glow: #2a1650;
+  --surface: #140b26;
+  --card: #1e1238;
+  --card-2: #281a4a;
+  --line: #5a3d9e;
   --text: #f2eefc;
-  --muted: #bfaedf;
-  --muted-2: #9688b5;
-  --accent: #a3e635;
-  --accent-ink: #1a2e05;
-  --accent-soft: rgba(163, 230, 53, 0.12);
-  --danger: #fda4a4;
-  --danger-bg: rgba(253, 164, 164, 0.12);
-  --warn: #fbbf24;
-  --warn-bg: rgba(251, 191, 36, 0.12);
-  --shadow-sm: 0 1px 2px rgba(0, 0, 0, 0.4);
-  --shadow-md: 0 8px 24px rgba(0, 0, 0, 0.4);
+  --muted: #c3b3e8;
+  --accent: #c6f25c;
+  --accent-ink: #142107;
+  --danger: #ffb0a4;
+  --danger-bg: #3c2420;
+  --warn: #f5c542;
 }
 
 html[data-text='small'] { font-size: 15px; }
 html[data-text='large'] { font-size: 19px; }
 html[data-motion='reduce'] .garden-glow { display: none; }
-html[data-accent='lime'] { --accent: #a3e635; --accent-ink: #1a2e05; }
+html[data-accent='lime'] { --accent: #c6f25c; --accent-ink: #142107; }
 html[data-accent='amber'] { --accent: #f0a04b; --accent-ink: #1c0e06; }
 html[data-accent='rose'] { --accent: #ff8a9a; --accent-ink: #1c0c10; }
 html[data-accent='sky'] { --accent: #7ddec8; --accent-ink: #04221c; }
-
-/* ---------- Base ---------- */
 
 html,
 body {
   margin: 0;
   padding: 0;
-  height: 100%;
   background: var(--bg);
   color: var(--text);
   font-family: var(--font-sans);
   font-size: 17px;
-  line-height: 1.55;
+  line-height: 1.5;
   -webkit-text-size-adjust: 100%;
-  -webkit-font-smoothing: antialiased;
 }
 
 #root {
-  height: 100%;
+  min-height: 100vh;
 }
 
-/* ---------- App shell ---------- */
-
+/* Phone frame shell (Grok-style): 448px column, full viewport height,
+   garden glow at the top, content scrolls above the bottom nav. */
 .app-shell {
-  height: 100%;
-  min-height: 100vh;
   min-height: 100dvh;
   background: var(--bg);
 }
 
 .app-frame {
-  position: fixed;
-  inset: 0;
+  position: relative;
   margin: 0 auto;
   width: 100%;
   max-width: 448px;
+  height: 100dvh;
   display: flex;
   flex-direction: column;
   background: var(--surface);
@@ -251,12 +197,11 @@ body {
   flex: 1;
   min-height: 0;
   overflow-y: auto;
-  padding: 16px 16px 32px;
-  scrollbar-width: thin;
-  scrollbar-color: var(--line-strong) transparent;
+  padding: 12px 16px 32px;
 }
 
-/* Chat tab takes over the scroll: messages scroll, composer stays pinned. */
+/* Chat tab takes over the scroll: messages scroll, composer stays pinned
+   (Grok Buddy layout). Applied to .app-content when the chat tab is open. */
 .app-content.chat-active {
   display: flex;
   flex-direction: column;
@@ -264,18 +209,18 @@ body {
   padding: 0;
 }
 
-/* Soft light at the top of the app — subtle, not a heavy glow. */
+/* Soft garden light at the top of the app. */
 .garden-glow {
   position: fixed;
   inset: 0 0 auto 0;
-  height: 280px;
+  height: 320px;
   pointer-events: none;
-  background: radial-gradient(ellipse at top, var(--glow), transparent 70%);
+  background: radial-gradient(ellipse at top, var(--glow), transparent 68%);
 }
 
 .garden-hero {
   overflow: hidden;
-  border-radius: var(--radius-lg);
+  border-radius: var(--radius);
   border: 1px solid var(--line);
   margin-bottom: 16px;
 }
@@ -287,24 +232,21 @@ body {
   object-fit: cover;
 }
 
-/* ---------- Typography ---------- */
-
 h1,
 h2,
 h3 {
-  font-family: var(--font-sans);
-  font-weight: 700;
-  letter-spacing: -0.02em;
-  line-height: 1.2;
+  font-family: var(--font-display);
+  font-weight: 500;
 }
 
 h1 {
-  font-size: 1.75rem;
+  font-size: 1.9rem;
   margin: 0;
+  letter-spacing: 0.01em;
 }
 
 h2 {
-  font-size: 1.25rem;
+  font-size: 1.5rem;
   margin: 0 0 10px;
 }
 
@@ -325,39 +267,23 @@ p {
   font-size: 0.85rem;
 }
 
-.eyebrow {
-  font-size: 0.72rem;
-  font-weight: 700;
-  letter-spacing: 0.12em;
-  text-transform: uppercase;
-  color: var(--muted);
-  margin: 0 0 6px;
-}
+/* Grok page head — big display title + small muted subtitle. */
 
-/* Page head — clean title + quiet subtitle. */
 .page-title {
-  font-family: var(--font-sans);
-  font-size: 1.75rem;
-  line-height: 1.15;
-  font-weight: 800;
-  letter-spacing: -0.02em;
+  font-family: var(--font-display);
+  font-size: 2.25rem;
+  line-height: 1;
+  font-weight: 500;
   margin: 0;
 }
 
 .page-sub {
-  margin: 6px 0 16px;
-  font-size: 0.92rem;
+  margin: 8px 0 16px;
+  font-size: 0.9rem;
   color: var(--muted);
 }
 
-/* Brand wordmark keeps the display serif — the only place it appears. */
-.brand-word {
-  font-family: var(--font-display);
-  font-weight: 600;
-  letter-spacing: 0.01em;
-}
-
-/* ---------- Chips & badges ---------- */
+/* Grok chips — pill picks for method, amount, experience, filters. */
 
 .chip-row {
   display: flex;
@@ -366,43 +292,659 @@ p {
 }
 
 .chip {
-  min-height: 36px;
+  min-height: 44px;
   padding: 8px 14px;
   border-radius: 999px;
   border: 1px solid var(--line);
   background: var(--card);
   color: var(--text);
-  font-size: 0.9rem;
-  font-weight: 600;
-  cursor: pointer;
-  transition: background 0.15s ease, border-color 0.15s ease;
+  font-size: 0.95rem;
+  font-weight: 500;
 }
 
-.chip:hover {
-  border-color: var(--line-strong);
+.chip.on {
+  border-color: var(--accent);
+  background: var(--accent);
+  color: var(--accent-ink);
 }
 
-.chip.active,
-.chip[aria-pressed='true'] {
+.chip:disabled {
+  opacity: 0.45;
+}
+
+/* Strain names — Grok uses display font for item names. */
+
+.strain-name {
+  font-family: var(--font-display);
+  font-size: 1.5rem;
+  font-weight: 500;
+  margin: 0;
+}
+
+.field-label {
+  margin: 20px 0 8px;
+  font-size: 0.95rem;
+  font-weight: 700;
+  color: var(--text);
+}
+
+.app-header {
+  position: relative;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  padding: 16px 16px 8px;
+}
+
+.brand-btn {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  min-height: 44px;
+  min-width: 0;
+  padding: 0;
+  border: none;
+  background: transparent;
+  color: var(--text);
+  text-align: left;
+}
+
+.brand-avatar {
+  width: 36px;
+  height: 36px;
+  flex-shrink: 0;
+  overflow: hidden;
+  border-radius: 50%;
+  border: 1px solid var(--line);
+}
+
+.brand-avatar img {
+  display: block;
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+}
+
+.brand-text {
+  display: flex;
+  flex-direction: column;
+  min-width: 0;
+}
+
+.brand-word {
+  font-family: var(--font-display);
+  font-size: 1.25rem;
+  font-style: italic;
+  font-weight: 500;
+  line-height: 1;
+}
+
+.brand-who {
+  display: block;
+  max-width: 9rem;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  font-size: 0.75rem;
+  color: var(--muted);
+}
+
+.header-actions {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  flex-shrink: 0;
+}
+
+.icon-btn {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 44px;
+  height: 44px;
+  padding: 0;
+  border-radius: 50%;
+  border: 1px solid var(--line);
+  background: transparent;
+  color: var(--muted);
+}
+
+.icon-btn[aria-pressed='true'] {
   background: var(--accent);
   border-color: var(--accent);
   color: var(--accent-ink);
 }
 
-.badge {
-  display: inline-flex;
-  align-items: center;
-  gap: 4px;
-  padding: 3px 8px;
+.age-pill {
+  padding: 4px 10px;
   border-radius: 999px;
-  background: var(--accent-soft);
-  color: var(--accent);
+  border: 1px solid var(--line);
   font-size: 0.75rem;
   font-weight: 700;
-  letter-spacing: 0.02em;
+  letter-spacing: 0.05em;
+  color: var(--muted);
 }
 
-/* ---------- Cards ---------- */
+/* Live AI / Offline buddy badge — compact, sits in the header. */
+.badge {
+  display: inline-block;
+  padding: 4px 10px;
+  border-radius: 999px;
+  border: 1px solid var(--line);
+  background: var(--card-soft);
+  color: var(--muted);
+  font-size: 0.75rem;
+  font-weight: 700;
+  white-space: nowrap;
+}
+
+.badge.live {
+  background: var(--card-2);
+  border-color: var(--accent);
+  color: var(--accent);
+}
+
+.badge.offline {
+  background: #3d2f1a;
+  border-color: #6b5518;
+  color: var(--warn);
+}
+
+/* Timer pill — sits under the header while a timer runs; taps to Tools. */
+
+.timer-pill {
+  position: relative;
+  display: block;
+  width: calc(100% - 32px);
+  margin: 0 16px 8px;
+  padding: 8px 16px;
+  border-radius: 999px;
+  border: 1px solid var(--line);
+  background: var(--card);
+  color: var(--text);
+  text-align: left;
+}
+
+.timer-pill-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+}
+
+.timer-pill-label {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  font-size: 0.9rem;
+  color: var(--muted);
+}
+
+.timer-pill-label svg {
+  color: var(--accent);
+  flex-shrink: 0;
+}
+
+.timer-pill-time {
+  font-family: var(--font-display);
+  font-size: 1.15rem;
+  font-variant-numeric: tabular-nums;
+  color: var(--accent);
+}
+
+.timer-pill-track {
+  display: block;
+  height: 4px;
+  margin-top: 6px;
+  overflow: hidden;
+  border-radius: 999px;
+  background: var(--line);
+}
+
+.timer-pill-fill {
+  display: block;
+  height: 100%;
+  background: var(--accent);
+}
+
+/* Bottom nav + More sheet */
+
+.nav-wrap {
+  position: relative;
+  z-index: 30;
+  flex-shrink: 0;
+}
+
+.bottom-nav {
+  display: grid;
+  grid-template-columns: repeat(6, 1fr);
+  padding: 6px 4px 14px;
+  border-top: 1px solid var(--line);
+  background: var(--surface);
+}
+
+.nav-item {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 4px;
+  min-height: 60px;
+  min-width: 0;
+  padding: 0 2px;
+  border: none;
+  border-radius: 16px;
+  background: transparent;
+  color: var(--muted);
+  font-size: 0.8rem;
+  font-weight: 600;
+}
+
+.nav-item span {
+  max-width: 100%;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.nav-item.active {
+  color: var(--accent);
+}
+
+.more-backdrop {
+  position: absolute;
+  inset: 0;
+  z-index: 20;
+  width: 100%;
+  height: 100%;
+  padding: 0;
+  border: none;
+  background: rgba(0, 0, 0, 0.45);
+}
+
+/* Mini player (Audius) — sits above the bottom nav while a track is loaded. */
+
+.mini-player {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 8px 10px;
+  border-top: 1px solid var(--line);
+  background: var(--surface);
+}
+
+.mini-player-info {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  flex: 1;
+  min-width: 0;
+  padding: 0;
+  border: none;
+  background: transparent;
+  color: inherit;
+  text-align: left;
+}
+
+.mini-player-info img,
+.mini-player-art-fallback {
+  width: 44px;
+  height: 44px;
+  border-radius: 10px;
+  object-fit: cover;
+  flex-shrink: 0;
+}
+
+.mini-player-art-fallback {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background: var(--card);
+  color: var(--accent);
+  font-size: 1.3rem;
+}
+
+.mini-player-text {
+  display: flex;
+  flex-direction: column;
+  min-width: 0;
+}
+
+.mini-player-text strong,
+.mini-player-text span {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.mini-player-btn {
+  flex-shrink: 0;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 40px;
+  height: 40px;
+  border-radius: 50%;
+  border: 1px solid var(--line);
+  background: var(--card);
+  color: var(--text);
+}
+
+/* Audius track rows (Music tab) */
+
+.track-row {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  width: 100%;
+  padding: 10px;
+  border: 1px solid var(--line);
+  border-radius: 14px;
+  background: var(--card);
+  color: inherit;
+  text-align: left;
+}
+
+.track-row.playing {
+  border-color: var(--accent);
+}
+
+.track-row img,
+.track-row-art-fallback {
+  width: 52px;
+  height: 52px;
+  border-radius: 10px;
+  object-fit: cover;
+  flex-shrink: 0;
+}
+
+.track-row-art-fallback {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background: var(--surface);
+  color: var(--accent);
+  font-size: 1.4rem;
+}
+
+.track-row-text {
+  flex: 1;
+  min-width: 0;
+}
+
+.track-row-text strong,
+.track-row-text span {
+  display: block;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+/* The song itself inside a track row (the row is a div now, so the + /
+ * remove button can sit beside it without nesting a button in a button). */
+.track-row-main {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  flex: 1;
+  min-width: 0;
+  padding: 0;
+  border: 0;
+  background: none;
+  color: inherit;
+  text-align: left;
+  font: inherit;
+  cursor: pointer;
+}
+
+/* Round + / x button on a track row (add to playlist / remove from it). */
+.track-row-add {
+  flex-shrink: 0;
+  width: 36px;
+  height: 36px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  border: 1px solid var(--line);
+  border-radius: 50%;
+  background: var(--surface);
+  color: var(--accent);
+  cursor: pointer;
+}
+
+/* PIN pad (app lock + lock screen). */
+.pin-pad {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 20px;
+  width: 100%;
+  max-width: 280px;
+}
+
+.pin-pad.shake {
+  animation: pin-shake 0.45s ease;
+}
+
+@keyframes pin-shake {
+  0%,
+  100% {
+    transform: translateX(0);
+  }
+  20% {
+    transform: translateX(-9px);
+  }
+  40% {
+    transform: translateX(9px);
+  }
+  60% {
+    transform: translateX(-6px);
+  }
+  80% {
+    transform: translateX(6px);
+  }
+}
+
+.pin-dots {
+  display: flex;
+  gap: 14px;
+}
+
+.pin-dot {
+  width: 14px;
+  height: 14px;
+  border-radius: 50%;
+  border: 2px solid var(--muted);
+}
+
+.pin-dot.filled {
+  background: var(--accent);
+  border-color: var(--accent);
+}
+
+.pin-grid {
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  gap: 12px;
+  width: 100%;
+}
+
+.pin-key {
+  height: 64px;
+  border: 1px solid var(--line);
+  border-radius: 50%;
+  background: var(--card);
+  color: var(--text);
+  font: inherit;
+  font-size: 1.4rem;
+  cursor: pointer;
+}
+
+.pin-key:disabled {
+  opacity: 0.4;
+  cursor: default;
+}
+
+.pin-key-back {
+  font-size: 1.2rem;
+}
+
+/* Bottom sheet (add-to-playlist picker): a dim backdrop with a card
+   docked at the bottom, so the picker is always where the user is
+   looking instead of buried up the page. */
+.sheet-backdrop {
+  position: fixed;
+  inset: 0;
+  z-index: 1000;
+  background: rgba(0, 0, 0, 0.55);
+  display: flex;
+  align-items: flex-end;
+  justify-content: center;
+  padding: 16px;
+}
+
+.sheet-card {
+  width: 100%;
+  max-width: 480px;
+  max-height: 70dvh;
+  overflow-y: auto;
+}
+
+/* Music search input */
+
+.music-search {
+  flex: 1;
+  min-width: 0;
+  padding: 12px 14px;
+  border: 1px solid var(--line);
+  border-radius: 14px;
+  background: var(--card);
+  color: var(--text);
+  font: inherit;
+}
+
+.music-search::placeholder {
+  color: var(--muted);
+}
+
+.more-sheet {
+  position: absolute;
+  left: 8px;
+  right: 8px;
+  bottom: calc(100% + 8px);
+  z-index: 30;
+  padding: 6px;
+  border-radius: 16px;
+  border: 1px solid var(--line);
+  background: var(--card);
+  box-shadow: 0 -8px 32px rgba(0, 0, 0, 0.4);
+}
+
+.more-item {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  width: 100%;
+  min-height: 48px;
+  padding: 8px 12px;
+  border: none;
+  border-radius: 12px;
+  background: transparent;
+  color: var(--text);
+  font-size: 1rem;
+  font-weight: 600;
+  text-align: left;
+}
+
+.more-item svg {
+  color: var(--accent);
+  flex-shrink: 0;
+}
+
+.more-item:hover {
+  background: var(--card-2);
+}
+
+/* Shown when the browser reports no connection (PWA offline state). */
+
+.offline-banner {
+  margin: 12px 0 0;
+  padding: 10px 14px;
+  border-radius: 12px;
+  background: #3d2f1a;
+  border: 1px solid #6b5518;
+  color: var(--warn);
+  font-size: 0.95rem;
+}
+
+/* Edible-timer milestone alert — banner shown on every tab until dismissed. */
+
+.alert-banner {
+  margin: 12px 0 0;
+  padding: 12px 14px;
+  border-radius: 12px;
+  background: #123324;
+  border: 1px solid var(--accent);
+  color: var(--text);
+  display: flex;
+  align-items: flex-start;
+  gap: 12px;
+}
+
+.alert-banner-text {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+
+.alert-banner-text strong {
+  font-size: 1.02rem;
+}
+
+.alert-banner-text span {
+  font-size: 0.95rem;
+  color: var(--muted);
+}
+
+.alert-banner-actions {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  flex-shrink: 0;
+}
+
+.alert-banner-actions button {
+  background: none;
+  border: none;
+  color: var(--accent);
+  font-weight: 700;
+  font-size: 0.9rem;
+  padding: 6px 8px;
+  cursor: pointer;
+}
+
+/* Notification permission row inside the timer card. */
+
+.alert-permission {
+  margin-top: 14px;
+  padding: 12px;
+  border-radius: 12px;
+  background: var(--bg-soft);
+  border: 1px solid var(--line);
+}
+
+.alert-permission p {
+  margin: 0 0 8px;
+  font-size: 0.95rem;
+}
+
+.alert-permission p:last-child {
+  margin-bottom: 0;
+}
+
+/* Cards */
 
 .card {
   background: var(--card);
@@ -410,7 +952,6 @@ p {
   border-radius: var(--radius);
   padding: 16px;
   margin-bottom: 12px;
-  box-shadow: var(--shadow-sm);
 }
 
 .card h2 {
@@ -419,15 +960,13 @@ p {
   gap: 8px;
 }
 
-/* ---------- Forms ---------- */
+/* Forms — big touch targets */
 
-label,
-.field-label {
+label {
   display: block;
   font-weight: 700;
-  margin: 12px 0 6px;
-  font-size: 0.9rem;
-  color: var(--text);
+  margin: 12px 0 4px;
+  font-size: 0.95rem;
 }
 
 label:first-child {
@@ -439,27 +978,21 @@ select,
 textarea {
   width: 100%;
   min-height: 48px;
-  padding: 11px 14px;
-  border-radius: var(--radius-sm);
-  border: 1px solid var(--line-strong);
+  padding: 10px 12px;
+  border-radius: 16px;
+  border: 1px solid var(--line);
   background: var(--bg-soft);
   color: var(--text);
-  font-size: 1rem;
+  font-size: 1.05rem;
   font-family: inherit;
-  transition: border-color 0.15s ease, box-shadow 0.15s ease;
-}
-
-input::placeholder,
-textarea::placeholder {
-  color: var(--muted-2);
 }
 
 input:focus,
 select:focus,
 textarea:focus {
-  outline: none;
+  outline: 3px solid var(--accent);
+  outline-offset: 1px;
   border-color: var(--accent);
-  box-shadow: 0 0 0 3px var(--accent-soft);
 }
 
 textarea {
@@ -480,29 +1013,11 @@ textarea {
   flex: 2;
 }
 
-.password-wrap {
-  position: relative;
-}
-
-.password-toggle {
-  position: absolute;
-  right: 8px;
-  top: 50%;
-  transform: translateY(-50%);
-  background: transparent;
-  border: none;
-  color: var(--muted);
-  font-size: 0.85rem;
-  font-weight: 700;
-  padding: 8px;
-}
-
-/* ---------- Buttons ---------- */
+/* Buttons */
 
 button {
   font-family: inherit;
   cursor: pointer;
-  -webkit-tap-highlight-color: transparent;
 }
 
 .btn {
@@ -512,34 +1027,28 @@ button {
   border: none;
   background: var(--accent);
   color: var(--accent-ink);
-  font-size: 1rem;
+  font-size: 1.05rem;
   font-weight: 700;
-  letter-spacing: -0.01em;
-  transition: filter 0.15s ease, transform 0.05s ease;
 }
 
 .btn:hover {
-  filter: brightness(1.07);
-}
-
-.btn:active {
-  transform: scale(0.98);
+  filter: brightness(1.08);
 }
 
 .btn:disabled {
-  opacity: 0.5;
+  opacity: 0.55;
   cursor: wait;
 }
 
 .btn.sm {
-  min-height: 40px;
+  min-height: 44px;
   padding: 8px 16px;
-  font-size: 0.92rem;
+  font-size: 0.95rem;
 }
 
 .btn.secondary {
-  background: var(--card-2);
-  border: 1px solid var(--line-strong);
+  background: var(--card-soft);
+  border: 1px solid var(--line);
   color: var(--text);
 }
 
@@ -561,412 +1070,106 @@ button {
   width: 100%;
 }
 
-.button-row {
+/* Legal (Settings → Legal) */
+
+.legal-list {
   display: flex;
-  gap: 10px;
-  flex-wrap: wrap;
+  flex-direction: column;
+  gap: 4px;
 }
 
-.icon-btn {
-  display: inline-flex;
-  align-items: center;
-  justify-content: center;
-  width: 40px;
-  height: 40px;
-  border-radius: 50%;
-  border: 1px solid var(--line);
-  background: var(--card);
-  color: var(--text);
-  font-size: 1.1rem;
-}
-
-.link {
-  background: none;
-  border: none;
-  padding: 0;
-  color: var(--accent);
-  font-size: inherit;
-  font-weight: 700;
-  text-decoration: none;
-}
-
-.link:hover {
-  text-decoration: underline;
-}
-
-/* ---------- App header ---------- */
-
-.app-header {
+.legal-row {
   display: flex;
   align-items: center;
+  justify-content: space-between;
   gap: 12px;
-  padding: 12px 16px;
-  border-bottom: 1px solid var(--line);
-  background: var(--surface);
-}
-
-.brand-avatar {
-  width: 40px;
-  height: 40px;
-  border-radius: 50%;
-  overflow: hidden;
-  flex-shrink: 0;
-  border: 1px solid var(--line);
-}
-
-.brand-avatar img {
   width: 100%;
-  height: 100%;
-  object-fit: cover;
-  display: block;
-}
-
-.brand-text {
-  flex: 1;
-  min-width: 0;
-  display: flex;
-  flex-direction: column;
-  align-items: flex-start;
-  line-height: 1.25;
-}
-
-.brand-word {
-  font-family: var(--font-display);
-  font-weight: 600;
-  letter-spacing: 0.01em;
-  font-size: 1.1rem;
-  line-height: 1.2;
-  white-space: nowrap;
-}
-
-.brand-who {
-  font-size: 0.8rem;
-  color: var(--muted);
-  white-space: nowrap;
-  overflow: hidden;
-  text-overflow: ellipsis;
-  max-width: 100%;
-}
-
-.header-actions {
-  display: flex;
-  gap: 8px;
-  align-items: center;
-  flex-shrink: 0;
-}
-
-/* The status badge in the header stays on one line so it never crowds
-   the brand name into a wrap. */
-.app-header .badge {
-  white-space: nowrap;
-  max-width: 140px;
-  overflow: hidden;
-  text-overflow: ellipsis;
-}
-
-.brand-btn {
-  background: none;
+  min-height: 56px;
+  padding: 10px 4px;
   border: none;
-  padding: 0;
-  display: flex;
-  align-items: center;
-  gap: 10px;
-  text-align: left;
+  border-bottom: 1px solid var(--line);
+  background: transparent;
   color: var(--text);
-  flex: 1 1 auto;
-  min-width: 0;
-}
-
-/* Live AI / Offline buddy badge — compact, sits in the header. */
-.chat-session-pill {
-  display: inline-flex;
-  align-items: center;
-  gap: 6px;
-  padding: 5px 10px;
-  border-radius: 999px;
-  border: 1px solid var(--line);
-  background: var(--card);
-  font-size: 0.78rem;
-  font-weight: 700;
-  color: var(--muted);
-}
-
-/* Timer pill — sits under the header while a timer runs; taps to Tools. */
-.timer-pill {
-  display: flex;
-  align-items: center;
-  gap: 10px;
-  margin: 12px 16px 0;
-  padding: 10px 14px;
-  border-radius: var(--radius);
-  border: 1px solid var(--line);
-  background: var(--card);
+  font-size: 1rem;
+  text-align: left;
   cursor: pointer;
-  box-shadow: var(--shadow-sm);
 }
 
-.timer-pill-row {
-  display: flex;
-  align-items: center;
-  gap: 8px;
-  flex: 1;
-  min-width: 0;
+.legal-row:last-child {
+  border-bottom: none;
 }
 
-.timer-pill-label {
-  font-size: 0.85rem;
-  font-weight: 700;
-}
-
-.timer-pill-time {
-  font-size: 0.85rem;
-  color: var(--muted);
-  font-variant-numeric: tabular-nums;
-}
-
-.timer-pill-track {
-  flex: 1;
-  height: 6px;
-  border-radius: 999px;
-  background: var(--card-2);
-  overflow: hidden;
-  min-width: 40px;
-}
-
-.timer-pill-fill {
-  height: 100%;
-  border-radius: 999px;
-  background: var(--accent);
-  transition: width 0.3s linear;
-}
-
-/* ---------- Bottom nav + More sheet ---------- */
-
-.bottom-nav {
-  display: flex;
-  border-top: 1px solid var(--line);
-  background: var(--surface);
-  padding: 6px 4px calc(6px + env(safe-area-inset-bottom));
-}
-
-.nav-wrap {
-  display: flex;
-  flex: 1;
-}
-
-.nav-item {
-  flex: 1;
+.legal-row > span:first-child {
   display: flex;
   flex-direction: column;
-  align-items: center;
   gap: 2px;
-  padding: 6px 2px;
-  background: none;
-  border: none;
+}
+
+.legal-row > span:last-child {
   color: var(--muted);
-  font-size: 0.68rem;
-  font-weight: 600;
-  border-radius: var(--radius-sm);
-}
-
-.nav-item.active {
-  color: var(--accent);
-}
-
-.nav-item .nav-icon {
-  font-size: 1.25rem;
+  font-size: 1.4rem;
   line-height: 1;
 }
 
-.more-backdrop {
-  position: fixed;
-  inset: 0;
-  background: rgba(0, 0, 0, 0.55);
-  z-index: 40;
+.legal-row.danger-row strong {
+  color: var(--danger);
 }
 
-.more-sheet {
-  position: fixed;
-  left: 50%;
-  transform: translateX(-50%);
-  bottom: 0;
-  width: 100%;
-  max-width: 448px;
-  background: var(--surface);
-  border: 1px solid var(--line);
-  border-bottom: none;
-  border-radius: var(--radius-lg) var(--radius-lg) 0 0;
-  padding: 12px 16px calc(20px + env(safe-area-inset-bottom));
-  z-index: 41;
-  box-shadow: var(--shadow-md);
+.legal-doc p {
+  line-height: 1.65;
 }
 
-.more-item {
-  display: flex;
-  align-items: center;
-  gap: 12px;
-  width: 100%;
-  padding: 13px 8px;
-  background: none;
-  border: none;
-  border-bottom: 1px solid var(--line);
-  color: var(--text);
-  font-size: 1rem;
-  font-weight: 600;
-  text-align: left;
-}
-
-.more-item:last-child {
-  border-bottom: none;
-}
-
-/* ---------- Bottom sheet (generic) ---------- */
-
-.sheet-backdrop {
-  position: fixed;
-  inset: 0;
-  background: rgba(0, 0, 0, 0.55);
-  z-index: 40;
-  display: flex;
-  align-items: flex-end;
-  justify-content: center;
-}
-
-.sheet-card {
-  width: 100%;
-  max-width: 448px;
-  background: var(--surface);
-  border: 1px solid var(--line);
-  border-bottom: none;
-  border-radius: var(--radius-lg) var(--radius-lg) 0 0;
-  padding: 20px 20px calc(24px + env(safe-area-inset-bottom));
-  box-shadow: var(--shadow-md);
-}
-
-/* ---------- Mini player (Audius) ---------- */
-
-.mini-player {
-  display: flex;
-  align-items: center;
-  gap: 10px;
-  margin: 0 12px 8px;
-  padding: 8px 10px;
-  border-radius: var(--radius);
-  border: 1px solid var(--line);
-  background: var(--card);
-  box-shadow: var(--shadow-sm);
-}
-
-.mini-player-art-fallback {
-  width: 40px;
-  height: 40px;
-  border-radius: 8px;
-  background: var(--card-2);
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  font-size: 1.2rem;
-  flex-shrink: 0;
-}
-
-.mini-player-info {
-  flex: 1;
-  min-width: 0;
-}
-
-.mini-player-text {
-  font-size: 0.88rem;
-  font-weight: 700;
-  white-space: nowrap;
-  overflow: hidden;
-  text-overflow: ellipsis;
-}
-
-.mini-player-btn {
-  width: 36px;
-  height: 36px;
-  border-radius: 50%;
-  border: none;
-  background: var(--accent);
-  color: var(--accent-ink);
-  font-size: 1rem;
-  display: inline-flex;
-  align-items: center;
-  justify-content: center;
-  flex-shrink: 0;
-}
-
-/* ---------- Alerts & banners ---------- */
-
-.alert-banner {
-  display: flex;
-  gap: 12px;
-  align-items: flex-start;
-  padding: 12px 14px;
-  border-radius: var(--radius);
-  border: 1px solid var(--warn);
-  background: var(--warn-bg);
-  margin-bottom: 12px;
-}
-
-.alert-banner-text {
-  flex: 1;
-  font-size: 0.9rem;
-}
-
-.alert-banner-actions {
-  display: flex;
-  gap: 8px;
-  flex-shrink: 0;
-}
-
-.alert-permission {
-  display: flex;
-  gap: 10px;
-  align-items: center;
-  padding: 12px 14px;
-  border-radius: var(--radius);
-  border: 1px solid var(--line);
-  background: var(--card);
-  margin-top: 12px;
-}
-
-.offline-banner {
-  padding: 10px 16px;
-  background: var(--warn-bg);
-  color: var(--warn);
-  font-size: 0.85rem;
-  font-weight: 700;
-  text-align: center;
-  border-bottom: 1px solid var(--line);
-}
-
-/* ---------- Chat ---------- */
+/* Chat — Grok Buddy layout: messages scroll, composer pinned at the bottom. */
 
 .chat-shell {
   flex: 1;
+  min-height: 0;
   display: flex;
   flex-direction: column;
-  min-height: 0;
 }
 
 .chat-scroll {
   flex: 1;
+  min-height: 0;
   overflow-y: auto;
-  padding: 16px;
+  padding: 8px 16px 12px;
   display: flex;
   flex-direction: column;
-  gap: 10px;
+  gap: 12px;
+}
+
+.chat-session-pill {
+  width: 100%;
+  padding: 10px 12px;
+  border-radius: 16px;
+  border: 1px solid var(--line);
+  background: var(--card);
+  color: var(--text);
+  font-size: 0.95rem;
+  text-align: left;
+}
+
+.chat-session-pill .muted {
+  color: var(--muted);
+}
+
+.chat-empty-card {
+  background: var(--card);
+  border: 1px solid var(--line);
+  border-radius: var(--radius);
+  padding: 16px;
+  font-size: 1.05rem;
+  line-height: 1.5;
 }
 
 .msg {
-  max-width: 85%;
-  padding: 11px 14px;
-  border-radius: 18px;
-  font-size: 0.97rem;
-  line-height: 1.5;
+  max-width: 90%;
+  padding: 12px 16px;
+  border-radius: 24px;
   white-space: pre-wrap;
   word-break: break-word;
+  font-size: 0.95rem;
+  line-height: 1.5;
 }
 
 .msg.user {
@@ -976,485 +1179,404 @@ button {
   border-bottom-right-radius: 6px;
 }
 
-.msg.bud,
-.msg.buddy {
+.msg.bud {
   align-self: flex-start;
-  background: var(--card);
-  border: 1px solid var(--line);
-  color: var(--text);
+  background: var(--card-2);
   border-bottom-left-radius: 6px;
 }
 
-.msg-speak {
-  margin-top: 6px;
-  background: none;
-  border: none;
+.msg .who {
+  display: block;
+  font-size: 0.75rem;
+  font-weight: 800;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  opacity: 0.75;
+  margin-bottom: 4px;
+}
+
+.msg.bud .who {
   color: var(--muted);
-  font-size: 0.82rem;
-  font-weight: 700;
-  padding: 2px 0;
+}
+
+.chat-sources {
+  display: block;
+  margin-top: 8px;
+  font-size: 0.75rem;
+  line-height: 1.5;
+  opacity: 0.85;
+}
+
+.chat-sources a {
+  color: var(--accent);
+  text-decoration: underline;
 }
 
 .chat-composer {
   border-top: 1px solid var(--line);
+  padding: 8px 16px 12px;
   background: var(--surface);
-  padding: 10px 12px calc(10px + env(safe-area-inset-bottom));
+}
+
+.chat-prompts {
+  display: flex;
+  gap: 8px;
+  overflow-x: auto;
+  margin: 0 -16px 8px;
+  padding: 0 16px;
+  scrollbar-width: none;
+}
+
+.chat-prompts::-webkit-scrollbar {
+  display: none;
+}
+
+.chat-prompt {
+  flex-shrink: 0;
+  min-height: 40px;
+  padding: 8px 12px;
+  border-radius: 999px;
+  border: 1px solid var(--line);
+  background: var(--card);
+  color: var(--text);
+  font-size: 0.9rem;
+  white-space: nowrap;
+}
+
+.chat-prompt:disabled {
+  opacity: 0.5;
 }
 
 .chat-input-row {
   display: flex;
   gap: 8px;
-  align-items: flex-end;
 }
 
-.chat-input-row input,
-.chat-input-row textarea {
+.chat-input-row input {
   flex: 1;
   min-height: 48px;
-  max-height: 120px;
-  border-radius: 24px;
-  padding: 12px 16px;
+  border-radius: 999px;
+  padding: 10px 16px;
 }
 
-.chat-send,
-.chat-mic {
+.chat-send {
+  flex-shrink: 0;
   width: 48px;
   height: 48px;
+  padding: 0;
+  display: flex;
+  align-items: center;
+  justify-content: center;
   border-radius: 50%;
+}
+
+/* Tap-to-talk mic — same 48px circle as the send button. */
+.chat-mic {
+  flex-shrink: 0;
+  width: 48px;
+  height: 48px;
+  padding: 0;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  border-radius: 50%;
+}
+
+.chat-mic.recording {
+  background: var(--danger-bg);
+  border: 1px solid var(--danger);
+  color: var(--danger);
+  animation: mic-pulse 1.2s ease-in-out infinite;
+}
+
+@keyframes mic-pulse {
+  0%, 100% { opacity: 1; }
+  50% { opacity: 0.55; }
+}
+
+/* Small "Hear it" button on Bud-E messages. */
+.msg-speak {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  margin-top: 8px;
+  padding: 4px 0;
   border: none;
-  background: var(--accent);
-  color: var(--accent-ink);
-  font-size: 1.15rem;
-  display: inline-flex;
-  align-items: center;
-  justify-content: center;
-  flex-shrink: 0;
+  background: transparent;
+  color: var(--muted);
+  font-size: 0.8rem;
+  font-weight: 700;
 }
 
+/* Photo in a chat message (in-memory only — never saved). */
 .chat-photo {
-  width: 44px;
-  height: 44px;
-  border-radius: 50%;
-  border: 1px solid var(--line);
-  background: var(--card);
-  color: var(--text);
-  font-size: 1.1rem;
-  display: inline-flex;
-  align-items: center;
-  justify-content: center;
-  flex-shrink: 0;
+  display: block;
+  max-width: 220px;
+  max-height: 220px;
+  border-radius: 12px;
+  margin-bottom: 6px;
 }
 
+/* Photo picked and waiting to be sent, above the chat input. */
 .chat-photo-preview {
   display: flex;
+  align-items: center;
   gap: 8px;
   margin-bottom: 8px;
-  align-items: center;
 }
 
 .chat-photo-preview img {
-  width: 64px;
-  height: 64px;
-  border-radius: var(--radius-sm);
+  width: 56px;
+  height: 56px;
   object-fit: cover;
-  border: 1px solid var(--line);
+  border-radius: 12px;
 }
 
-.chat-empty-card {
-  text-align: center;
-  padding: 32px 20px;
+.chat-photo-preview span {
+  flex: 1;
+  font-size: 0.85rem;
   color: var(--muted);
 }
 
-.chat-prompts {
-  display: flex;
-  flex-wrap: wrap;
-  gap: 8px;
-  justify-content: center;
-  margin-top: 16px;
-}
-
-.chat-prompt {
-  padding: 9px 14px;
-  border-radius: 999px;
-  border: 1px solid var(--line-strong);
-  background: var(--card);
+.chat-photo-preview button {
+  flex-shrink: 0;
+  background: none;
+  border: none;
   color: var(--text);
-  font-size: 0.88rem;
-  font-weight: 600;
+  padding: 6px;
+  cursor: pointer;
 }
 
-.chat-foot {
-  padding: 8px 16px;
-  font-size: 0.78rem;
-  color: var(--muted-2);
-  text-align: center;
-}
-
+/* Web image search results under a Bud-E reply — sideways scroll. */
 .chat-images {
   display: flex;
   gap: 8px;
   overflow-x: auto;
-  padding: 4px 0;
+  margin-top: 8px;
+  padding-bottom: 4px;
 }
 
-.chat-images img {
-  width: 96px;
-  height: 96px;
-  border-radius: var(--radius-sm);
-  object-fit: cover;
-  border: 1px solid var(--line);
+.chat-images a {
   flex-shrink: 0;
 }
 
-.chat-sources {
-  font-size: 0.78rem;
-  color: var(--muted);
-  margin-top: 6px;
+.chat-images img {
+  width: 120px;
+  height: 120px;
+  object-fit: cover;
+  border-radius: 12px;
+  display: block;
 }
 
-/* ---------- Tools grid ---------- */
+.chat-foot {
+  margin-top: 8px;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  font-size: 0.75rem;
+  color: var(--muted);
+}
+
+.chat-foot button {
+  border: none;
+  background: transparent;
+  color: var(--muted);
+  font-size: 0.75rem;
+  padding: 4px 0;
+}
+
+.chat-foot button.danger-text {
+  color: var(--danger);
+  font-weight: 700;
+}
+
+/* Tools — Grok tool home grid + drill-in view. */
 
 .tool-home {
   display: grid;
   grid-template-columns: 1fr 1fr;
-  gap: 10px;
+  gap: 12px;
 }
 
 .tool-tile {
-  display: flex;
-  flex-direction: column;
-  align-items: flex-start;
-  gap: 6px;
-  padding: 16px;
+  min-height: 128px;
+  padding: 12px;
   border-radius: var(--radius);
   border: 1px solid var(--line);
   background: var(--card);
   color: var(--text);
   text-align: left;
-  box-shadow: var(--shadow-sm);
-  min-height: 96px;
 }
 
-.tool-tile .tool-icon {
-  font-size: 1.5rem;
-  line-height: 1;
+.tool-tile svg {
+  color: var(--accent);
 }
 
-.tool-title,
-.tool-tile-title {
-  font-size: 0.95rem;
+.tool-tile .tool-tile-title {
+  display: block;
+  margin-top: 12px;
   font-weight: 700;
-  letter-spacing: -0.01em;
 }
 
-.tool-tile .tool-sub,
-.tool-tile-detail {
-  font-size: 0.82rem;
+.tool-tile .tool-tile-detail {
+  display: block;
+  margin-top: 4px;
+  font-size: 0.9rem;
   color: var(--muted);
 }
 
 .tool-back {
-  display: inline-flex;
-  align-items: center;
-  gap: 6px;
-  background: none;
-  border: none;
-  color: var(--muted);
-  font-size: 0.92rem;
-  font-weight: 700;
-  padding: 4px 0 12px;
-}
-
-/* ---------- Tonight ---------- */
-
-.tonight-hero {
-  border-radius: var(--radius-lg);
-  border: 1px solid var(--line);
-  background: var(--card);
-  padding: 20px;
-  margin-bottom: 12px;
-  box-shadow: var(--shadow-sm);
-}
-
-.tonight-big {
-  font-size: 1.6rem;
-  font-weight: 800;
-  letter-spacing: -0.02em;
-  line-height: 1.2;
-}
-
-.log-hero {
-  border-radius: var(--radius-lg);
-  border: 1px solid var(--line);
-  background: var(--card);
-  padding: 20px;
-  margin-bottom: 12px;
-}
-
-/* ---------- Stash jars ---------- */
-
-.jar-shelf {
-  display: flex;
-  flex-direction: column;
-  gap: 12px;
-}
-
-.jar-shelf-board {
-  display: flex;
-  flex-direction: column;
-  gap: 12px;
-}
-
-.jar-wrap {
-  display: flex;
-  flex-direction: column;
-  gap: 12px;
-}
-
-.jar-card {
-  background: var(--card);
-  border: 1px solid var(--line);
-  border-radius: var(--radius);
-  padding: 16px;
-  box-shadow: var(--shadow-sm);
-}
-
-.jar-card-head {
-  display: flex;
-  align-items: baseline;
-  justify-content: space-between;
-  gap: 10px;
-}
-
-.jar-card-name {
-  font-size: 1.05rem;
-  font-weight: 700;
-  letter-spacing: -0.01em;
-}
-
-.jar-card-amount {
-  font-size: 1.05rem;
-  font-weight: 800;
-  font-variant-numeric: tabular-nums;
-}
-
-.jar-card-sub {
-  font-size: 0.85rem;
-  color: var(--muted);
-  margin-top: 2px;
-}
-
-.jar {
-  background: var(--card);
-  border: 1px solid var(--line);
-  border-radius: var(--radius);
-  padding: 16px;
-}
-
-.jar-body {
-  display: flex;
-  flex-direction: column;
-  gap: 8px;
-}
-
-.jar-label {
-  font-size: 0.85rem;
-  font-weight: 700;
-  color: var(--muted);
-}
-
-.jar-amount {
-  font-size: 1.4rem;
-  font-weight: 800;
-  font-variant-numeric: tabular-nums;
-}
-
-.jar-lid {
-  height: 8px;
-  border-radius: 999px;
-  background: var(--card-2);
-  overflow: hidden;
-}
-
-.jar-fill {
-  height: 100%;
-  border-radius: 999px;
-  background: var(--accent);
-  transition: width 0.3s ease;
-}
-
-.jar-controls {
-  display: flex;
-  gap: 8px;
-  align-items: center;
-  margin-top: 8px;
-}
-
-.jar-stepper {
   display: flex;
   align-items: center;
   gap: 4px;
+  min-height: 44px;
+  padding: 0;
+  border: none;
+  background: transparent;
+  color: var(--muted);
+  font-size: 0.95rem;
 }
 
-.jar-step {
+.countdown-ring-wrap {
+  position: relative;
+  width: 224px;
+  height: 224px;
+  margin: 20px auto 0;
+}
+
+.countdown-ring-wrap svg {
+  width: 100%;
+  height: 100%;
+}
+
+.countdown-ring-label {
+  position: absolute;
+  inset: 0;
   display: flex;
-  align-items: center;
-  gap: 8px;
-}
-
-.jar-step-btn {
-  width: 36px;
-  height: 36px;
-  border-radius: 50%;
-  border: 1px solid var(--line-strong);
-  background: var(--card-2);
-  color: var(--text);
-  font-size: 1.1rem;
-  font-weight: 700;
-  display: inline-flex;
   align-items: center;
   justify-content: center;
+  font-family: var(--font-display);
+  font-size: 3rem;
+  font-variant-numeric: tabular-nums;
+  color: var(--accent);
 }
 
-/* ---------- Journal / memory ---------- */
-
-.memory-grid {
-  display: grid;
-  grid-template-columns: repeat(2, 1fr);
-  gap: 10px;
+.countdown-ring-wrap.done .countdown-ring-label {
+  animation: countdown-pulse 1.4s ease-in-out 3;
 }
 
-.memory-card {
-  background: var(--card);
+@keyframes countdown-pulse {
+  0%, 100% { opacity: 1; }
+  50% { opacity: 0.35; }
+}
+
+/* Unit toggle — Grok's mg/g pill inside forms. */
+
+.unit-toggle {
+  display: flex;
+  padding: 4px;
+  border-radius: 999px;
   border: 1px solid var(--line);
-  border-radius: var(--radius);
-  padding: 14px;
-  box-shadow: var(--shadow-sm);
 }
 
-.timeline {
+.unit-toggle button {
+  min-height: 40px;
+  padding: 8px 12px;
+  border-radius: 999px;
+  border: none;
+  background: transparent;
+  color: var(--muted);
+  font-size: 0.95rem;
+  font-weight: 700;
+}
+
+.unit-toggle button.on {
+  background: var(--accent);
+  color: var(--accent-ink);
+}
+
+.timer-big {
+  font-family: var(--font-display);
+  font-size: 3rem;
+  font-weight: 500;
+  text-align: center;
+  margin: 8px 0;
+  font-variant-numeric: tabular-nums;
+  letter-spacing: 0.02em;
+  color: var(--accent);
+}
+
+.timer-done {
+  color: var(--warn);
+  text-align: center;
+  font-weight: 700;
+}
+
+.breath-wrap {
   display: flex;
   flex-direction: column;
-  gap: 0;
-  border-left: 2px solid var(--line);
-  margin-left: 6px;
-  padding-left: 16px;
+  align-items: center;
+  gap: 12px;
+  padding: 8px 0 4px;
 }
 
-/* ---------- Strains ---------- */
-
-.strain-name {
-  font-family: var(--font-sans);
+.breath-circle {
+  width: 170px;
+  height: 170px;
+  border-radius: 50%;
+  background: radial-gradient(circle at 35% 35%, var(--accent), var(--card-2) 70%);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  text-align: center;
+  font-weight: 800;
   font-size: 1.1rem;
-  font-weight: 700;
-  letter-spacing: -0.01em;
+  color: var(--text);
+  transition: transform 4s ease-in-out;
+  box-shadow: 0 0 0 12px color-mix(in srgb, var(--accent) 18%, transparent);
 }
 
-/* ---------- Plan ---------- */
+.breath-phase {
+  font-weight: 700;
+  color: var(--muted);
+  min-height: 1.5em;
+}
 
-.plan-text {
-  font-size: 0.97rem;
-  line-height: 1.6;
+.result-box {
+  background: var(--bg-soft);
+  border: 1px solid var(--line);
+  border-radius: 12px;
+  padding: 14px;
+  font-size: 1.05rem;
 }
 
 .plan-sentence {
-  font-size: 1.05rem;
-  font-weight: 600;
-  line-height: 1.5;
-}
-
-/* ---------- Music ---------- */
-
-.music-search {
-  margin-bottom: 12px;
-}
-
-.track-row {
-  display: flex;
-  align-items: center;
-  gap: 12px;
-  padding: 10px 12px;
-  border-radius: var(--radius);
+  background: var(--bg-soft);
   border: 1px solid var(--line);
-  background: var(--card);
-  margin-bottom: 8px;
-}
-
-.track-row-main {
-  flex: 1;
-  min-width: 0;
-  display: flex;
-  align-items: center;
-  gap: 12px;
-}
-
-.track-row-text {
-  flex: 1;
-  min-width: 0;
-}
-
-.track-row-text .track-title {
-  font-size: 0.95rem;
-  font-weight: 700;
-  white-space: nowrap;
-  overflow: hidden;
-  text-overflow: ellipsis;
-}
-
-.track-row-text .track-artist {
-  font-size: 0.82rem;
-  color: var(--muted);
-  white-space: nowrap;
-  overflow: hidden;
-  text-overflow: ellipsis;
-}
-
-.track-row-art-fallback {
-  width: 44px;
-  height: 44px;
-  border-radius: 8px;
-  background: var(--card-2);
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  font-size: 1.2rem;
-  flex-shrink: 0;
-}
-
-.track-row-add {
-  width: 36px;
-  height: 36px;
-  border-radius: 50%;
-  border: 1px solid var(--line-strong);
-  background: var(--card-2);
-  color: var(--text);
+  border-left: 5px solid var(--accent);
+  border-radius: 12px;
+  padding: 14px;
   font-size: 1.1rem;
-  display: inline-flex;
-  align-items: center;
-  justify-content: center;
-  flex-shrink: 0;
 }
-
-/* ---------- Games ---------- */
 
 .trivia-option {
   display: block;
   width: 100%;
   text-align: left;
-  padding: 13px 16px;
-  border-radius: var(--radius);
-  border: 1px solid var(--line-strong);
-  background: var(--card);
-  color: var(--text);
-  font-size: 0.97rem;
-  font-weight: 600;
+  min-height: 52px;
+  padding: 12px 14px;
   margin-bottom: 8px;
+  border-radius: 12px;
+  border: 2px solid var(--line);
+  background: var(--bg-soft);
+  color: var(--text);
+  font-size: 1rem;
 }
 
 .trivia-option.correct {
   border-color: var(--accent);
-  background: var(--accent-soft);
+  background: var(--card-2);
 }
 
 .trivia-option.wrong {
@@ -1462,494 +1584,690 @@ button {
   background: var(--danger-bg);
 }
 
+.trivia-option:disabled {
+  cursor: default;
+}
+
+/* Memory Match — a 4x4 grid of flip cards. Face down is a leaf on the card
+   color; face up shows the emoji on a soft background; matched pairs get
+   the lime border so they stay visibly done. */
+.memory-grid {
+  display: grid;
+  grid-template-columns: repeat(4, 1fr);
+  gap: 8px;
+  margin-top: 12px;
+}
+
+.memory-card {
+  aspect-ratio: 1;
+  min-height: 64px;
+  border-radius: 14px;
+  border: 2px solid var(--line);
+  background: var(--card-2);
+  color: var(--text);
+  font-size: 1.9rem;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  cursor: pointer;
+  transition: transform 0.12s ease, background 0.12s ease, border-color 0.12s ease;
+}
+
+.memory-card:active {
+  transform: scale(0.94);
+}
+
+.memory-card.up {
+  background: var(--bg-soft);
+}
+
+.memory-card.matched {
+  border-color: var(--accent);
+  background: var(--card-2);
+}
+
+/* The sticker image on a face-up card — fills the card, keeps its shape. */
+.memory-sticker {
+  width: 92%;
+  height: 92%;
+  object-fit: contain;
+  pointer-events: none;
+  user-select: none;
+}
+
 .score-big {
-  font-size: 2.5rem;
+  font-size: 2.2rem;
   font-weight: 800;
-  letter-spacing: -0.02em;
-  font-variant-numeric: tabular-nums;
+  text-align: center;
+  margin: 6px 0;
+}
+
+.button-row {
+  display: flex;
+  gap: 8px;
+  flex-wrap: wrap;
+}
+
+.button-row .btn {
+  flex: 1;
+  min-width: 120px;
+}
+
+/* Plan tab */
+
+.plan-text {
+  white-space: pre-wrap;
+  background: var(--bg-soft);
+  border: 1px solid var(--line);
+  border-radius: 12px;
+  padding: 16px;
+  font-size: 1.02rem;
+  line-height: 1.6;
+}
+
+/* Tonight tab */
+
+.tonight-hero {
+  font-family: var(--font-display);
+  font-size: 2.25rem;
+  line-height: 1.1;
+}
+
+.tonight-big {
+  font-family: var(--font-display);
+  font-size: 1.9rem;
+  line-height: 1.2;
+  text-transform: capitalize;
+}
+
+.eyebrow {
+  font-size: 0.75rem;
+  font-weight: 700;
+  letter-spacing: 0.16em;
+  text-transform: uppercase;
+  color: var(--accent);
+}
+
+.timeline {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+}
+
+.timeline li {
+  display: flex;
+  gap: 12px;
+  padding: 8px 0;
+}
+
+.timeline .dot {
+  margin-top: 8px;
+  width: 10px;
+  height: 10px;
+  flex-shrink: 0;
+  border-radius: 50%;
+  background: var(--line);
+}
+
+.timeline li.active .dot {
+  background: var(--accent);
+}
+
+.timeline li.active .phase-label {
+  color: var(--accent);
+}
+
+/* Age gate */
+
+.age-gate {
+  position: relative;
+  max-width: 448px;
+  margin: 0 auto;
+  min-height: 100vh;
+  min-height: 100dvh;
+  padding: 40px 24px;
+  display: flex;
+  flex-direction: column;
+  justify-content: space-between;
+  gap: 24px;
+}
+
+.age-gate .garden-hero img {
+  height: 224px;
+}
+
+.age-gate .eyebrow {
+  letter-spacing: 0.22em;
+}
+
+.age-gate h1 {
+  font-size: 3rem;
+  font-style: italic;
+  line-height: 1;
+}
+
+/* Birthdate entry on the age gate — three big fields (MM / DD / YYYY) that
+   auto-advance as you type, with a numeric keyboard on mobile. */
+.dob-row {
+  display: flex;
+  align-items: flex-end;
+  justify-content: center;
+  gap: 8px;
+  margin-top: 16px;
+}
+
+.dob-field {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 6px;
+}
+
+.dob-field label {
+  font-size: 0.8rem;
+  letter-spacing: 0.12em;
+  text-transform: uppercase;
+  color: var(--text-muted);
+}
+
+.dob-input {
+  width: 68px;
+  min-height: 64px;
+  padding: 10px 8px;
+  border-radius: 16px;
+  border: 1px solid var(--line);
+  background: var(--bg-soft);
+  color: var(--text);
+  font-size: 1.5rem;
+  font-weight: 700;
+  text-align: center;
+  font-family: inherit;
+}
+
+.dob-field.dob-year .dob-input {
+  width: 104px;
+}
+
+.dob-input:focus {
+  outline: 3px solid var(--accent);
+  outline-offset: 1px;
+  border-color: var(--accent);
+}
+
+.dob-sep {
+  font-size: 1.5rem;
+  font-weight: 700;
+  color: var(--text-muted);
+  padding-bottom: 16px;
+}
+
+/* Theme picker (Settings tab) */
+
+.theme-grid {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 8px;
+}
+
+.theme-swatch {
+  min-height: 96px;
+  padding: 12px;
+  text-align: left;
+  border-radius: 16px;
+  border: 2px solid transparent;
+  background: var(--swatch-bg);
+  color: var(--swatch-ink);
+  font-family: inherit;
+}
+
+.theme-swatch[aria-pressed='true'] {
+  border-color: var(--swatch-accent);
+}
+
+.theme-swatch[data-swatch='night'] {
+  --swatch-bg: #07110c;
+  --swatch-card: #163024;
+  --swatch-ink: #f3f6ea;
+  --swatch-accent: #c6f25c;
+}
+
+.theme-swatch[data-swatch='day'] {
+  --swatch-bg: #f4f1e4;
+  --swatch-card: #e7f0dc;
+  --swatch-ink: #142107;
+  --swatch-accent: #1f5c28;
+}
+
+.theme-swatch[data-swatch='ember'] {
+  --swatch-bg: #140c08;
+  --swatch-card: #2c1a12;
+  --swatch-ink: #f8efe4;
+  --swatch-accent: #f0a04b;
+}
+
+.theme-swatch[data-swatch='moon'] {
+  --swatch-bg: #070d14;
+  --swatch-card: #152433;
+  --swatch-ink: #eef4f8;
+  --swatch-accent: #7ddec8;
+}
+
+.theme-swatch .swatch-dot {
+  display: inline-block;
+  width: 16px;
+  height: 16px;
+  border-radius: 50%;
+  background: var(--swatch-accent);
+  vertical-align: middle;
+  margin-right: 8px;
+}
+
+.theme-swatch .swatch-bar {
+  display: block;
+  height: 8px;
+  border-radius: 999px;
+  background: var(--swatch-card);
+  margin: 10px 0 8px;
+}
+
+/* Tool card titles (Grok: display font, text-3xl). */
+
+.tool-title {
+  font-family: var(--font-display);
+  font-size: 1.9rem;
+  font-weight: 500;
+  margin: 0 0 10px;
 }
 
 .score-display {
+  font-family: var(--font-display);
+  font-size: 3rem;
+  font-weight: 500;
   text-align: center;
-  padding: 20px;
+  margin: 8px 0;
+  color: var(--accent);
+  font-variant-numeric: tabular-nums;
 }
 
-.result-box {
+/* Stash — Grok jar cards: name + big amount, then a round stepper row. */
+
+.jar-card {
   background: var(--card);
   border: 1px solid var(--line);
   border-radius: var(--radius);
-  padding: 16px;
+  padding: 12px;
   margin-bottom: 12px;
-  text-align: center;
 }
 
-.memory-sticker {
-  width: 100%;
-  height: 100%;
-  object-fit: contain;
-  padding: 8px;
-}
-
-.countdown-ring-wrap {
+.jar-card-head {
   display: flex;
-  align-items: center;
-  justify-content: center;
-  padding: 16px;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 12px;
 }
 
-.countdown-ring-label {
-  font-size: 2rem;
-  font-weight: 800;
+.jar-card-name {
+  font-family: var(--font-display);
+  font-size: 1.5rem;
+  font-weight: 500;
+  line-height: 1.2;
+}
+
+.jar-card-amount {
+  font-family: var(--font-display);
+  font-size: 1.9rem;
+  font-weight: 500;
   font-variant-numeric: tabular-nums;
+  white-space: nowrap;
 }
 
-.timer-big {
-  font-size: 2.5rem;
-  font-weight: 800;
-  letter-spacing: -0.02em;
-  font-variant-numeric: tabular-nums;
-  text-align: center;
-}
-
-.timer-done {
-  text-align: center;
-  padding: 20px;
-  font-size: 1.1rem;
-  font-weight: 700;
-}
-
-/* ---------- Breathing ---------- */
-
-.breath-wrap {
-  display: flex;
-  flex-direction: column;
-  align-items: center;
-  gap: 16px;
-  padding: 24px 0;
-}
-
-.breath-circle {
-  width: 160px;
-  height: 160px;
-  border-radius: 50%;
-  border: 2px solid var(--accent);
-  background: var(--accent-soft);
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  transition: transform 4s ease-in-out;
-}
-
-.breath-phase {
-  font-size: 1.1rem;
-  font-weight: 700;
+.jar-card-sub {
+  font-size: 0.85rem;
   color: var(--muted);
 }
 
-/* ---------- Settings & account ---------- */
-
-.account-screen {
+.jar-stepper {
+  margin-top: 12px;
   display: flex;
-  flex-direction: column;
-  gap: 12px;
+  align-items: center;
+  gap: 8px;
+}
+
+.jar-stepper input {
+  flex: 1;
+  min-height: 48px;
+  text-align: center;
+  font-size: 1rem;
+}
+
+.jar-step-btn {
+  flex-shrink: 0;
+  width: 48px;
+  height: 48px;
+  padding: 0;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  border-radius: 50%;
+  border: 1px solid var(--line);
+  background: var(--card-2);
+  color: var(--text);
+}
+
+.jar-step-btn:disabled {
+  opacity: 0.4;
+}
+
+.jar-step-btn.accent {
+  border: none;
+  background: var(--accent);
+  color: var(--accent-ink);
+}
+
+/* Log page hero image (Grok Journal). */
+
+.log-hero {
+  overflow: hidden;
+  border-radius: var(--radius);
+  margin-bottom: 16px;
+}
+
+.log-hero img {
+  display: block;
+  width: 100%;
+  height: 112px;
+  object-fit: cover;
+}
+
+/* Profile (You tab) — Grok avatar + name card. */
+
+.profile-avatar {
+  width: 64px;
+  height: 64px;
+  flex-shrink: 0;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  border-radius: 50%;
+  background: var(--accent);
+  color: var(--accent-ink);
+  font-family: var(--font-display);
+  font-size: 1.9rem;
 }
 
 .profile-row {
   display: flex;
   align-items: center;
-  gap: 12px;
-  padding: 16px;
-  background: var(--card);
-  border: 1px solid var(--line);
-  border-radius: var(--radius);
-  box-shadow: var(--shadow-sm);
-}
-
-.profile-avatar {
-  width: 48px;
-  height: 48px;
-  border-radius: 50%;
-  background: var(--accent-soft);
-  color: var(--accent);
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  font-size: 1.3rem;
-  font-weight: 800;
-  flex-shrink: 0;
+  gap: 16px;
 }
 
 .profile-name {
-  font-size: 1.05rem;
-  font-weight: 700;
-  letter-spacing: -0.01em;
+  font-family: var(--font-display);
+  font-size: 1.5rem;
+  line-height: 1.1;
+  font-weight: 500;
+  overflow-wrap: anywhere;
 }
 
 .profile-email {
-  font-size: 0.85rem;
+  margin-top: 4px;
+  font-size: 0.9rem;
   color: var(--muted);
-  word-break: break-all;
+  overflow-wrap: anywhere;
 }
 
-.theme-grid {
-  display: grid;
-  grid-template-columns: repeat(2, 1fr);
-  gap: 10px;
+/* Account sign-in / sign-up — Grok account screen layout. */
+
+.account-screen {
+  padding: 32px 8px 8px;
 }
 
-.theme-swatch {
-  border-radius: var(--radius);
-  border: 2px solid var(--line);
-  padding: 14px;
-  background: var(--card);
-  color: var(--text);
-  text-align: left;
-  cursor: pointer;
+.account-screen .eyebrow {
+  letter-spacing: 0.22em;
 }
 
-.theme-swatch.active {
-  border-color: var(--accent);
-  box-shadow: 0 0 0 3px var(--accent-soft);
+.account-screen h1 {
+  margin-top: 12px;
+  font-size: 3rem;
+  font-style: italic;
+  line-height: 1;
 }
 
-.unit-toggle {
-  display: inline-flex;
-  border-radius: 999px;
-  border: 1px solid var(--line-strong);
-  overflow: hidden;
+.account-screen form {
+  margin-top: 24px;
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
 }
 
-.unit-toggle button {
-  padding: 8px 16px;
+.account-screen form label {
+  margin: 0;
+}
+
+.account-screen form label span {
+  display: block;
+  margin-bottom: 8px;
+}
+
+.password-wrap {
+  position: relative;
+}
+
+.password-wrap input {
+  padding-right: 80px;
+}
+
+.password-toggle {
+  position: absolute;
+  top: 50%;
+  right: 6px;
+  transform: translateY(-50%);
+  min-height: 36px;
+  padding: 8px 12px;
+  border: none;
+  border-radius: 12px;
+  background: transparent;
+  color: var(--accent);
+  font-size: 0.75rem;
+  font-weight: 700;
+  letter-spacing: 0.05em;
+  text-transform: uppercase;
+}
+
+/* Inline text link (account screen mode toggle). */
+
+.link {
   background: transparent;
   border: none;
-  color: var(--muted);
-  font-size: 0.9rem;
+  padding: 0;
+  color: var(--accent);
+  font-size: 1rem;
   font-weight: 700;
 }
 
-.unit-toggle button.active {
-  background: var(--accent);
-  color: var(--accent-ink);
+/* Stash jars on a shelf (legacy jar drawing — kept for reference). */
+
+.jar-shelf {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(140px, 1fr));
+  gap: 20px 12px;
+  align-items: end;
 }
 
-/* ---------- Age gate & date of birth ---------- */
+.jar-wrap {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+}
 
-.age-gate {
+.jar {
+  width: 110px;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+}
+
+.jar-lid {
+  width: 76px;
+  height: 16px;
+  border-radius: 6px 6px 3px 3px;
+  background: var(--accent);
+  border: 1px solid var(--line);
+}
+
+.jar-body {
+  position: relative;
+  width: 110px;
+  height: 130px;
+  overflow: hidden;
+  border: 2px solid var(--line);
+  border-top: none;
+  border-radius: 10px 10px 22px 22px;
+  background: color-mix(in srgb, var(--surface) 55%, transparent);
+}
+
+.jar-fill {
+  position: absolute;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  background: linear-gradient(180deg, var(--accent), color-mix(in srgb, var(--accent) 55%, var(--card-2)));
+  opacity: 0.75;
+}
+
+.jar-label {
+  position: absolute;
+  inset: 0;
   display: flex;
   flex-direction: column;
   align-items: center;
   justify-content: center;
-  min-height: 100dvh;
-  padding: 24px;
+  gap: 2px;
+  padding: 8px;
   text-align: center;
-  gap: 12px;
 }
 
-.age-pill {
-  display: inline-flex;
-  padding: 6px 12px;
-  border-radius: 999px;
-  background: var(--accent-soft);
-  color: var(--accent);
-  font-size: 0.8rem;
-  font-weight: 700;
+.jar-label strong {
+  font-family: var(--font-display);
+  font-size: 1.05rem;
+  line-height: 1.15;
+  overflow-wrap: anywhere;
 }
 
-.dob-row {
-  display: flex;
-  align-items: center;
-  gap: 8px;
-  justify-content: center;
-}
-
-.dob-field {
-  width: 72px;
-}
-
-.dob-input {
-  text-align: center;
-  font-size: 1.2rem;
-  font-weight: 700;
+.jar-amount {
+  font-weight: 800;
   font-variant-numeric: tabular-nums;
 }
 
-.dob-sep {
-  font-size: 1.2rem;
-  color: var(--muted);
-  font-weight: 700;
-}
-
-/* ---------- Legal ---------- */
-
-.legal-list {
-  display: flex;
-  flex-direction: column;
-}
-
-.legal-row {
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  gap: 12px;
-  padding: 14px 4px;
-  border-bottom: 1px solid var(--line);
-  color: var(--text);
-  font-size: 0.97rem;
-  font-weight: 600;
-  background: none;
-  border-top: none;
-  border-left: none;
-  border-right: none;
+.jar-shelf-board {
   width: 100%;
-  text-align: left;
-}
-
-.legal-row:last-child {
-  border-bottom: none;
-}
-
-.legal-doc {
-  font-size: 0.95rem;
-  line-height: 1.65;
-  color: var(--text);
-}
-
-.legal-doc h2 {
-  margin-top: 20px;
-}
-
-/* ---------- PIN pad (app lock) ---------- */
-
-.pin-pad {
-  display: flex;
-  flex-direction: column;
-  align-items: center;
-  gap: 20px;
-  padding: 24px 0;
-}
-
-.pin-dots {
-  display: flex;
-  gap: 12px;
-}
-
-.pin-dot {
-  width: 14px;
-  height: 14px;
-  border-radius: 50%;
-  border: 2px solid var(--line-strong);
-  background: transparent;
-}
-
-.pin-dot.filled {
-  background: var(--accent);
-  border-color: var(--accent);
-}
-
-.pin-grid {
-  display: grid;
-  grid-template-columns: repeat(3, 72px);
-  gap: 12px;
-}
-
-.pin-key {
-  width: 72px;
-  height: 72px;
-  border-radius: 50%;
-  border: 1px solid var(--line-strong);
-  background: var(--card);
-  color: var(--text);
-  font-size: 1.4rem;
-  font-weight: 700;
-  display: inline-flex;
-  align-items: center;
-  justify-content: center;
-}
-
-.pin-key:active {
+  height: 10px;
+  border-radius: 5px;
   background: var(--card-2);
+  border: 1px solid var(--line);
+  margin-top: -4px;
 }
 
-.pin-key-back {
+.jar-controls {
+  width: 100%;
+  margin-top: 10px;
+}
+
+.jar-controls .field-row {
+  align-items: center;
+}
+
+.jar-controls input {
+  min-height: 44px;
+  text-align: center;
+  padding: 6px 8px;
   font-size: 1rem;
-  color: var(--muted);
 }
 
-/* ---------- Update modal ---------- */
+.jar-step {
+  min-width: 44px;
+  min-height: 44px;
+  padding: 6px 10px;
+  border-radius: 12px;
+  border: 2px solid var(--line);
+  background: var(--card-soft);
+  color: var(--text);
+  font-size: 1.1rem;
+  font-weight: 800;
+}
 
+/* Footer */
+
+.footer {
+  margin-top: 8px;
+  padding-top: 20px;
+  text-align: center;
+  color: var(--muted);
+  font-size: 0.9rem;
+  line-height: 1.6;
+}
+
+@media (max-width: 480px) {
+  body {
+    font-size: 16px;
+  }
+
+  .timer-big {
+    font-size: 2.5rem;
+  }
+
+  .breath-circle {
+    width: 150px;
+    height: 150px;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .breath-circle {
+    transition: none !important;
+  }
+}
+
+/* Update available pop-up (native only) */
 .update-card {
+  background: var(--card);
+  border: 1px solid var(--line);
+  border-radius: 20px;
+  padding: 22px 20px;
   text-align: left;
 }
 
 .update-eyebrow {
-  font-size: 0.72rem;
-  font-weight: 700;
-  letter-spacing: 0.12em;
-  text-transform: uppercase;
   color: var(--accent);
-  margin: 0 0 8px;
+  font-size: 0.8rem;
+  font-weight: 800;
+  letter-spacing: 0.08em;
+  margin-bottom: 8px;
 }
 
 .update-title {
-  font-size: 1.35rem;
-  font-weight: 800;
-  letter-spacing: -0.02em;
-  margin: 0 0 8px;
+  font-family: var(--font-display);
+  font-size: 1.6rem;
+  line-height: 1.15;
+  margin: 0 0 10px;
+  color: var(--text);
 }
 
 .update-notes {
-  font-size: 0.95rem;
   color: var(--muted);
-  white-space: pre-line;
+  font-size: 1rem;
+  line-height: 1.5;
   margin: 0 0 16px;
+  white-space: pre-line;
 }
 
 .update-download {
-  margin-bottom: 8px;
+  margin-bottom: 6px;
 }
 
 .update-force-note {
-  font-size: 0.85rem;
-  color: var(--warn);
-  font-weight: 700;
-  margin-top: 8px;
-}
-
-/* ---------- Footer ---------- */
-
-.footer {
-  padding: 20px 16px 8px;
-  text-align: center;
-  font-size: 0.8rem;
-  color: var(--muted-2);
-}
-
-/* ---------- Reduced motion ---------- */
-
-@media (prefers-reduced-motion: reduce) {
-  * {
-    animation-duration: 0.01ms !important;
-    transition-duration: 0.01ms !important;
-  }
-}
-
-/* ---------- Remaining component classes ---------- */
-
-/* Accent variant (e.g. a highlighted stepper button). */
-.accent {
-  color: var(--accent);
-}
-
-.jar-step-btn.accent {
-  background: var(--accent);
-  border-color: var(--accent);
-  color: var(--accent-ink);
-}
-
-/* Saved chats list view. */
-.chat-list-view {
-  display: flex;
-  flex-direction: column;
-  gap: 8px;
-  padding: 16px;
-}
-
-/* Danger row / text (destructive settings rows). */
-.danger-row {
-  color: var(--danger);
-}
-
-.danger-text {
-  color: var(--danger);
+  color: var(--muted);
   font-size: 0.9rem;
-  font-weight: 600;
-}
-
-/* Date-of-birth year field is wider than month/day. */
-.dob-year {
-  width: 96px;
-}
-
-/* Small status dot. */
-.dot {
-  width: 8px;
-  height: 8px;
-  border-radius: 50%;
-  background: var(--accent);
-  display: inline-block;
-  flex-shrink: 0;
-}
-
-/* Hands Free full-screen overlay. */
-.driving-overlay {
-  position: fixed;
-  inset: 0;
-  z-index: 50;
-  background: var(--bg);
-  display: flex;
-  flex-direction: column;
-  align-items: center;
-  justify-content: center;
-  gap: 20px;
-  padding: 24px;
   text-align: center;
-}
-
-/* Generic input class (used on a few fields). */
-.input {
-  width: 100%;
-  min-height: 48px;
-  padding: 11px 14px;
-  border-radius: var(--radius-sm);
-  border: 1px solid var(--line-strong);
-  background: var(--bg-soft);
-  color: var(--text);
-  font-size: 1rem;
-  font-family: inherit;
-}
-
-/* Badge states. */
-.badge.live {
-  background: var(--accent-soft);
-  color: var(--accent);
-}
-
-.badge.offline {
-  background: var(--card-2);
-  color: var(--muted);
-}
-
-/* Breathing phase label. */
-.phase-label {
-  font-size: 1.1rem;
-  font-weight: 700;
-  color: var(--muted);
-}
-
-/* Theme swatch color bar + dot. */
-.swatch-bar {
-  height: 8px;
-  border-radius: 999px;
-  background: var(--accent);
-  margin-bottom: 8px;
-}
-
-.swatch-dot {
-  width: 12px;
-  height: 12px;
-  border-radius: 50%;
-  background: var(--accent);
-  display: inline-block;
-}
-
-/* Update modal dismiss button. */
-.update-dismiss {
-  margin-top: 4px;
-}
-
-/* Small "who" label (brand area). */
-.who {
-  font-size: 0.8rem;
-  color: var(--muted);
+  margin: 8px 0 0;
 }

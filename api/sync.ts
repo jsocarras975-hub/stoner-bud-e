@@ -27,7 +27,6 @@
 import { getPool, getSessionUser } from '../src/lib/auth-server.ts';
 import { isPreflight, readJsonBody, setCorsHeaders } from '../src/lib/cors.ts';
 import type { ReqLike, ResLike } from '../src/lib/cors.ts';
-import { clientIp, rateLimited } from '../src/lib/rate-limit.ts';
 import { isPersonaId } from '../src/voice.ts';
 import type { Pool, PoolClient } from 'pg';
 
@@ -1269,13 +1268,6 @@ export default async function handler(req: Req, res: Res): Promise<void> {
     }
     if (req.method !== 'GET' && req.method !== 'POST') {
       res.status(405).json({ ok: false, error: 'method_not_allowed' });
-      return;
-    }
-
-    // Rate limit (per IP, generous for normal sync use): caps hammering of
-    // the data/community/premium endpoint. Authenticated or not.
-    if (rateLimited(`sync:${clientIp(req)}`, 120, 60_000)) {
-      res.status(429).json({ ok: false, error: 'rate_limited' });
       return;
     }
 
