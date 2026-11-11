@@ -47,7 +47,13 @@ import { setKeyboardTheme } from './lib/keyboard';
 import StrainsTab from './StrainsTab';
 import Community from './Community';
 import SecretChat from './SecretChat';
+import Vault from './Vault';
+import FourTwentyChat from './FourTwentyChat';
 import { isSecretUnlocked, markSecretUnlocked, unlockSecretServer } from './lib/secret-chat';
+import { isVaultUnlocked, markVaultUnlocked } from './lib/vault';
+import { isFourTwentyUnlocked, markFourTwentyUnlocked, unlockFourTwentyServer } from './lib/fourtwenty-chat';
+import { BADGES, earnBadge, getBadges } from './lib/badges';
+import { isLitMode, markLitModeUnlocked, toggleLitMode } from './lib/lit-mode';
 import MusicTab from './MusicTab';
 import TonightTab from './TonightTab';
 import SettingsTab from './SettingsTab';
@@ -150,7 +156,7 @@ function apiUrl(): string {
   return `${apiBase()}/chat`;
 }
 
-type Tab = 'tonight' | 'chat' | 'tools' | 'plan' | 'strains' | 'music' | 'journal' | 'stash' | 'break' | 'dose' | 'settings' | 'account' | 'secret';
+type Tab = 'tonight' | 'chat' | 'tools' | 'plan' | 'strains' | 'music' | 'journal' | 'stash' | 'break' | 'dose' | 'settings' | 'account' | 'secret' | 'vault' | 'fourtwenty';
 type Source = 'live' | 'fallback' | null;
 
 /** True when a string from the native side names a real tab. */
@@ -159,7 +165,7 @@ function isTab(value: string): value is Tab {
     value === 'tonight' || value === 'chat' || value === 'tools' || value === 'plan' ||
     value === 'strains' || value === 'music' || value === 'journal' || value === 'stash' ||
     value === 'break' || value === 'dose' || value === 'settings' || value === 'account' ||
-    value === 'secret'
+    value === 'secret' || value === 'vault' || value === 'fourtwenty'
   );
 }
 
@@ -433,12 +439,44 @@ export default function App() {
       // Unlock it server-side too, so the room is only served to users who
       // figured out the secret — not just hidden in the UI.
       void unlockSecretServer();
+      earnBadge('secret-finder');
       if (!secretUnlocked) {
         markSecretUnlocked();
         setSecretUnlocked(true);
       }
     }
   }, [tab, secretUnlocked]);
+
+  // Hidden Strain Vault (B+E): once found it stays in the app (More menu).
+  const [vaultUnlocked, setVaultUnlocked] = useState<boolean>(() => isVaultUnlocked());
+
+  useEffect(() => {
+    if (tab === 'vault') {
+      earnBadge('vault-raider');
+      if (!vaultUnlocked) {
+        markVaultUnlocked();
+        setVaultUnlocked(true);
+      }
+    }
+  }, [tab, vaultUnlocked]);
+
+  // 420 Room (4+2): the deeper secret room. Once found it stays in the app.
+  const [fourtwentyUnlocked, setFourTwentyUnlocked] = useState<boolean>(() => isFourTwentyUnlocked());
+
+  useEffect(() => {
+    if (tab === 'fourtwenty') {
+      void unlockFourTwentyServer();
+      earnBadge('four-twenty');
+      if (!fourtwentyUnlocked) {
+        markFourTwentyUnlocked();
+        setFourTwentyUnlocked(true);
+      }
+    }
+  }, [tab, fourtwentyUnlocked]);
+
+  // Lit Mode (L+T): the glowing look. Once found it stays unlocked, and the
+  // app remembers whether it is on.
+  const [litMode, setLitModeState] = useState<boolean>(() => isLitMode());
   const [theme, setTheme] = useState<ThemeId>(() => loadTheme());
   const [ageConfirmed, setAgeConfirmed] = useState<boolean>(() => {
     try {
@@ -705,6 +743,14 @@ export default function App() {
       if (info.sharedText !== '') {
         setPendingQuestion(info.sharedText);
         setTab('chat');
+      } else if (info.tab === 'lit') {
+        // L+T on the keyboard: toggle Lit Mode (the glowing look) and land
+        // on Tonight. "lit" is not a real tab — it is a one-shot toggle.
+        markLitModeUnlocked();
+        earnBadge('lit-up');
+        const next = toggleLitMode();
+        setLitModeState(next);
+        setTab('tonight');
       } else if (isTab(info.tab)) {
         setTab(info.tab);
       }
@@ -1316,7 +1362,7 @@ export default function App() {
   );
 
   return (
-    <div className="app-shell">
+    <div className={litMode ? 'app-shell lit-mode' : 'app-shell'}>
       <div className="app-frame">
         <div className="garden-glow" aria-hidden />
         <header className="app-header">
@@ -1510,17 +1556,32 @@ export default function App() {
         />
       )}
       {tab === 'account' && (
-        <AuthTab
-          user={user}
-          onAuthChange={handleAuthChange}
-          onSyncNow={() => void syncNow('manual')}
-          syncMessage={syncMessage}
-          nights={journal.length}
-          stocked={stash.filter((i) => i.amount > 0).length}
-          onGoSettings={() => setTab('settings')}
-        />
+        <>
+          <AuthTab
+            user={user}
+            onAuthChange={handleAuthChange}
+            onSyncNow={() => void syncNow('manual')}
+            syncMessage={syncMessage}
+            nights={journal.length}
+            stocked={stash.filter((i) => i.amount > 0).length}
+            onGoSettings={() => setTab('settings')}
+          />
+          {getBadges().length > 0 && (
+            <section className="card" aria-label="Secret badges">
+              <p className="eyebrow">🏅 Secret badges</p>
+              <p className="muted">Things you found that most people never will.</p>
+              {BADGES.filter((b) => getBadges().includes(b.id)).map((b) => (
+                <p key={b.id} style={{ margin: '6px 0' }}>
+                  {b.emoji} <strong>{b.name}</strong> — {b.detail}
+                </p>
+              ))}
+            </section>
+          )}
+        </>
       )}
       {tab === 'secret' && <SecretChat user={user} />}
+      {tab === 'vault' && <Vault onAskAboutStrain={askAboutStrain} />}
+      {tab === 'fourtwenty' && <FourTwentyChat user={user} />}
         </div>
 
         {moreOpen && (
@@ -1614,6 +1675,34 @@ export default function App() {
                 >
                   <span aria-hidden>🤫</span>
                   <span>Secret</span>
+                </button>
+              )}
+              {vaultUnlocked && (
+                <button
+                  type="button"
+                  role="menuitem"
+                  className="more-item"
+                  onClick={() => {
+                    setTab('vault');
+                    setMoreOpen(false);
+                  }}
+                >
+                  <span aria-hidden>🗝️</span>
+                  <span>Vault</span>
+                </button>
+              )}
+              {fourtwentyUnlocked && (
+                <button
+                  type="button"
+                  role="menuitem"
+                  className="more-item"
+                  onClick={() => {
+                    setTab('fourtwenty');
+                    setMoreOpen(false);
+                  }}
+                >
+                  <span aria-hidden>🌿</span>
+                  <span>420 Room</span>
                 </button>
               )}
             </div>

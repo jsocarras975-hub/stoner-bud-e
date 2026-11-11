@@ -6,6 +6,7 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
 import { CommunityError, getDisplayName, MAX_POST_CHARS, setDisplayName } from './lib/community';
 import { fetchSecretFeed, postSecretMessage, type SecretMessage } from './lib/secret-chat';
+import { redeemSecretCode } from './lib/secret-codes';
 
 export default function SecretChat({ user }: { user: { name: string } | null }) {
   const [messages, setMessages] = useState<SecretMessage[]>([]);
@@ -15,6 +16,8 @@ export default function SecretChat({ user }: { user: { name: string } | null }) 
   const [nameSaved, setNameSaved] = useState(false);
   const [draft, setDraft] = useState('');
   const [posting, setPosting] = useState(false);
+  const [code, setCode] = useState('');
+  const [codeMessage, setCodeMessage] = useState<string | null>(null);
   const listRef = useRef<HTMLDivElement>(null);
   const stickToBottom = useRef(true);
 
@@ -69,6 +72,28 @@ export default function SecretChat({ user }: { user: { name: string } | null }) 
     setDisplayName(name.trim() || 'Bud-E friend');
     setNameSaved(true);
     window.setTimeout(() => setNameSaved(false), 2000);
+  }
+
+  async function handlePassIt(): Promise<void> {
+    if (posting) return;
+    setPosting(true);
+    setError(null);
+    try {
+      const displayName = getDisplayName('Buddy');
+      const created = await postSecretMessage(`🍃 ${displayName} passed it around the room`);
+      setMessages((prev) => [...prev, created]);
+      stickToBottom.current = true;
+    } catch (e) {
+      setError(e instanceof CommunityError ? e.message : 'That did not go through — try again.');
+    } finally {
+      setPosting(false);
+    }
+  }
+
+  function handleCode(): void {
+    const result = redeemSecretCode(code);
+    setCodeMessage(result ?? 'Not a code — keep looking.');
+    if (result) setCode('');
   }
 
   return (
@@ -136,6 +161,35 @@ export default function SecretChat({ user }: { user: { name: string } | null }) 
         <button type="button" className="btn" onClick={() => void handlePost()} disabled={posting || draft.trim() === ''}>
           Send
         </button>
+      </div>
+      <div style={{ display: 'flex', gap: 8, marginTop: 8 }}>
+        <button type="button" className="btn secondary" onClick={() => void handlePassIt()} disabled={posting}>
+          🍃 Pass it
+        </button>
+      </div>
+      <div style={{ marginTop: 16 }}>
+        <label htmlFor="secret-code">Got a secret code?</label>
+        <div style={{ display: 'flex', gap: 8 }}>
+          <input
+            id="secret-code"
+            value={code}
+            maxLength={20}
+            onChange={(e) => setCode(e.target.value)}
+            onKeyDown={(e) => {
+              if (e.key === 'Enter') {
+                e.preventDefault();
+                handleCode();
+              }
+            }}
+            placeholder="Enter a code you found…"
+            aria-label="Secret code"
+            style={{ flex: 1, minWidth: 0 }}
+          />
+          <button type="button" className="btn secondary" onClick={handleCode} disabled={code.trim() === ''}>
+            Unlock
+          </button>
+        </div>
+        {codeMessage && <p className="muted" style={{ marginTop: 6 }}>{codeMessage}</p>}
       </div>
     </section>
   );

@@ -1,6 +1,7 @@
 /* Stoner Bud-E — night-garden theme (tokens from the Grok night-garden app).
    Themes switch via html[data-theme]: night (default), day, ember, moon,
-   plus premium forest and sunset, plus owner-only kartoon. */
+   plus premium forest and sunset, plus owner-only kartoon, plus secret
+   midnight (unlocked in the Strain Vault). */
 
 * {
   box-sizing: border-box;
@@ -136,6 +137,39 @@ html[data-theme='kartoon'] {
   --danger: #ffb0a4;
   --danger-bg: #3c2420;
   --warn: #f5c542;
+}
+
+/* Midnight (secret) — deep violet night, unlocked in the Strain Vault. */
+html[data-theme='midnight'] {
+  color-scheme: dark;
+  --bg: #070510;
+  --glow: #1c1038;
+  --surface: #0d0919;
+  --card: #150e2c;
+  --card-2: #1d1338;
+  --line: #4a2d8a;
+  --text: #f0ebfb;
+  --muted: #b3a3d8;
+  --accent: #a78bfa;
+  --accent-ink: #12081f;
+  --danger: #ffb0a4;
+  --danger-bg: #3c2420;
+  --warn: #f5c542;
+}
+
+/* Lit Mode — the glowing look, turned on by holding L + T on the keyboard.
+   Applied as a class on the app root; it layers a lime glow over any theme. */
+.lit-mode {
+  --accent: #d4ff4d;
+}
+.lit-mode .card {
+  box-shadow: 0 0 18px rgba(198, 242, 92, 0.22), 0 0 2px rgba(198, 242, 92, 0.35);
+}
+.lit-mode .btn {
+  box-shadow: 0 0 14px rgba(198, 242, 92, 0.35);
+}
+.lit-mode .app-header {
+  box-shadow: 0 2px 18px rgba(198, 242, 92, 0.25);
 }
 
 html[data-text='small'] { font-size: 15px; }
@@ -1850,6 +1884,12 @@ button {
   --swatch-card: #152433;
   --swatch-ink: #eef4f8;
   --swatch-accent: #7ddec8;
+}
+.theme-swatch[data-swatch='midnight'] {
+  --swatch-bg: #070510;
+  --swatch-card: #150e2c;
+  --swatch-ink: #f0ebfb;
+  --swatch-accent: #a78bfa;
 }
 
 .theme-swatch .swatch-dot {

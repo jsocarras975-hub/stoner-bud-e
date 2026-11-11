@@ -4,7 +4,7 @@
 // functions (Groq voice id + direction for /api/voice/speak, tone line for
 // /api/chat) — same pattern as src/bude.ts.
 
-export type PersonaId = 'chill' | 'cosmic' | 'giggly' | 'wise' | 'coach' | 'poet' | 'kartoon';
+export type PersonaId = 'chill' | 'cosmic' | 'giggly' | 'wise' | 'coach' | 'poet' | 'kartoon' | 'dj';
 
 export interface Persona {
   id: PersonaId;
@@ -28,6 +28,8 @@ export interface Persona {
   rate: number;
   /** Owner-only persona — only the owner tier can pick it. */
   ownerOnly?: boolean;
+  /** Secret persona — hidden until the matching secret is found. */
+  secret?: 'fourtwenty';
 }
 
 export const PERSONAS: Persona[] = [
@@ -110,6 +112,19 @@ export const PERSONAS: Persona[] = [
     pitch: 1.05,
     rate: 1.0,
     ownerOnly: true,
+  },
+  // Secret — only shows once the deeper 420 Room is found (4+2).
+  {
+    id: 'dj',
+    name: 'DJ',
+    tagline: 'The 420 Room DJ — keeps the vibe rolling.',
+    voice: 'leo',
+    gender: 'male',
+    direction: '[upbeat]',
+    tone: 'Talk like a chill party DJ at 4:20 — upbeat, warm, a little playful, always keeping the vibe rolling. Plain words, no fluff.',
+    pitch: 1.0,
+    rate: 1.0,
+    secret: 'fourtwenty',
   },
 ];
 

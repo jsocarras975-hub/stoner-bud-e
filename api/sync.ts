@@ -181,6 +181,23 @@ const SECRET_UNLOCKS_DDL = `create table if not exists secret_unlocks (
   unlocked_at timestamptz not null default CURRENT_TIMESTAMP
 )`;
 
+// 420 Room: the deeper secret room. Same shape as the Secret Room, but it
+// needs BOTH unlocks — the J+S secret AND the 4+2 gesture — so only users
+// who found both secrets get in.
+const FOURTWENTY_MESSAGES_DDL = `create table if not exists fourtwenty_messages (
+  id uuid not null primary key default gen_random_uuid(),
+  user_id text not null references "user" ("id") on delete cascade,
+  display_name text not null,
+  body text not null,
+  created_at timestamptz not null default CURRENT_TIMESTAMP
+);
+create index if not exists fourtwenty_messages_created_at_idx on fourtwenty_messages (created_at desc)`;
+
+const FOURTWENTY_UNLOCKS_DDL = `create table if not exists fourtwenty_unlocks (
+  user_id text not null primary key references "user" ("id") on delete cascade,
+  unlocked_at timestamptz not null default CURRENT_TIMESTAMP
+)`;
+
 const STRAIN_REVIEWS_DDL = `create table if not exists strain_reviews (
   user_id text not null references "user" ("id") on delete cascade,
   strain_id text not null,
@@ -285,6 +302,8 @@ async function ensureCommunityTables(pool: Pool): Promise<void> {
     await pool.query(COMMUNITY_COMMENT_LIKES_DDL);
     await pool.query(SECRET_MESSAGES_DDL);
     await pool.query(SECRET_UNLOCKS_DDL);
+    await pool.query(FOURTWENTY_MESSAGES_DDL);
+    await pool.query(FOURTWENTY_UNLOCKS_DDL);
     await pool.query(STRAIN_REVIEWS_DDL);
     await pool.query(PREMIUM_CODES_DDL);
     await pool.query(CASHAPP_PAYMENTS_DDL);
@@ -558,6 +577,117 @@ async function handleCommunity(
       created_at: string;
     }>(
       `insert into secret_messages (user_id, display_name, body)
+       values ($1, $2, $3) returning id, created_at`,
+      [user.id, displayName, text],
+    );
+    const row = inserted.rows[0];
+    if (!row) {
+      res.status(500).json({ ok: false, error: 'sync_failed' });
+      return;
+    }
+    res.status(200).json({
+      ok: true,
+      message: {
+        id: row.id,
+        userId: user.id,
+        displayName,
+        body: text,
+        createdAt: row.created_at,
+        mine: true,
+      },
+    });
+    return;
+  }
+
+  // 420 Room — the deeper secret room. Needs BOTH unlocks: the J+S secret
+  // AND the 4+2 gesture. Same 280-char cap and 10/hour limit as the
+  // Secret Room. The client polls for the live feel.
+  if (action === 'fourtwenty_unlock') {
+    await pool.query(
+      `insert into fourtwenty_unlocks (user_id) values ($1)
+       on conflict (user_id) do nothing`,
+      [user.id],
+    );
+    res.status(200).json({ ok: true, unlocked: true });
+    return;
+  }
+
+  async function fourtwentyUnlocked(): Promise<boolean> {
+    const r = await pool.query<{ n: string }>(
+      `select count(*) as n from fourtwenty_unlocks where user_id = $1`,
+      [user.id],
+    );
+    return Number(r.rows[0]?.n ?? 0) > 0;
+  }
+
+  if (action === 'fourtwenty_feed') {
+    if (!(await secretUnlocked())) {
+      res.status(403).json({ ok: false, error: 'secret_locked' });
+      return;
+    }
+    if (!(await fourtwentyUnlocked())) {
+      res.status(403).json({ ok: false, error: 'fourtwenty_locked' });
+      return;
+    }
+    const rows = await pool.query<{
+      id: string;
+      user_id: string;
+      display_name: string;
+      body: string;
+      created_at: string;
+      mine: boolean;
+    }>(
+      `select id, user_id, display_name, body, created_at,
+              (user_id = $1) as mine
+       from fourtwenty_messages
+       order by created_at desc
+       limit $2`,
+      [user.id, FEED_LIMIT],
+    );
+    res.status(200).json({
+      ok: true,
+      messages: rows.rows.map((r) => ({
+        id: r.id,
+        userId: r.user_id,
+        displayName: r.display_name,
+        body: r.body,
+        createdAt: r.created_at,
+        mine: r.mine,
+      })),
+    });
+    return;
+  }
+
+  if (action === 'fourtwenty_post') {
+    if (!(await secretUnlocked())) {
+      res.status(403).json({ ok: false, error: 'secret_locked' });
+      return;
+    }
+    if (!(await fourtwentyUnlocked())) {
+      res.status(403).json({ ok: false, error: 'fourtwenty_locked' });
+      return;
+    }
+    const displayName =
+      typeof body.displayName === 'string' ? body.displayName.trim().slice(0, MAX_DISPLAY_NAME_CHARS) : '';
+    const text = typeof body.body === 'string' ? body.body.trim() : '';
+    if (displayName === '' || text === '' || text.length > MAX_POST_CHARS) {
+      res.status(400).json({ ok: false, error: 'bad_community_body' });
+      return;
+    }
+    const recent = await pool.query<{ n: string }>(
+      `select count(*) as n from fourtwenty_messages
+       where user_id = $1 and created_at > now() - interval '1 hour'`,
+      [user.id],
+    );
+    if (Number(recent.rows[0]?.n ?? 0) >= MAX_POSTS_PER_HOUR) {
+      res.status(429).json({ ok: false, error: 'too_many_posts' });
+      return;
+    }
+    const inserted = await pool.query<{
+      id: string;
+      created_at: string;
+    }>(
+      `insert into fourtwenty_messages (user_id, display_name, body)
        values ($1, $2, $3) returning id, created_at`,
       [user.id, displayName, text],
     );

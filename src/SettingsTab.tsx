@@ -11,6 +11,8 @@
 import { useEffect, useState } from 'react';
 import { THEMES } from './theme';
 import type { ThemeId } from './theme';
+import { isVaultUnlocked } from './lib/vault';
+import { isFourTwentyUnlocked } from './lib/fourtwenty-chat';
 import { APP_VERSION, COPYRIGHT, getLegalDoc } from './legal';
 import type { LegalDoc } from './legal';
 import type { AuthUser } from './lib/auth-client';
@@ -707,7 +709,7 @@ export default function SettingsTab(props: {
             <section className="card" aria-label="Appearance">
               <p className="muted">Swap the whole garden. It stays on this phone.</p>
               <div className="theme-grid">
-                {THEMES.map((item) => {
+                {THEMES.filter((item) => !item.secret || (item.secret === 'vault' && isVaultUnlocked())).map((item) => {
                   const locked =
                     (item.premium && !premiumTier) ||
                     (item.ownerOnly && premiumTier !== 'owner');
@@ -1008,9 +1010,11 @@ export default function SettingsTab(props: {
               <p className="muted">Pick how Bud-E sounds, and whether it talks back out loud.</p>
               <Label>Buddy voice</Label>
               <ChipRow>
-                {PERSONAS.map((p) => {
+                {PERSONAS.filter((p) => !p.secret || (p.secret === 'fourtwenty' && isFourTwentyUnlocked())).map((p) => {
+                  // Secret personas (DJ) are gated by the secret, not by
+                  // premium — finding the 420 Room is what unlocks them.
                   const locked =
-                    (isPremiumPersona(p.id) && !premiumTier) ||
+                    (!p.secret && isPremiumPersona(p.id) && !premiumTier) ||
                     (isOwnerPersona(p.id) && premiumTier !== 'owner');
                   return (
                     <Chip

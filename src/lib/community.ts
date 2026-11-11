@@ -58,6 +58,7 @@ export class CommunityError extends Error {
     | 'already_premium'
     | 'not_owner'
     | 'secret_locked'
+    | 'fourtwenty_locked'
     | 'other';
   constructor(code: CommunityError['code'], message?: string) {
     super(message ?? code);
@@ -116,6 +117,9 @@ function communityError(status: number, body: unknown): CommunityError {
   }
   if (code === 'secret_locked') {
     return new CommunityError('secret_locked', 'This room is only for users who figured out the secret.');
+  }
+  if (code === 'fourtwenty_locked') {
+    return new CommunityError('fourtwenty_locked', 'This room needs both secrets — the Secret Room and the 4+2 hold.');
   }
   return new CommunityError('other', 'That did not go through — try again.');
 }

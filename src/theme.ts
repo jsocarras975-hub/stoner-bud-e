@@ -4,7 +4,7 @@
 export const THEME_KEY = 'bude-theme-v1';
 export const AGE_GATE_KEY = 'bude-age-gate-v1';
 
-export const THEMES: { id: ThemeId; name: string; detail: string; premium?: boolean; ownerOnly?: boolean }[] = [
+export const THEMES: { id: ThemeId; name: string; detail: string; premium?: boolean; ownerOnly?: boolean; secret?: 'vault' }[] = [
   { id: 'night', name: 'Night garden', detail: 'Deep green. The original.' },
   { id: 'day', name: 'Day garden', detail: 'Paper and daylight.' },
   { id: 'ember', name: 'Amber lounge', detail: 'Warm lamp light.' },
@@ -14,9 +14,11 @@ export const THEMES: { id: ThemeId; name: string; detail: string; premium?: bool
   { id: 'sunset', name: 'Sunset', detail: 'Warm oranges and pinks.', premium: true },
   // Owner only — the Kartoon cut, deep purple with the Bud-E lime.
   { id: 'kartoon', name: 'Kartoon', detail: 'Deep purple night, lime accent.', ownerOnly: true },
+  // Secret — only shows once the hidden Strain Vault is found (B+E).
+  { id: 'midnight', name: 'Midnight', detail: 'Deep violet night, unlocked in the Vault.', secret: 'vault' },
 ];
 
-export type ThemeId = 'night' | 'day' | 'ember' | 'moon' | 'forest' | 'sunset' | 'kartoon';
+export type ThemeId = 'night' | 'day' | 'ember' | 'moon' | 'forest' | 'sunset' | 'kartoon' | 'midnight';
 
 export function isPremiumTheme(id: string): boolean {
   return THEMES.some((t) => t.id === id && t.premium);

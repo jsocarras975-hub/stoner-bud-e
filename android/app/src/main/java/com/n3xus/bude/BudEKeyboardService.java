@@ -117,24 +117,73 @@ public class BudEKeyboardService extends InputMethodService {
         }
     };
 
-    /** Secret gesture: hold J + S together for 3 seconds and the app's
-     *  secret section opens. Both keys must stay down the whole time. */
-    private static final long SECRET_HOLD_MS = 3000;
-    private boolean jDown = false;
-    private boolean sDown = false;
-    /** Release-clicks to swallow after the secret fires, so the held J
-     *  and S don't also type themselves into the text field. */
-    private int secretSuppressCount = 0;
-    private final Handler secretHandler = new Handler(Looper.getMainLooper());
-    private final Runnable secretRunnable = new Runnable() {
-        @Override
-        public void run() {
-            jDown = false;
-            sDown = false;
-            secretSuppressCount = 2;
-            openSecretSection();
-        }
+    /** Secret hold gestures: hold two keys together for 3 seconds.
+     *  J+S opens the Secret Room, B+E the hidden Strain Vault, 4+2 the
+     *  420 Room, L+T toggles Lit Mode. Both keys must stay down the
+     *  whole time. "lit" is a toggle, not a tab — the app reads it from
+     *  the launch tab and switches Lit Mode on/off. */
+    private static final long GESTURE_HOLD_MS = 3000;
+    private static final String[][] GESTURE_PAIRS = {
+        {"j", "s", "secret"},
+        {"b", "e", "vault"},
+        {"4", "2", "fourtwenty"},
+        {"l", "t", "lit"},
     };
+    private final java.util.Set<String> gestureDown = new java.util.HashSet<>();
+    /** Release-clicks to swallow after a gesture fires, so the held keys
+     *  don't also type themselves into the text field. */
+    private final java.util.Set<String> suppressKeys = new java.util.HashSet<>();
+    private final Handler gestureHandler = new Handler(Looper.getMainLooper());
+    private Runnable pendingGesture = null;
+
+    private static boolean isGestureKey(String label) {
+        for (String[] pair : GESTURE_PAIRS) {
+            if (pair[0].equals(label) || pair[1].equals(label)) return true;
+        }
+        return false;
+    }
+
+    private void onGestureKeyDown(String label) {
+        gestureDown.add(label);
+        for (String[] pair : GESTURE_PAIRS) {
+            if (gestureDown.contains(pair[0]) && gestureDown.contains(pair[1])) {
+                final String tab = pair[2];
+                if (pendingGesture != null) gestureHandler.removeCallbacks(pendingGesture);
+                pendingGesture = () -> {
+                    gestureDown.clear();
+                    suppressKeys.add(pair[0]);
+                    suppressKeys.add(pair[1]);
+                    pendingGesture = null;
+                    openTab(tab);
+                };
+                gestureHandler.postDelayed(pendingGesture, GESTURE_HOLD_MS);
+                return;
+            }
+        }
+    }
+
+    private void onGestureKeyUp(String label) {
+        gestureDown.remove(label);
+        if (pendingGesture != null) {
+            gestureHandler.removeCallbacks(pendingGesture);
+            pendingGesture = null;
+        }
+    }
+
+    /** Attach the hold-gesture tracking to a key (letter or number row). */
+    private void attachGestureTouch(Button key, String label) {
+        if (!isGestureKey(label)) return;
+        key.setOnTouchListener((v, event) -> {
+            int action = event.getActionMasked();
+            if (action == android.view.MotionEvent.ACTION_DOWN) {
+                onGestureKeyDown(label);
+            } else if (action == android.view.MotionEvent.ACTION_UP
+                    || action == android.view.MotionEvent.ACTION_CANCEL) {
+                onGestureKeyUp(label);
+            }
+            return false;
+        });
+    }
 
     /** The phone's launcher apps, for the Apps tab. Loaded once, lazily,
      *  the first time the tab opens, then cached. */
@@ -549,10 +598,9 @@ public class BudEKeyboardService extends InputMethodService {
         key.setTag(letter);
         letterKeys.add(key);
         key.setOnClickListener(v -> {
-            // A J or S released right after the secret gesture fired must
-            // not also type itself into the text field.
-            if (("j".equals(letter) || "s".equals(letter)) && secretSuppressCount > 0) {
-                secretSuppressCount--;
+            // A key released right after a hold gesture fired must not
+            // also type itself into the text field.
+            if (suppressKeys.remove(letter)) {
                 v.performHapticFeedback(HapticFeedbackConstants.KEYBOARD_TAP);
                 return;
             }
@@ -565,36 +613,26 @@ public class BudEKeyboardService extends InputMethodService {
             }
             updateSuggestions();
         });
-        // Secret gesture: J + S held together for 3 seconds opens the
-        // app's secret section. Track press/release on just these two keys.
-        if ("j".equals(letter) || "s".equals(letter)) {
-            key.setOnTouchListener((v, event) -> {
-                int action = event.getActionMasked();
-                if (action == android.view.MotionEvent.ACTION_DOWN) {
-                    if ("j".equals(letter)) jDown = true;
-                    if ("s".equals(letter)) sDown = true;
-                    if (jDown && sDown) {
-                        secretHandler.postDelayed(secretRunnable, SECRET_HOLD_MS);
-                    }
-                } else if (action == android.view.MotionEvent.ACTION_UP
-                        || action == android.view.MotionEvent.ACTION_CANCEL) {
-                    if ("j".equals(letter)) jDown = false;
-                    if ("s".equals(letter)) sDown = false;
-                    secretHandler.removeCallbacks(secretRunnable);
-                }
-                return false;
-            });
-        }
+        // Secret hold gestures (J+S, B+E, L+T) — track press/release.
+        attachGestureTouch(key, letter);
         return key;
     }
 
     private Button makeTextKey(String text) {
         Button key = makeKey(text, 1f);
         key.setOnClickListener(v -> {
+            // A number key released right after a hold gesture fired must
+            // not also type itself into the text field (4+2 → 420 Room).
+            if (suppressKeys.remove(text)) {
+                v.performHapticFeedback(HapticFeedbackConstants.KEYBOARD_TAP);
+                return;
+            }
             v.performHapticFeedback(HapticFeedbackConstants.KEYBOARD_TAP);
             commitText(text);
             updateSuggestions();
         });
+        // Secret hold gesture on the number row (4+2 → 420 Room).
+        attachGestureTouch(key, text);
         return key;
     }
 
@@ -805,13 +843,14 @@ public class BudEKeyboardService extends InputMethodService {
         startActivity(intent);
     }
 
-    /** Secret gesture: open the app straight into its hidden secret
-     *  section (the "secret" tab, read by the app via launch info). */
-    private void openSecretSection() {
+    /** Secret hold gesture: open the app straight into a hidden section
+     *  (the tab id, read by the app via launch info). "lit" is not a tab —
+     *  the app reads it as "toggle Lit Mode". */
+    private void openTab(String tab) {
         Intent intent = getPackageManager().getLaunchIntentForPackage(getPackageName());
         if (intent == null) return;
         intent.addFlags(Intent.FLAG_ACTIVITY_NEW_TASK);
-        intent.putExtra(BudELaunchInfo.EXTRA_TAB, "secret");
+        intent.putExtra(BudELaunchInfo.EXTRA_TAB, tab);
         startActivity(intent);
     }
 
