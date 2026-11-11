@@ -348,6 +348,7 @@ export default function SettingsTab(props: {
   const [lockNote, setLockNote] = useState('');
   const [exporting, setExporting] = useState(false);
   const [exportNote, setExportNote] = useState<string | null>(null);
+  const [clearNote, setClearNote] = useState<string | null>(null);
   const [lockError, setLockError] = useState(false);
   const [lockBusy, setLockBusy] = useState(false);
 
@@ -1506,12 +1507,32 @@ export default function SettingsTab(props: {
           {view === 'data' && (
             <section className="card" aria-label="Privacy">
               <p className="muted">These stay on this device until you clear them.</p>
-              <button type="button" className="btn secondary btn-block" onClick={onClearChats}>
+              <button
+                type="button"
+                className="btn secondary btn-block"
+                onClick={() => {
+                  onClearChats();
+                  setClearNote('All chats cleared.');
+                }}
+              >
                 Clear all chats
               </button>
-              <button type="button" className="btn secondary btn-block" style={{ marginTop: 8 }} onClick={onClearJournal}>
+              <button
+                type="button"
+                className="btn secondary btn-block"
+                style={{ marginTop: 8 }}
+                onClick={() => {
+                  onClearJournal();
+                  setClearNote('Journal cleared.');
+                }}
+              >
                 Clear journal
               </button>
+              {clearNote && (
+                <p className="muted" role="status" style={{ marginTop: 12, marginBottom: 0 }}>
+                  {clearNote}
+                </p>
+              )}
               <button
                 type="button"
                 className="btn secondary btn-block"

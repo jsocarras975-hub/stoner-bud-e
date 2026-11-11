@@ -1607,8 +1607,20 @@ export default function App() {
           premiumTier={premiumTier}
           personalization={personalization}
           onPersonalization={setPersonalization}
-          onClearChats={() => { setChats([]); setCurrentChatId(null); }}
-          onClearJournal={() => setJournal([])}
+          onClearChats={() => {
+            // Queue a tombstone per chat first — without them the next
+            // sync pulls the chats back down from the server and the
+            // clear looks like it did nothing.
+            chats.forEach((c) => queueDeletion('chat', c.id));
+            setChats([]);
+            setCurrentChatId(null);
+          }}
+          onClearJournal={() => {
+            // Same: tombstone every entry first, or the server resurrects
+            // the journal on the next sync.
+            journal.forEach((e) => queueDeletion('journal', e.id));
+            setJournal([]);
+          }}
           journal={journal}
           chats={chats}
           lockSettings={lockSettings}
