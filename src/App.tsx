@@ -1880,12 +1880,12 @@ export default function App() {
         </div>
 
         {/* Floating Bud-E — he bobs at the top center of the screen,
-            and tapping him opens the chat. */}
+            and tapping him opens your chats. */}
         <button
           type="button"
           className="bude-avatar-float"
-          onClick={() => setTab('chat')}
-          aria-label="Open chat with Bud-E"
+          onClick={() => { setTab('chat'); setShowChatList(true); }}
+          aria-label="Open your chats"
         >
           <BudEAvatar mood={floatMood} />
         </button>
@@ -2689,9 +2689,6 @@ function ChatTab({
             </p>
           </div>
           <div style={{ display: 'flex', gap: 8, flexShrink: 0 }}>
-            <button type="button" className="btn" onClick={() => setShowChatList(true)}>
-              Chats
-            </button>
             <button type="button" className="btn secondary" onClick={onOpenDriving}>
               🎙️ Hands Free
             </button>
