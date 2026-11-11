@@ -48,6 +48,27 @@ export default function BudEAvatar({ mood = 'idle' }: { mood?: BudEMood }) {
         <circle cx="92" cy="54" r="4" fill="#ffffff" opacity="0" className="bude-smoke bude-smoke-1" />
         <circle cx="96" cy="46" r="5" fill="#ffffff" opacity="0" className="bude-smoke bude-smoke-2" />
         <circle cx="90" cy="38" r="6" fill="#ffffff" opacity="0" className="bude-smoke bude-smoke-3" />
+        {/* A laptop in front — Bud-E is sitting at it, looking things up
+            and doing what was asked. The screen shows a search bar with a
+            blinking cursor; while he is thinking it shows loading dots. */}
+        <g>
+          <rect x="26" y="92" width="68" height="26" rx="4" fill="#1e293b" stroke="#475569" strokeWidth="1.5" />
+          {mood === 'thinking' ? (
+            <g fill="#a3e635">
+              <circle cx="48" cy="105" r="2.5" className="bude-dot bude-dot-1" />
+              <circle cx="60" cy="105" r="2.5" className="bude-dot bude-dot-2" />
+              <circle cx="72" cy="105" r="2.5" className="bude-dot bude-dot-3" />
+            </g>
+          ) : (
+            <g>
+              <rect x="32" y="97" width="56" height="7" rx="3.5" fill="#334155" />
+              <rect x="35" y="99" width="3" height="3" rx="1" fill="#a3e635" className="bude-cursor" />
+              <rect x="32" y="108" width="40" height="3" rx="1.5" fill="#64748b" />
+              <rect x="32" y="113" width="28" height="3" rx="1.5" fill="#475569" />
+            </g>
+          )}
+          <path d="M20 118 L100 118 L104 124 L16 124 Z" fill="#334155" stroke="#475569" strokeWidth="1" />
+        </g>
       </svg>
     </div>
   );

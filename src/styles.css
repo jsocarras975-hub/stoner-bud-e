@@ -1226,6 +1226,36 @@ button {
   100% { transform: translateY(-24px) translateX(5px) scale(1.5); opacity: 0; }
 }
 
+/* Laptop screen — the search cursor blinks, and the loading dots bounce
+ * one after another while Bud-E is thinking. */
+.bude-cursor {
+  animation: bude-cursor 1s steps(2) infinite;
+}
+
+.bude-dot {
+  animation: bude-dot 1.2s ease-in-out infinite;
+  transform-origin: center;
+  transform-box: fill-box;
+}
+
+.bude-dot-2 {
+  animation-delay: 0.15s;
+}
+
+.bude-dot-3 {
+  animation-delay: 0.3s;
+}
+
+@keyframes bude-cursor {
+  0%, 100% { opacity: 1; }
+  50% { opacity: 0; }
+}
+
+@keyframes bude-dot {
+  0%, 100% { transform: translateY(0); }
+  50% { transform: translateY(-4px); }
+}
+
 @keyframes bude-bob {
   0%, 100% { transform: translateY(0) rotate(0deg); }
   50% { transform: translateY(-5px) rotate(-1.5deg); }
