@@ -46,6 +46,8 @@ import type { ChatImage, ChatMessage, Method, Session, TriviaQuestion } from './
 import { setKeyboardTheme } from './lib/keyboard';
 import StrainsTab from './StrainsTab';
 import Community from './Community';
+import SecretChat from './SecretChat';
+import { isSecretUnlocked, markSecretUnlocked } from './lib/secret-chat';
 import MusicTab from './MusicTab';
 import TonightTab from './TonightTab';
 import SettingsTab from './SettingsTab';
@@ -422,6 +424,16 @@ function formatCountdown(totalSeconds: number): string {
 
 export default function App() {
   const [tab, setTab] = useState<Tab>('tonight');
+  // Secret live chat room: once a user figures out the J + S gesture it
+  // stays in their app (More menu) from then on.
+  const [secretUnlocked, setSecretUnlocked] = useState<boolean>(() => isSecretUnlocked());
+
+  useEffect(() => {
+    if (tab === 'secret' && !secretUnlocked) {
+      markSecretUnlocked();
+      setSecretUnlocked(true);
+    }
+  }, [tab, secretUnlocked]);
   const [theme, setTheme] = useState<ThemeId>(() => loadTheme());
   const [ageConfirmed, setAgeConfirmed] = useState<boolean>(() => {
     try {
@@ -1503,28 +1515,7 @@ export default function App() {
           onGoSettings={() => setTab('settings')}
         />
       )}
-      {tab === 'secret' && (
-        <section>
-          <p className="eyebrow">🤫 Secret</p>
-          <h1>You found it.</h1>
-          <p className="muted">
-            Hold J + S together for 3 seconds on the Bud-E keyboard and this opens.
-            Only you know it&rsquo;s here.
-          </p>
-          <div className="card">
-            <p className="eyebrow">🌿 Hidden strain</p>
-            <h2>Purple Punch</h2>
-            <p className="muted">Indica · THC about 18–22%</p>
-            <p>
-              Grape candy and berry — a heavy, sleepy relaxer. The one strain
-              that doesn&rsquo;t live in the main guide.
-            </p>
-            <button type="button" className="btn" onClick={() => askAboutStrain('Purple Punch')}>
-              💬 Ask Bud-E about it
-            </button>
-          </div>
-        </section>
-      )}
+      {tab === 'secret' && <SecretChat user={user} />}
         </div>
 
         {moreOpen && (
@@ -1606,6 +1597,20 @@ export default function App() {
                   </button>
                 );
               })}
+              {secretUnlocked && (
+                <button
+                  type="button"
+                  role="menuitem"
+                  className="more-item"
+                  onClick={() => {
+                    setTab('secret');
+                    setMoreOpen(false);
+                  }}
+                >
+                  <span aria-hidden>🤫</span>
+                  <span>Secret</span>
+                </button>
+              )}
             </div>
           )}
           <nav className="bottom-nav" aria-label="Main">

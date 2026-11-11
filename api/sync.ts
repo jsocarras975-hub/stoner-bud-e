@@ -160,6 +160,19 @@ const COMMUNITY_COMMENT_LIKES_DDL = `create table if not exists community_commen
   primary key (comment_id, user_id)
 )`;
 
+// Secret live chat room: one row per message. Only users who figured out
+// the secret gesture (J + S held together on the Bud-E keyboard) ever see
+// this room, and once unlocked it stays in their app. Same shape as a
+// community post, but no likes/reports — just a live feed.
+const SECRET_MESSAGES_DDL = `create table if not exists secret_messages (
+  id uuid not null primary key default gen_random_uuid(),
+  user_id text not null references "user" ("id") on delete cascade,
+  display_name text not null,
+  body text not null,
+  created_at timestamptz not null default CURRENT_TIMESTAMP
+);
+create index if not exists secret_messages_created_at_idx on secret_messages (created_at desc)`;
+
 const STRAIN_REVIEWS_DDL = `create table if not exists strain_reviews (
   user_id text not null references "user" ("id") on delete cascade,
   strain_id text not null,
@@ -262,6 +275,7 @@ async function ensureCommunityTables(pool: Pool): Promise<void> {
     await pool.query(COMMUNITY_REPORTS_DDL);
     await pool.query(COMMUNITY_COMMENTS_DDL);
     await pool.query(COMMUNITY_COMMENT_LIKES_DDL);
+    await pool.query(SECRET_MESSAGES_DDL);
     await pool.query(STRAIN_REVIEWS_DDL);
     await pool.query(PREMIUM_CODES_DDL);
     await pool.query(CASHAPP_PAYMENTS_DDL);
@@ -446,6 +460,83 @@ async function handleCommunity(
         createdAt: row.created_at,
         mine: true,
         liked: false,
+      },
+    });
+    return;
+  }
+
+  // Secret live chat room — the hidden room only users who figured out the
+  // J + S gesture ever see. Newest first; the client polls for the live
+  // feel. Same 280-char cap and 10/hour limit as board posts.
+  if (action === 'secret_feed') {
+    const rows = await pool.query<{
+      id: string;
+      user_id: string;
+      display_name: string;
+      body: string;
+      created_at: string;
+      mine: boolean;
+    }>(
+      `select id, user_id, display_name, body, created_at,
+              (user_id = $1) as mine
+       from secret_messages
+       order by created_at desc
+       limit $2`,
+      [user.id, FEED_LIMIT],
+    );
+    res.status(200).json({
+      ok: true,
+      messages: rows.rows.map((r) => ({
+        id: r.id,
+        userId: r.user_id,
+        displayName: r.display_name,
+        body: r.body,
+        createdAt: r.created_at,
+        mine: r.mine,
+      })),
+    });
+    return;
+  }
+
+  if (action === 'secret_post') {
+    const displayName =
+      typeof body.displayName === 'string' ? body.displayName.trim().slice(0, MAX_DISPLAY_NAME_CHARS) : '';
+    const text = typeof body.body === 'string' ? body.body.trim() : '';
+    if (displayName === '' || text === '' || text.length > MAX_POST_CHARS) {
+      res.status(400).json({ ok: false, error: 'bad_community_body' });
+      return;
+    }
+    const recent = await pool.query<{ n: string }>(
+      `select count(*) as n from secret_messages
+       where user_id = $1 and created_at > now() - interval '1 hour'`,
+      [user.id],
+    );
+    if (Number(recent.rows[0]?.n ?? 0) >= MAX_POSTS_PER_HOUR) {
+      res.status(429).json({ ok: false, error: 'too_many_posts' });
+      return;
+    }
+    const inserted = await pool.query<{
+      id: string;
+      created_at: string;
+    }>(
+      `insert into secret_messages (user_id, display_name, body)
+       values ($1, $2, $3) returning id, created_at`,
+      [user.id, displayName, text],
+    );
+    const row = inserted.rows[0];
+    if (!row) {
+      res.status(500).json({ ok: false, error: 'sync_failed' });
+      return;
+    }
+    res.status(200).json({
+      ok: true,
+      message: {
+        id: row.id,
+        userId: user.id,
+        displayName,
+        body: text,
+        createdAt: row.created_at,
+        mine: true,
       },
     });
     return;
