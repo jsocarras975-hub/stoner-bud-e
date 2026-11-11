@@ -114,7 +114,7 @@ function communityError(status: number, body: unknown): CommunityError {
     return new CommunityError('not_owner', 'Only the owner can do that.');
   }
   if (code === 'secret_locked') {
-    return new CommunityError('other', 'This room is only for users who figured out the secret.');
+    return new CommunityError('secret_locked', 'This room is only for users who figured out the secret.');
   }
   return new CommunityError('other', 'That did not go through — try again.');
 }

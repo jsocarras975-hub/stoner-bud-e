@@ -3,7 +3,7 @@
 // Once unlocked it stays in their app (localStorage flag). Same 280-char
 // cap and 10/hour limit as board posts. The client polls for the live feel.
 
-import { communityCall, getDisplayName } from './community';
+import { CommunityError, communityCall, getDisplayName } from './community';
 
 export interface SecretMessage {
   id: string;
@@ -55,8 +55,25 @@ function isMessage(value: unknown): value is SecretMessage {
   );
 }
 
+// If the server says the room is locked, the unlock was missed (an old
+// build, or the unlock call failed). Record the unlock and try once more,
+// so a missed unlock self-heals instead of leaving Send dead. Only the
+// secret_locked rejection is retried — it means the post was refused, never
+// stored, so retrying cannot double-post.
+async function secretCall(action: string, extra: Record<string, unknown> = {}): Promise<Record<string, unknown>> {
+  try {
+    return await communityCall(action, extra);
+  } catch (e) {
+    const code =
+      e instanceof CommunityError ? e.code : '';
+    if (code !== 'secret_locked') throw e;
+    await unlockSecretServer();
+    return await communityCall(action, extra);
+  }
+}
+
 export async function fetchSecretFeed(): Promise<SecretMessage[]> {
-  const body = await communityCall('secret_feed');
+  const body = await secretCall('secret_feed');
   const raw = (body as { messages?: unknown }).messages;
   if (!Array.isArray(raw)) return [];
   return raw.filter(isMessage).reverse();
@@ -64,7 +81,7 @@ export async function fetchSecretFeed(): Promise<SecretMessage[]> {
 
 export async function postSecretMessage(text: string): Promise<SecretMessage> {
   const displayName = getDisplayName('Buddy');
-  const body = await communityCall('secret_post', { displayName, body: text.trim() });
+  const body = await secretCall('secret_post', { displayName, body: text.trim() });
   const message = (body as { message?: unknown }).message;
   if (!isMessage(message)) throw new Error('bad_secret_message');
   return message;
