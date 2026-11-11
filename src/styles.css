@@ -1306,6 +1306,19 @@ button {
   gap: 12px;
 }
 
+/* Pinned chat top bar — Bud-E's avatar stays put at the top of the Buddy
+ * tab so it never scrolls away with the messages. */
+.chat-topbar {
+  flex-shrink: 0;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  padding: 10px 16px;
+  border-bottom: 1px solid var(--line);
+  background: var(--bg);
+}
+
 .chat-session-pill {
   width: 100%;
   padding: 10px 12px;

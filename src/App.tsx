@@ -2655,29 +2655,30 @@ function ChatTab({
         </div>
       ) : (
         <>
-        <div className="chat-scroll" role="log" aria-live="polite">
-          <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-            <div style={{ display: 'flex', alignItems: 'center', gap: 12 }}>
-              <BudEAvatar mood={avatarMood} />
-              <div>
-                <h1 className="page-title">Buddy</h1>
-                <p className="page-sub" style={{ marginBottom: 0 }}>
-                  {sending
-                    ? 'Bud-E is thinking…'
-                    : speakingIdx !== null
-                      ? 'Bud-E is speaking…'
-                      : 'Ask anything — Bud-E answers with your session in mind.'}
-                </p>
-              </div>
+        <div className="chat-topbar">
+          <div style={{ display: 'flex', alignItems: 'center', gap: 12, minWidth: 0 }}>
+            <BudEAvatar mood={avatarMood} />
+            <div style={{ minWidth: 0 }}>
+              <h1 className="page-title" style={{ margin: 0 }}>Buddy</h1>
+              <p className="page-sub" style={{ marginBottom: 0 }}>
+                {sending
+                  ? 'Bud-E is thinking…'
+                  : speakingIdx !== null
+                    ? 'Bud-E is speaking…'
+                    : 'Ask anything — Bud-E answers with your session in mind.'}
+              </p>
             </div>
+          </div>
+          <div style={{ display: 'flex', gap: 8, flexShrink: 0 }}>
             <button type="button" className="btn" onClick={() => setShowChatList(true)}>
               Chats
             </button>
-            <button type="button" className="btn secondary" onClick={onOpenDriving} style={{ marginLeft: 8 }}>
+            <button type="button" className="btn secondary" onClick={onOpenDriving}>
               🎙️ Hands Free
             </button>
           </div>
-
+        </div>
+        <div className="chat-scroll" role="log" aria-live="polite">
         <button type="button" className="chat-session-pill" onClick={onGoTonight}>
           {amount !== '' ? (
             <>
