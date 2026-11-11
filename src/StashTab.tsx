@@ -3,6 +3,7 @@
 // running low. Plain words, no selling, no sourcing talk.
 
 import { useEffect, useMemo, useState } from 'react';
+import JarGraphic from './JarGraphic';
 import { isRunningLow, lowNote, newStashId, withAmount } from './stash';
 import type { StashForm, StashItem } from './stash';
 import { usualStrains } from './recap';
@@ -59,6 +60,7 @@ function StashRow(props: {
 
   return (
     <article className="jar-card" aria-label={item.name}>
+      <JarGraphic item={item} />
       <div className="jar-card-head">
         <div>
           <p className="jar-card-name">{item.name}</p>

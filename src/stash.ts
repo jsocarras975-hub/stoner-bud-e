@@ -55,7 +55,23 @@ function baseline(item: StashItem): number {
   return item.startedAt !== undefined && item.startedAt > 0 ? item.startedAt : item.amount;
 }
 
-/** Absolute floor for the default rule, in the item's unit. */
+/** How full the jar is, 0–100. The jar started with `startedAt`; what is
+ * left is `amount`. A jar with no recorded start is treated as full. */
+export function jarFillPct(item: StashItem): number {
+  const full = baseline(item);
+  if (full <= 0) return 0;
+  return Math.max(0, Math.min(100, (item.amount / full) * 100));
+}
+
+/** Fill color for the visible jar, by what is inside it. */
+export const JAR_FILL_COLORS: Record<StashForm, string> = {
+  flower: '#7cb342',
+  edible: '#f59e0b',
+  vape: '#8b5cf6',
+  dab: '#eab308',
+  drink: '#3b82f6',
+  other: '#65a30d',
+};
 function lowFloor(unit: StashItem['unit']): number {
   return unit === 'g' ? 1 : unit === 'mg' ? 10 : 1;
 }
