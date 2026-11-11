@@ -2227,3 +2227,47 @@ button {
     transition: none !important;
   }
 }
+
+/* Update available pop-up (native only) */
+.update-card {
+  background: var(--card);
+  border: 1px solid var(--line);
+  border-radius: 20px;
+  padding: 22px 20px;
+  text-align: left;
+}
+
+.update-eyebrow {
+  color: var(--accent);
+  font-size: 0.8rem;
+  font-weight: 800;
+  letter-spacing: 0.08em;
+  margin-bottom: 8px;
+}
+
+.update-title {
+  font-family: var(--font-display);
+  font-size: 1.6rem;
+  line-height: 1.15;
+  margin: 0 0 10px;
+  color: var(--text);
+}
+
+.update-notes {
+  color: var(--muted);
+  font-size: 1rem;
+  line-height: 1.5;
+  margin: 0 0 16px;
+  white-space: pre-line;
+}
+
+.update-download {
+  margin-bottom: 6px;
+}
+
+.update-force-note {
+  color: var(--muted);
+  font-size: 0.9rem;
+  text-align: center;
+  margin: 8px 0 0;
+}

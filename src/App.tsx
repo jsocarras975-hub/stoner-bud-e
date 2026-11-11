@@ -50,6 +50,9 @@ import MusicTab from './MusicTab';
 import TonightTab from './TonightTab';
 import SettingsTab from './SettingsTab';
 import DrivingMode from './DrivingMode';
+import UpdateModal from './UpdateModal';
+import { checkForUpdate } from './lib/update-check';
+import type { UpdateInfo } from './lib/update-check';
 import { GuessTheStrain, MemoryMatch, WouldYouRather } from './Games';
 import { tasteSummary } from './lib/taste';
 import LockScreen from './LockScreen';
@@ -453,6 +456,10 @@ export default function App() {
   const [showChatList, setShowChatList] = useState(false);
   // Hands-free driving mode overlay.
   const [drivingOpen, setDrivingOpen] = useState(false);
+  // New-version pop-up (native only): set when version.json says a newer
+  // build is out. Dismissing hides it for that version; a forced update
+  // has no dismiss button.
+  const [updateInfo, setUpdateInfo] = useState<UpdateInfo | null>(null);
   const [vibe, setVibe] = useState<Vibe>(() => load(VIBE_KEY, DEFAULT_VIBE));
   const [voice, setVoice] = useState<VoiceSettings>(() => loadVoiceSettings());
   const [premiumTier, setPremiumTier] = useState<PremiumTier>(null);
@@ -487,6 +494,18 @@ export default function App() {
   useEffect(() => {
     stashRef.current = stash;
   }, [stash]);
+
+  // New-version check (native only, once on launch). Fail-open: a bad
+  // network or a missing version file just means no pop-up this time.
+  useEffect(() => {
+    let cancelled = false;
+    void checkForUpdate().then((info) => {
+      if (!cancelled && info) setUpdateInfo(info);
+    });
+    return () => {
+      cancelled = true;
+    };
+  }, []);
   const [user, setUser] = useState<AuthUser | null>(null);
   const [syncMessage, setSyncMessage] = useState('');
   // Guards the debounced sync effect while a server state is being applied,
@@ -1621,6 +1640,11 @@ export default function App() {
           onAppAction={applyAppAction}
           onClose={() => setDrivingOpen(false)}
         />
+      )}
+
+      {/* New-version pop-up — what's new, Download, Dismiss. */}
+      {updateInfo && (
+        <UpdateModal update={updateInfo} onClose={() => setUpdateInfo(null)} />
       )}
     </div>
   );
