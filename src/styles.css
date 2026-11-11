@@ -1192,6 +1192,40 @@ button {
   animation: bude-shine 2.4s ease-in-out infinite;
 }
 
+/* Joint ember — a slow glow pulse at the lit tip. */
+.bude-ember {
+  animation: bude-ember 1.6s ease-in-out infinite;
+  transform-origin: center;
+  transform-box: fill-box;
+}
+
+/* Smoke — three wisps that rise off the ember, grow, and fade out,
+ * staggered so the stream never stops. */
+.bude-smoke {
+  animation: bude-smoke-rise 2.8s ease-out infinite;
+  transform-origin: center;
+  transform-box: fill-box;
+}
+
+.bude-smoke-2 {
+  animation-delay: 0.9s;
+}
+
+.bude-smoke-3 {
+  animation-delay: 1.8s;
+}
+
+@keyframes bude-ember {
+  0%, 100% { opacity: 1; }
+  50% { opacity: 0.5; }
+}
+
+@keyframes bude-smoke-rise {
+  0% { transform: translateY(0) translateX(0) scale(0.7); opacity: 0; }
+  20% { opacity: 0.5; }
+  100% { transform: translateY(-24px) translateX(5px) scale(1.5); opacity: 0; }
+}
+
 @keyframes bude-bob {
   0%, 100% { transform: translateY(0) rotate(0deg); }
   50% { transform: translateY(-5px) rotate(-1.5deg); }
