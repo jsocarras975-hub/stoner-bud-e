@@ -109,15 +109,17 @@ export default function SettingsTab(props: {
   /** Lit Mode (the glowing look) — the owner and anyone who found it can toggle it here. */
   litMode: boolean;
   onLitMode: (on: boolean) => void;
+  /** Which section to open at (the AI limit banner opens Premium directly). */
+  initialView?: SettingsView;
 }) {
   const {
     theme, onTheme, user, onDeleteAccount, voice, onVoice, apiBase,
     premiumTier = null, personalization, onPersonalization,
     onClearChats, onClearJournal, journal, chats,
     lockSettings, onLockSettings, biometric, onSyncNow,
-    litMode, onLitMode,
+    litMode, onLitMode, initialView,
   } = props;
-  const [view, setView] = useState<SettingsView>('main');
+  const [view, setView] = useState<SettingsView>(initialView ?? 'main');
   const [deleting, setDeleting] = useState(false);
   const [deleteError, setDeleteError] = useState('');
   const [trying, setTrying] = useState(false);

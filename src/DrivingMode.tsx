@@ -81,6 +81,9 @@ export default function DrivingMode(props: {
     const history: DriveMessage[] = [...historyRef.current, { role: 'user', text }];
     const res = await fetch(`${apiBase}/chat`, {
       method: 'POST',
+      // Send the session cookie so the server can tell a free member from
+      // a premium one (the AI use limit).
+      credentials: 'include',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({
         messages: history.slice(-6).map((m) => ({ role: m.role, text: m.text })),
@@ -97,6 +100,17 @@ export default function DrivingMode(props: {
       }),
     });
     const data: unknown = await res.json().catch(() => null);
+    // AI use limit: a free member gets 20 AI replies a day. Surface it
+    // as its own error so the loop stops with a clear note, not a
+    // "lost connection" retry.
+    if (
+      res.status === 429 &&
+      data &&
+      typeof data === 'object' &&
+      (data as { error?: unknown }).error === 'ai_limit_reached'
+    ) {
+      throw new Error('ai_limit_reached');
+    }
     const reply =
       data && typeof data === 'object' && 'reply' in data
         ? (data as { reply?: unknown }).reply
@@ -166,8 +180,16 @@ export default function DrivingMode(props: {
       setLastReply(reply);
       setStatus('speaking');
       await speakVoice(apiBase, reply, persona);
-    } catch {
+    } catch (err) {
       if (!runningRef.current) return;
+      if (err instanceof Error && err.message === 'ai_limit_reached') {
+        setNote(
+          "You've used your 20 free AI chats for today. Go premium for unlimited chats — tap Stop, then open Settings → Premium.",
+        );
+        setStatus('off');
+        runningRef.current = false;
+        return;
+      }
       setNote('Lost the connection for a second — listening again.');
     }
     if (!runningRef.current) return;

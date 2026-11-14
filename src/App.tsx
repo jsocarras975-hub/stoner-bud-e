@@ -443,6 +443,13 @@ function formatCountdown(totalSeconds: number): string {
 
 export default function App() {
   const [tab, setTab] = useState<Tab>('chat');
+  // Which Settings section to open at (the AI limit banner opens Premium
+  // directly). Reset to null when leaving Settings so a normal visit
+  // starts at the menu.
+  const [settingsInitialView, setSettingsInitialView] = useState<'premium' | null>(null);
+  useEffect(() => {
+    if (tab !== 'settings') setSettingsInitialView(null);
+  }, [tab]);
   // Mood for the floating Bud-E avatar (reported up from the chat tab).
   const [floatMood, setFloatMood] = useState<BudEMood>('idle');
   // Owner-only analytics: which features get used (no content, no
@@ -1607,6 +1614,10 @@ export default function App() {
           personalization={personalization}
           onOpenDriving={() => setDrivingOpen(true)}
           onAvatarMood={setFloatMood}
+          onGoPremium={() => {
+            setSettingsInitialView('premium');
+            setTab('settings');
+          }}
         />
       )}
       {tab === 'tools' && (
@@ -1664,6 +1675,7 @@ export default function App() {
           onVoice={setVoice}
           apiBase={apiBase()}
           premiumTier={premiumTier}
+          initialView={settingsInitialView ?? undefined}
           personalization={personalization}
           onPersonalization={setPersonalization}
           onClearChats={() => {
@@ -2227,6 +2239,7 @@ function ChatTab({
   personalization,
   onOpenDriving,
   onAvatarMood,
+  onGoPremium,
 }: {
   session: Session;
   chats: SyncedChatConversation[];
@@ -2249,12 +2262,17 @@ function ChatTab({
   onOpenDriving: () => void;
   /** Report the avatar mood up so the floating avatar can match it. */
   onAvatarMood?: (mood: BudEMood) => void;
+  /** Open the Premium screen (Settings) — used by the AI limit banner. */
+  onGoPremium: () => void;
 }) {
   const current = chats.find((c) => c.id === currentChatId) ?? null;
   const transcript = current?.messages ?? [];
 
   const [input, setInput] = useState('');
   const [sending, setSending] = useState(false);
+  // AI use limit: set when the server answers ai_limit_reached, so the
+  // chat shows an upgrade banner instead of a generic offline fallback.
+  const [aiLimitHit, setAiLimitHit] = useState(false);
   // Photo attached to the next message (data URL, downscaled). Sent once
   // for analysis, then cleared — never saved (see ChatMessage.image).
   const [pendingPhoto, setPendingPhoto] = useState<string | null>(null);
@@ -2538,6 +2556,10 @@ function ChatTab({
         : '';
       const res = await fetch(apiUrl(), {
         method: 'POST',
+        // Send the session cookie so the server can tell a free member from
+        // a premium one (the AI use limit). Without this the server sees
+        // every request as signed-out.
+        credentials: 'include',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
           messages: next.slice(-12),
@@ -2557,6 +2579,25 @@ function ChatTab({
         }),
       });
       const data: unknown = await res.json();
+      // AI use limit: the server answers 429 ai_limit_reached when a free
+      // member has used their 20 AI replies for today. Show the limit
+      // message + the upgrade banner, not a generic offline fallback.
+      if (
+        res.status === 429 &&
+        data &&
+        typeof data === 'object' &&
+        (data as { error?: unknown }).error === 'ai_limit_reached'
+      ) {
+        setAiLimitHit(true);
+        const limitText =
+          "You've used your 20 free AI chats for today. Come back tomorrow for more, or go premium for unlimited chats — plus the extra voices, themes, and playlists.";
+        updateChat([...next, { role: 'bud', text: limitText }]);
+        setSource('live');
+        return;
+      }
+      // A successful reply clears the limit banner (a new day, or the user
+      // just went premium).
+      setAiLimitHit(false);
       const reply =
         data && typeof data === 'object' && 'reply' in data
           ? (data as { reply?: unknown }).reply
@@ -2878,6 +2919,22 @@ function ChatTab({
           <p className="muted" role="alert" style={{ margin: '0 0 8px' }}>
             {photoNote}
           </p>
+        )}
+        {aiLimitHit && (
+          <div
+            className="card"
+            role="status"
+            style={{ margin: '0 0 8px', padding: '10px 12px' }}
+          >
+            <p style={{ margin: '0 0 8px' }}>
+              <strong>Daily AI limit reached.</strong> You&apos;ve used your 20 free AI
+              chats for today. Premium gets unlimited chats, plus the extra voices,
+              themes, and playlists.
+            </p>
+            <button type="button" className="btn btn-block" onClick={onGoPremium}>
+              See premium →
+            </button>
+          </div>
         )}
         <form
           className="chat-input-row"

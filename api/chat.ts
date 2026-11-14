@@ -9,6 +9,7 @@ import { BUD_E_SYSTEM_PROMPT } from '../src/bude.ts';
 import type { ChatMessage, Session } from '../src/bude.ts';
 import { isPersonaId, personaById } from '../src/voice.ts';
 import { clientIp, rateLimited } from '../src/lib/rate-limit.ts';
+import { getPool, getSessionUser } from '../src/lib/auth-server.ts';
 
 const GROQ_URL = 'https://api.groq.com/openai/v1/chat/completions';
 // NOTE (2026-11-08): Groq retired llama-3.3-70b-versatile and
@@ -134,7 +135,13 @@ function corsOrigin(req: ReqLike): string | null {
 
 function setCorsHeaders(req: ReqLike, res: ResLike): void {
   const origin = corsOrigin(req);
-  if (origin) res.setHeader('Access-Control-Allow-Origin', origin);
+  if (origin) {
+    res.setHeader('Access-Control-Allow-Origin', origin);
+    // The session cookie rides with the chat request (the client sends
+    // credentials: 'include') so the server can tell a free member from a
+    // premium one for the AI limit. Without this the WebView drops it.
+    res.setHeader('Access-Control-Allow-Credentials', 'true');
+  }
   res.setHeader('Access-Control-Allow-Methods', 'POST, OPTIONS');
   res.setHeader('Access-Control-Allow-Headers', 'Content-Type');
   res.setHeader('Vary', 'Origin');
@@ -142,6 +149,79 @@ function setCorsHeaders(req: ReqLike, res: ResLike): void {
 
 function fallback(res: ResLike): void {
   res.status(200).json({ ok: true, source: 'fallback', reply: null });
+}
+
+// AI use limit (freemium): a signed-in member without a premium tier gets
+// this many AI chat replies per calendar day; Lit, Cloud Nine and the owner
+// get unlimited. One row per user per day, counted in the database so the
+// limit holds across devices. Signed-out users are not limited (the app
+// works without an account) — the limit is for members.
+const FREE_AI_PER_DAY = 20;
+
+const AI_USAGE_DDL = `create table if not exists ai_usage (
+  user_id text not null references "user" ("id") on delete cascade,
+  day date not null,
+  count int not null default 0,
+  primary key (user_id, day)
+)`;
+
+let aiUsageEnsured = false;
+
+/** Idempotent: create the ai_usage table if it is not there yet.
+ *  Best-effort — a failure here leaves the flag unset and the limit check
+ *  below treats the user as unlimited rather than breaking the chat. */
+async function ensureAiUsageTable(): Promise<void> {
+  if (aiUsageEnsured) return;
+  try {
+    const pool = getPool();
+    await pool.query(AI_USAGE_DDL);
+    aiUsageEnsured = true;
+  } catch {
+    // No database (or the table could not be created) — the limit check
+    // below will let the chat through rather than fail it.
+  }
+}
+
+type AiLimit = { limited: boolean; used: number; limit: number };
+
+/** How many AI replies this user has used today, and whether they are out.
+ *  Premium tiers (lit / cloudnine / owner) are never limited. Returns
+ *  limited:false when there is no database or the user cannot be checked,
+ *  so a limit failure never breaks the chat. */
+async function checkAiLimit(userId: string): Promise<AiLimit> {
+  try {
+    const pool = getPool();
+    const tier = await pool.query<{ data: Record<string, unknown> | null }>(
+      'select data from user_settings where user_id = $1',
+      [userId],
+    );
+    const premiumTier = tier.rows[0]?.data?.premiumTier;
+    if (premiumTier === 'lit' || premiumTier === 'cloudnine' || premiumTier === 'owner') {
+      return { limited: false, used: 0, limit: FREE_AI_PER_DAY };
+    }
+    const used = await pool.query<{ n: string }>(
+      `select coalesce((select count from ai_usage where user_id = $1 and day = CURRENT_DATE), 0)::text as n`,
+      [userId],
+    );
+    const n = Number(used.rows[0]?.n ?? 0);
+    return { limited: n >= FREE_AI_PER_DAY, used: n, limit: FREE_AI_PER_DAY };
+  } catch {
+    return { limited: false, used: 0, limit: FREE_AI_PER_DAY };
+  }
+}
+
+/** Count one AI reply for this user today (upsert, one row per day). */
+async function recordAiUse(userId: string): Promise<void> {
+  try {
+    const pool = getPool();
+    await pool.query(
+      `insert into ai_usage (user_id, day, count) values ($1, CURRENT_DATE, 1)
+       on conflict (user_id, day) do update set count = ai_usage.count + 1`,
+      [userId],
+    );
+  } catch {
+    // Best-effort — a missed count is better than a broken chat.
+  }
 }
 
 function parseBody(raw: unknown): Body {
@@ -548,6 +628,33 @@ export default async function handler(req: ReqLike, res: ResLike): Promise<void>
     if (messages.length === 0) {
       fallback(res);
       return;
+    }
+
+    // AI use limit (freemium): a signed-in free member gets 20 AI replies
+    // a day; premium members are unlimited. The client sends the session
+    // cookie (credentials: 'include'), so the server can tell who is who.
+    // Signed-out users are not limited. The count is recorded only when
+    // the reply is allowed, so a refused request never burns the quota.
+    await ensureAiUsageTable();
+    let aiUserId: string | null = null;
+    try {
+      const sessionUser = await getSessionUser(req);
+      aiUserId = sessionUser?.id ?? null;
+    } catch {
+      aiUserId = null;
+    }
+    if (aiUserId) {
+      const limit = await checkAiLimit(aiUserId);
+      if (limit.limited) {
+        res.status(429).json({
+          ok: false,
+          error: 'ai_limit_reached',
+          used: limit.used,
+          limit: limit.limit,
+        });
+        return;
+      }
+      await recordAiUse(aiUserId);
     }
 
     // Optional photo: must be an image data URL, capped so a huge upload
