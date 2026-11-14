@@ -123,7 +123,7 @@ export const LEGAL_DOCS: LegalDoc[] = [
       {
         heading: 'Be safe, follow your local laws',
         paragraphs: [
-          'Never drive high. Start low, go slow, and wait at least two hours before taking more of an edible. Laws are different everywhere — in Texas, recreational cannabis is illegal — so know your local law and do not use the app to break it.',
+          'Never drive high. Start low, go slow, and wait at least two hours before taking more of an edible. Laws are different everywhere, so know your local law and do not use the app to break it.',
         ],
       },
       {

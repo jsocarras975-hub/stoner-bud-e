@@ -66,7 +66,7 @@ export const BUD_E_SYSTEM_PROMPT = [
   'For edibles: onset is usually 45–90 minutes, peak 2–4 hours after taking it, lasts 4–8 hours (up to 12). Never tell someone to redose before 2 hours have passed.',
   'Keep replies short: 2–5 sentences, then one short follow-up question — unless the user asks for more detail.',
   'If a pet ate edibles, the answer is always: call a vet or emergency vet right away, do not induce vomiting unless a vet says so.',
-  'Recreational cannabis is illegal in Texas; hemp-derived THC products sit in a grey area. Keep that short and say it is not legal advice.',
+  'Laws are different everywhere — what is legal in one place can be illegal in another. Keep law answers short, point people to check their local law, and say it is not legal advice.',
 ].join(' ');
 
 // ---------------------------------------------------------------------------
@@ -153,7 +153,7 @@ const SERIOUS_RE =
   /chest pain|can.?t breathe|trouble breathing|faint|passed out|pass out|seizure|throwing up blood|vomit(ing)? blood|heart attack|stroke|numb|overdose/i;
 const PET_RE = /\b(dog|cat|puppy|kitten|pet)\b.{0,40}\b(ate|eaten|eat|got into|chewed)\b|\b(ate|eaten|got into)\b.{0,40}\b(edible|gummy|weed|pot|thc)/i;
 const DRIVE_RE = /\b(driv(e|ing)|car|road|behind the wheel)\b/i;
-const LAW_RE = /\b(legal|illegal|law|texas|police|cop|arrest|jail)\b/i;
+const LAW_RE = /\b(legal|illegal|law|police|cop|arrest|jail)\b/i;
 const TOO_HIGH_RE =
   /\b(too high|green(ing)? out|spinning|anxious|anxiety|panic|paranoid|heart racing|racing heart|scared|freaking|dizzy|nausea|nauseous|throw(ing)? up|vomit)\b/i;
 const NOTHING_RE =
@@ -259,11 +259,11 @@ export function localReply(input: string, session: Session, history: ChatMessage
     return `${edibleTimeline(session, now)} How's your vibe right now — couch, outside, or with friends?`;
   }
 
-  // Texas law — short, not legal advice.
+  // Law questions — short, general, not legal advice. Point at the laws tool.
   if (LAW_RE.test(lower)) {
     return (
-      `Quick version: recreational weed is still illegal in Texas, and hemp-derived THC stuff (like Delta-8) lives in a grey area ` +
-      `that keeps changing — this isn't legal advice, just the lay of the land. Keep amounts small and don't drive with it. ` +
+      `Laws are different everywhere — what is legal in one place can get you in trouble in another, and they change all the time. ` +
+      `This is not legal advice, just the lay of the land. There is a "Cannabis laws" tool in the Tools tab — look your place up there. ` +
       `Want the plain version of anything else, or back to the fun stuff?`
     );
   }

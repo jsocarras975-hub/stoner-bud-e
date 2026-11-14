@@ -44,6 +44,7 @@ const TOOL_LABELS: Record<string, string> = {
   'guess-strain': 'Guess the strain',
   memory: 'Memory match',
   community: 'Group Sesh',
+  laws: 'Cannabis laws',
 };
 
 function shortDay(day: string): string {

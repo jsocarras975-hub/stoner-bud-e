@@ -63,6 +63,8 @@ import { BADGES, earnBadge, getBadges } from './lib/badges';
 import { isLitMode, markLitModeUnlocked, setLitMode, toggleLitMode } from './lib/lit-mode';
 import { isOwnerTier } from './lib/sync';
 import { trackEvent, flushAnalytics } from './lib/analytics';
+import { CANNABIS_LAWS, LAWS_UPDATED, STATUS_EMOJI, STATUS_LABEL, searchLaws } from './lib/cannabis-laws';
+import type { LawEntry } from './lib/cannabis-laws';
 import OwnerDash from './OwnerDash';
 import PullToRefresh from './PullToRefresh';
 import MusicTab from './MusicTab';
@@ -185,7 +187,7 @@ function isTab(value: string): value is Tab {
 /** Which tool is open inside the Tools tab (Grok drill-in). Null = the tool grid.
  *  Log and Plan live here too now — they are full sections, not little helpers,
  *  but they open the same way, with "All tools" to go back. */
-type ToolId = 'timer' | 'breathe' | 'munchies' | 'thoughts' | 'trivia' | 'journal' | 'plan' | 'would-you-rather' | 'guess-strain' | 'memory' | 'community';
+type ToolId = 'timer' | 'breathe' | 'munchies' | 'thoughts' | 'trivia' | 'journal' | 'plan' | 'would-you-rather' | 'guess-strain' | 'memory' | 'community' | 'laws';
 
 /** Live state of the edible timer, lifted to App so the header pill can show it. */
 interface TimerState {
@@ -3138,6 +3140,12 @@ const TOOL_DEFS: { id: ToolId; name: string; detail: string; icon: React.ReactNo
     detail: 'Flip cards, match the pairs',
     icon: <LayoutGrid size={20} aria-hidden />,
   },
+  {
+    id: 'laws',
+    name: 'Cannabis laws',
+    detail: 'Look up the law where you are',
+    icon: <Scale size={20} aria-hidden />,
+  },
 ];
 
 function ToolsTab({
@@ -3222,6 +3230,7 @@ function ToolsTab({
       {activeTool === 'would-you-rather' && <WouldYouRather />}
       {activeTool === 'guess-strain' && <GuessTheStrain />}
       {activeTool === 'memory' && <MemoryMatch />}
+      {activeTool === 'laws' && <LawsLookup />}
     </main>
   );
 }
@@ -3630,6 +3639,64 @@ function HighThoughts() {
       <button className="btn btn-block" onClick={() => setThought(pickRandom(HIGH_THOUGHTS))}>
         🔀 Next thought
       </button>
+    </section>
+  );
+}
+
+function LawsLookup() {
+  const [query, setQuery] = useState('');
+  const [selected, setSelected] = useState<LawEntry | null>(null);
+  const results = searchLaws(query);
+  return (
+    <section className="card" aria-label="Cannabis laws lookup">
+      <h2 className="tool-title">Cannabis laws</h2>
+      <p className="muted">
+        Look up the law where you are. Laws change all the time — this is a snapshot from{' '}
+        {LAWS_UPDATED}, not legal advice. Double-check with an official source before you act on it.
+      </p>
+      <input
+        type="search"
+        value={query}
+        onChange={(e) => {
+          setQuery(e.target.value);
+          setSelected(null);
+        }}
+        placeholder="Type a state or country…"
+        aria-label="Search for a place"
+        className="text-input"
+        style={{ width: '100%', marginBottom: 12 }}
+      />
+      {selected !== null && (
+        <div className="result-box" style={{ marginBottom: 12 }}>
+          <strong>
+            {STATUS_EMOJI[selected.status]} {selected.name} — {STATUS_LABEL[selected.status]}
+          </strong>
+          <p style={{ margin: '6px 0 0' }}>{selected.note}</p>
+          <p className="muted" style={{ margin: '6px 0 0' }}>
+            {selected.kind} · Snapshot from {LAWS_UPDATED} · Not legal advice.
+          </p>
+        </div>
+      )}
+      <div className="law-list">
+        {results.length === 0 && <p className="muted">No place matches that — try another spelling.</p>}
+        {results.slice(0, 60).map((entry) => (
+          <button
+            key={`${entry.kind}-${entry.name}`}
+            type="button"
+            className="law-row"
+            onClick={() => setSelected(entry)}
+          >
+            <span>
+              {STATUS_EMOJI[entry.status]} {entry.name}
+            </span>
+            <span className="muted">{STATUS_LABEL[entry.status]}</span>
+          </button>
+        ))}
+      </div>
+      <p className="muted" style={{ marginTop: 12 }}>
+        {CANNABIS_LAWS.length} places listed. 🟢 recreational legal · 🟡 medical only · 🟠
+        decriminalized · 🔴 illegal.
+      </p>
     </section>
   );
 }
