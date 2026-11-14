@@ -633,15 +633,22 @@ export default async function handler(req: ReqLike, res: ResLike): Promise<void>
     // AI use limit (freemium): a signed-in free member gets 20 AI replies
     // a day; premium members are unlimited. The client sends the session
     // cookie (credentials: 'include'), so the server can tell who is who.
-    // Signed-out users are not limited. The count is recorded only when
-    // the reply is allowed, so a refused request never burns the quota.
+    // Everyone must be signed in to chat — a request with no session is
+    // refused (401 sign_in_required) so the limit cannot be dodged by
+    // signing out. If the session check itself fails (bad config, DB
+    // down), the chat is allowed rather than breaking for everyone.
     await ensureAiUsageTable();
     let aiUserId: string | null = null;
+    let sessionCheckFailed = false;
     try {
       const sessionUser = await getSessionUser(req);
       aiUserId = sessionUser?.id ?? null;
     } catch {
-      aiUserId = null;
+      sessionCheckFailed = true;
+    }
+    if (!sessionCheckFailed && !aiUserId) {
+      res.status(401).json({ ok: false, error: 'sign_in_required' });
+      return;
     }
     if (aiUserId) {
       const limit = await checkAiLimit(aiUserId);

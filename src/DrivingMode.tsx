@@ -100,6 +100,16 @@ export default function DrivingMode(props: {
       }),
     });
     const data: unknown = await res.json().catch(() => null);
+    // Sign-in required: everyone must be signed in to chat. Surface it
+    // as its own error so the loop stops with a clear note.
+    if (
+      res.status === 401 &&
+      data &&
+      typeof data === 'object' &&
+      (data as { error?: unknown }).error === 'sign_in_required'
+    ) {
+      throw new Error('sign_in_required');
+    }
     // AI use limit: a free member gets 20 AI replies a day. Surface it
     // as its own error so the loop stops with a clear note, not a
     // "lost connection" retry.
@@ -182,6 +192,14 @@ export default function DrivingMode(props: {
       await speakVoice(apiBase, reply, persona);
     } catch (err) {
       if (!runningRef.current) return;
+      if (err instanceof Error && err.message === 'sign_in_required') {
+        setNote(
+          'Sign in to use Hands Free. Tap Stop, then open your Account tab to sign in.',
+        );
+        setStatus('off');
+        runningRef.current = false;
+        return;
+      }
       if (err instanceof Error && err.message === 'ai_limit_reached') {
         setNote(
           "You've used your 20 free AI chats for today. Go premium for unlimited chats — tap Stop, then open Settings → Premium.",

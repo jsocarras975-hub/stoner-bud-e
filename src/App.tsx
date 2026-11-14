@@ -1618,6 +1618,8 @@ export default function App() {
             setSettingsInitialView('premium');
             setTab('settings');
           }}
+          user={user}
+          onGoSignIn={() => setTab('account')}
         />
       )}
       {tab === 'tools' && (
@@ -2240,6 +2242,8 @@ function ChatTab({
   onOpenDriving,
   onAvatarMood,
   onGoPremium,
+  user,
+  onGoSignIn,
 }: {
   session: Session;
   chats: SyncedChatConversation[];
@@ -2264,6 +2268,10 @@ function ChatTab({
   onAvatarMood?: (mood: BudEMood) => void;
   /** Open the Premium screen (Settings) — used by the AI limit banner. */
   onGoPremium: () => void;
+  /** Signed-in user (null when signed out). The chat needs a sign-in. */
+  user: AuthUser | null;
+  /** Open the sign-in screen (Account tab) — used by the sign-in banner. */
+  onGoSignIn: () => void;
 }) {
   const current = chats.find((c) => c.id === currentChatId) ?? null;
   const transcript = current?.messages ?? [];
@@ -2273,6 +2281,9 @@ function ChatTab({
   // AI use limit: set when the server answers ai_limit_reached, so the
   // chat shows an upgrade banner instead of a generic offline fallback.
   const [aiLimitHit, setAiLimitHit] = useState(false);
+  // Sign-in required: set when the server answers sign_in_required (the
+  // session expired mid-chat), so the chat shows a sign-in banner.
+  const [signInRequired, setSignInRequired] = useState(false);
   // Photo attached to the next message (data URL, downscaled). Sent once
   // for analysis, then cleared — never saved (see ChatMessage.image).
   const [pendingPhoto, setPendingPhoto] = useState<string | null>(null);
@@ -2579,6 +2590,24 @@ function ChatTab({
         }),
       });
       const data: unknown = await res.json();
+      // Sign-in required: the server refuses the chat when there is no
+      // session (everyone must be signed in to chat). Show the sign-in
+      // message + banner, not a generic offline fallback.
+      if (
+        res.status === 401 &&
+        data &&
+        typeof data === 'object' &&
+        (data as { error?: unknown }).error === 'sign_in_required'
+      ) {
+        setSignInRequired(true);
+        const signInText =
+          'Sign in to chat with Bud-E. It only takes a second — and your chats, stash, and journal sync across your devices once you do.';
+        updateChat([...next, { role: 'bud', text: signInText }]);
+        setSource('live');
+        return;
+      }
+      // A successful reply clears the sign-in banner (the session is back).
+      setSignInRequired(false);
       // AI use limit: the server answers 429 ai_limit_reached when a free
       // member has used their 20 AI replies for today. Show the limit
       // message + the upgrade banner, not a generic offline fallback.
@@ -2933,6 +2962,21 @@ function ChatTab({
             </p>
             <button type="button" className="btn btn-block" onClick={onGoPremium}>
               See premium →
+            </button>
+          </div>
+        )}
+        {(!user || signInRequired) && (
+          <div
+            className="card"
+            role="status"
+            style={{ margin: '0 0 8px', padding: '10px 12px' }}
+          >
+            <p style={{ margin: '0 0 8px' }}>
+              <strong>Sign in to chat with Bud-E.</strong> Your chats, stash, and
+              journal sync across your devices once you do.
+            </p>
+            <button type="button" className="btn btn-block" onClick={onGoSignIn}>
+              Sign in →
             </button>
           </div>
         )}
