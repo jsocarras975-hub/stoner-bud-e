@@ -142,6 +142,22 @@ export async function signIn(email: string, password: string): Promise<AuthUser>
   return mapUser(data.user as ClientUser);
 }
 
+/** Sign in with X (Twitter). This leaves the app for X's sign-in page and
+ *  comes back to Bud-E once X says yes — it does not return a user here.
+ *  Throws a plain-words Error when X sign-in is not set up yet (the X app's
+ *  keys are not in Vercel) or the redirect cannot start. */
+export async function signInWithX(): Promise<void> {
+  const { error } = await authClient.signIn.social({
+    provider: 'twitter',
+    callbackURL: '/',
+  });
+  if (error) {
+    throw new Error(
+      friendlyError(error, 'X sign-in is not set up yet — the app needs its X keys first.'),
+    );
+  }
+}
+
 /** Sign out. Throws a plain-words Error when the server does not confirm. */
 export async function signOut(): Promise<void> {
   const { error } = await authClient.signOut();

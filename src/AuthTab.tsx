@@ -31,6 +31,7 @@ import {
   requestPasswordReset,
   resetPassword,
   signIn,
+  signInWithX,
   signOut,
   signUp,
 } from './lib/auth-client';
@@ -111,6 +112,22 @@ export default function AuthTab({
     } catch (err) {
       setError(friendlySubmitError(err instanceof Error ? err.message : 'Something went wrong — try again.'));
     } finally {
+      setBusy(false);
+    }
+  }
+
+  /** Sign in with X (Twitter). Leaves the app for X's sign-in page and
+   *  comes back once X says yes. If X is not set up yet (no keys in
+   *  Vercel), it says so instead of failing quietly. */
+  async function doSignInWithX(): Promise<void> {
+    if (busy) return;
+    setBusy(true);
+    setError('');
+    setNotice('');
+    try {
+      await signInWithX();
+    } catch (err) {
+      setError(err instanceof Error ? err.message : 'X sign-in did not work — try again.');
       setBusy(false);
     }
   }
@@ -510,6 +527,23 @@ export default function AuthTab({
                   : 'Sign in'}
           </button>
         </form>
+
+        {mode !== 'forgot' && (
+          <>
+            <p className="muted small" style={{ textAlign: 'center', margin: '14px 0 8px' }}>
+              or
+            </p>
+            <button
+              type="button"
+              className="btn btn-block"
+              onClick={() => void doSignInWithX()}
+              disabled={busy}
+              style={{ background: '#000', color: '#fff', borderColor: '#000' }}
+            >
+              𝕏 Continue with X
+            </button>
+          </>
+        )}
 
         <p style={{ marginTop: 16 }}>
           {mode === 'signin' ? (

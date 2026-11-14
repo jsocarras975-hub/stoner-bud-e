@@ -57,11 +57,30 @@ const TRUSTED_ORIGINS: string[] = [
 ];
 
 function buildAuth(pool: Pool, secret: string) {
+  // Sign in with X (Twitter): only wired when the X app's keys are in
+  // Vercel (TWITTER_CLIENT_ID + TWITTER_CLIENT_SECRET). Without them the
+  // provider is skipped, so the app keeps working on email + password.
+  // Better Auth instantiates the provider from these options (keyed by
+  // provider name). The X app needs OAuth 2.0 on, the callback URL below
+  // registered, and email permission (needs a privacy policy URL — Bud-E
+  // has one) or the sign-in has no email to make an account from.
+  const twitterClientId = env('TWITTER_CLIENT_ID');
+  const twitterClientSecret = env('TWITTER_CLIENT_SECRET');
+  const socialProviders =
+    twitterClientId && twitterClientSecret
+      ? {
+          twitter: {
+            clientId: twitterClientId,
+            clientSecret: twitterClientSecret,
+          },
+        }
+      : undefined;
   return betterAuth({
     baseURL: AUTH_BASE_URL,
     secret,
     database: pool,
     trustedOrigins: [...new Set(TRUSTED_ORIGINS)],
+    ...(socialProviders ? { socialProviders } : {}),
     // Email + password only. No email verification on sign-up: Bud-E sends
     // no verification mail, and requiring it with no mailer would lock
     // every new account out.
