@@ -62,6 +62,8 @@ import { isSectionUnlocked, markSectionUnlocked } from './lib/hidden-sections';
 import { BADGES, earnBadge, getBadges } from './lib/badges';
 import { isLitMode, markLitModeUnlocked, setLitMode, toggleLitMode } from './lib/lit-mode';
 import { isOwnerTier } from './lib/sync';
+import { trackEvent, flushAnalytics } from './lib/analytics';
+import OwnerDash from './OwnerDash';
 import MusicTab from './MusicTab';
 import TonightTab from './TonightTab';
 import SettingsTab from './SettingsTab';
@@ -164,7 +166,7 @@ function apiUrl(): string {
   return `${apiBase()}/chat`;
 }
 
-type Tab = 'tonight' | 'chat' | 'tools' | 'plan' | 'strains' | 'music' | 'journal' | 'stash' | 'break' | 'dose' | 'settings' | 'account' | 'secret' | 'vault' | 'fourtwenty' | 'hi' | 'chill' | 'munchies' | 'go';
+type Tab = 'tonight' | 'chat' | 'tools' | 'plan' | 'strains' | 'music' | 'journal' | 'stash' | 'break' | 'dose' | 'settings' | 'account' | 'secret' | 'vault' | 'fourtwenty' | 'hi' | 'chill' | 'munchies' | 'go' | 'ownerdash';
 type Source = 'live' | 'fallback' | null;
 
 /** True when a string from the native side names a real tab. */
@@ -174,7 +176,8 @@ function isTab(value: string): value is Tab {
     value === 'strains' || value === 'music' || value === 'journal' || value === 'stash' ||
     value === 'break' || value === 'dose' || value === 'settings' || value === 'account' ||
     value === 'secret' || value === 'vault' || value === 'fourtwenty' ||
-    value === 'hi' || value === 'chill' || value === 'munchies' || value === 'go'
+    value === 'hi' || value === 'chill' || value === 'munchies' || value === 'go' ||
+    value === 'ownerdash'
   );
 }
 
@@ -441,6 +444,27 @@ export default function App() {
   const [tab, setTab] = useState<Tab>('chat');
   // Mood for the floating Bud-E avatar (reported up from the chat tab).
   const [floatMood, setFloatMood] = useState<BudEMood>('idle');
+  // Owner-only analytics: which features get used (no content, no
+  // personal details). app_open once per launch, tab_open on every tab
+  // change, and a flush every minute plus when the app goes to the
+  // background, so the queue reaches the server.
+  useEffect(() => {
+    trackEvent('app_open');
+  }, []);
+  useEffect(() => {
+    trackEvent('tab_open', tab);
+  }, [tab]);
+  useEffect(() => {
+    const id = window.setInterval(() => void flushAnalytics(), 60000);
+    const onHidden = () => {
+      if (document.visibilityState === 'hidden') void flushAnalytics();
+    };
+    document.addEventListener('visibilitychange', onHidden);
+    return () => {
+      window.clearInterval(id);
+      document.removeEventListener('visibilitychange', onHidden);
+    };
+  }, []);
   // Secret live chat room: once a user figures out the J + S gesture it
   // stays in their app (More menu) from then on.
   const [secretUnlocked, setSecretUnlocked] = useState<boolean>(() => isSecretUnlocked());
@@ -644,6 +668,11 @@ export default function App() {
   // Which tool is open in the Tools tab (null = the grid). Lifted to App so
   // the header timer pill can open the timer tool directly (Grok behavior).
   const [activeTool, setActiveTool] = useState<ToolId | null>(null);
+  // Owner analytics: record which tool was opened (null = back to the grid).
+  function handleToolChange(tool: ToolId | null): void {
+    if (tool) trackEvent('tool_open', tool);
+    setActiveTool(tool);
+  }
 
   // In-app music (Audius) — the <audio> element and the queue live here so
   // the music keeps playing while the user moves around the app. The Music
@@ -678,6 +707,7 @@ export default function App() {
   }, [currentTrack]);
 
   function playTrack(track: AudiusTrack, list: AudiusTrack[]): void {
+    trackEvent('music_play');
     setMusicQueue(list);
     setCurrentTrack(track);
     setAudioError(null);
@@ -1064,6 +1094,7 @@ export default function App() {
     const items = stashRef.current;
     switch (action.action) {
       case 'stash_add': {
+        trackEvent('stash_add');
         const jar = findJar(items, action.name);
         if (!jar) {
           // A new jar: flower by default, warn under nothing.
@@ -1105,6 +1136,7 @@ export default function App() {
         return null;
       }
       case 'log_session': {
+        trackEvent('session_log');
         const entry: JournalEntry = {
           id: newEntryId(),
           date: new Date().toISOString(),
@@ -1405,7 +1437,10 @@ export default function App() {
     <JournalTab
       key={`${session.method}-${session.amount}-${session.timeTaken}`}
       entries={journal}
-      onAdd={(e) => setJournal((j) => [e, ...j])}
+      onAdd={(e) => {
+        trackEvent('journal_save');
+        setJournal((j) => [e, ...j]);
+      }}
       onDelete={(id) => {
         // Queue the tombstone first: the delete must sync even if the
         // user signs out or closes the app before the next upload.
@@ -1528,7 +1563,10 @@ export default function App() {
           onChat={() => setTab('chat')}
           onTools={() => setTab('tools')}
           journal={journal}
-          onAddJournal={(e) => setJournal((j) => [e, ...j])}
+          onAddJournal={(e) => {
+            trackEvent('journal_save');
+            setJournal((j) => [e, ...j]);
+          }}
           stash={stash}
           onStash={() => setTab('stash')}
         />
@@ -1565,7 +1603,7 @@ export default function App() {
           onTimerState={setTimerState}
           onAlert={setTimerAlert}
           activeTool={activeTool}
-          onToolChange={setActiveTool}
+          onToolChange={handleToolChange}
           journalView={journalView}
           planView={planView}
           logDetail={logDetail}
@@ -1667,6 +1705,7 @@ export default function App() {
       {tab === 'chill' && <Chill />}
       {tab === 'munchies' && <MunchiesChat user={user} />}
       {tab === 'go' && <Go onGo={(next) => setTab(next)} />}
+      {tab === 'ownerdash' && ownerAccess && <OwnerDash />}
         </div>
 
         {moreOpen && (
@@ -1844,6 +1883,20 @@ export default function App() {
                 >
                   <span aria-hidden>🚀</span>
                   <span>Go</span>
+                </button>
+              )}
+              {ownerAccess && (
+                <button
+                  type="button"
+                  role="menuitem"
+                  className="more-item"
+                  onClick={() => {
+                    setTab('ownerdash');
+                    setMoreOpen(false);
+                  }}
+                >
+                  <span aria-hidden>📊</span>
+                  <span>Owner Dash</span>
                 </button>
               )}
             </div>
@@ -2406,6 +2459,7 @@ function ChatTab({
   async function sendText(text: string, photo?: string | null): Promise<void> {
     const trimmed = text.trim();
     if ((!trimmed && !photo) || sending) return;
+    trackEvent('chat_message');
     unlockAudio();
     stopVoice();
     setSpeakingIdx(null);

@@ -252,6 +252,20 @@ const CASHAPP_PAYMENTS_DDL = `create table if not exists cashapp_payments (
 );
 create index if not exists cashapp_payments_status_idx on cashapp_payments (status, created_at desc)`;
 
+/** Owner-only analytics: one row per feature-use event (app opened, tab
+ *  opened, tool opened, chat message sent, ...). No message content, no
+ *  personal details — just which feature was used and when, so the owner
+ *  can see what's actually getting used. */
+const ANALYTICS_EVENTS_DDL = `create table if not exists analytics_events (
+  id bigserial primary key,
+  user_id text not null references "user" ("id") on delete cascade,
+  event text not null,
+  detail text,
+  created_at timestamptz not null default CURRENT_TIMESTAMP
+);
+create index if not exists analytics_events_event_idx on analytics_events (event, created_at desc);
+create index if not exists analytics_events_user_idx on analytics_events (user_id, created_at desc)`;
+
 let deletedItemsEnsured = false;
 let chatTableEnsured = false;
 let playlistsTableEnsured = false;
@@ -325,6 +339,7 @@ async function ensureCommunityTables(pool: Pool): Promise<void> {
     await pool.query(STRAIN_REVIEWS_DDL);
     await pool.query(PREMIUM_CODES_DDL);
     await pool.query(CASHAPP_PAYMENTS_DDL);
+    await pool.query(ANALYTICS_EVENTS_DDL);
     // The posts table predates comment_count (added with comments) — add
     // the column to tables created before it existed. No-op when present.
     await pool.query(
@@ -1379,6 +1394,128 @@ async function handleCommunity(
       [paymentId],
     );
     res.status(200).json({ ok: true });
+    return;
+  }
+
+  // Owner-only analytics. The app records which features get used
+  // (app opened, tab opened, tool opened, message sent) — no message
+  // content, no personal details. analytics_track stores a batch of
+  // events; analytics_stats returns the aggregated numbers for the
+  // owner's dashboard. Stats are owner-only.
+  const ANALYTICS_EVENTS = new Set([
+    'app_open',
+    'tab_open',
+    'tool_open',
+    'chat_message',
+    'journal_save',
+    'music_play',
+    'stash_add',
+    'session_log',
+  ]);
+  if (action === 'analytics_track') {
+    const raw = body.events;
+    if (!Array.isArray(raw) || raw.length === 0 || raw.length > 100) {
+      res.status(400).json({ ok: false, error: 'bad_community_body' });
+      return;
+    }
+    const events: { event: string; detail: string | null }[] = [];
+    for (const e of raw) {
+      if (!e || typeof e !== 'object') {
+        res.status(400).json({ ok: false, error: 'bad_community_body' });
+        return;
+      }
+      const name = (e as Record<string, unknown>).event;
+      const detail = (e as Record<string, unknown>).detail;
+      if (typeof name !== 'string' || !ANALYTICS_EVENTS.has(name)) {
+        res.status(400).json({ ok: false, error: 'bad_community_body' });
+        return;
+      }
+      if (detail !== null && detail !== undefined && typeof detail !== 'string') {
+        res.status(400).json({ ok: false, error: 'bad_community_body' });
+        return;
+      }
+      const d = typeof detail === 'string' ? detail.slice(0, 64) : null;
+      events.push({ event: name, detail: d });
+    }
+    // Gentle flood guard: at most 500 events per user per hour.
+    const recent = await pool.query<{ n: string }>(
+      `select count(*)::text as n from analytics_events
+       where user_id = $1 and created_at >= now() - interval '1 hour'`,
+      [user.id],
+    );
+    if (Number(recent.rows[0]?.n ?? 0) + events.length > 500) {
+      res.status(429).json({ ok: false, error: 'too_many_events' });
+      return;
+    }
+    const values: unknown[] = [];
+    const placeholders: string[] = [];
+    events.forEach((e, i) => {
+      placeholders.push(`($${i * 3 + 1}, $${i * 3 + 2}, $${i * 3 + 3})`);
+      values.push(user.id, e.event, e.detail);
+    });
+    await pool.query(
+      `insert into analytics_events (user_id, event, detail) values ${placeholders.join(', ')}`,
+      values,
+    );
+    res.status(200).json({ ok: true, stored: events.length });
+    return;
+  }
+
+  if (action === 'analytics_stats') {
+    if (!(await isOwner(pool, user.id))) {
+      res.status(403).json({ ok: false, error: 'not_owner' });
+      return;
+    }
+    const totalUsers = await pool.query<{ n: string }>(
+      `select count(distinct user_id)::text as n from analytics_events`,
+    );
+    const totalEvents = await pool.query<{ n: string }>(
+      `select count(*)::text as n from analytics_events`,
+    );
+    const counts = await pool.query<{ event: string; n: string }>(
+      `select event, count(*)::text as n from analytics_events group by event`,
+    );
+    const byEvent: Record<string, number> = {};
+    for (const r of counts.rows) byEvent[r.event] = Number(r.n);
+    const dailyActive = await pool.query<{ day: string; users: string }>(
+      `select to_char(created_at, 'YYYY-MM-DD') as day,
+              count(distinct user_id)::text as users
+       from analytics_events
+       where created_at >= now() - interval '14 days'
+       group by day order by day`,
+    );
+    const eventsPerDay = await pool.query<{ day: string; n: string }>(
+      `select to_char(created_at, 'YYYY-MM-DD') as day,
+              count(*)::text as n
+       from analytics_events
+       where created_at >= now() - interval '14 days'
+       group by day order by day`,
+    );
+    const topTabs = await pool.query<{ tab: string; n: string }>(
+      `select detail as tab, count(*)::text as n
+       from analytics_events where event = 'tab_open' and detail is not null
+       group by detail order by count(*) desc limit 10`,
+    );
+    const topTools = await pool.query<{ tool: string; n: string }>(
+      `select detail as tool, count(*)::text as n
+       from analytics_events where event = 'tool_open' and detail is not null
+       group by detail order by count(*) desc limit 10`,
+    );
+    res.status(200).json({
+      ok: true,
+      totalUsers: Number(totalUsers.rows[0]?.n ?? 0),
+      totalEvents: Number(totalEvents.rows[0]?.n ?? 0),
+      appOpens: byEvent.app_open ?? 0,
+      chatMessages: byEvent.chat_message ?? 0,
+      journalSaves: byEvent.journal_save ?? 0,
+      musicPlays: byEvent.music_play ?? 0,
+      stashAdds: byEvent.stash_add ?? 0,
+      sessionLogs: byEvent.session_log ?? 0,
+      dailyActive: dailyActive.rows.map((r) => ({ day: r.day, users: Number(r.users) })),
+      eventsPerDay: eventsPerDay.rows.map((r) => ({ day: r.day, count: Number(r.n) })),
+      topTabs: topTabs.rows.map((r) => ({ tab: r.tab, count: Number(r.n) })),
+      topTools: topTools.rows.map((r) => ({ tool: r.tool, count: Number(r.n) })),
+    });
     return;
   }
 
