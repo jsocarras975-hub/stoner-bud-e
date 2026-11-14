@@ -64,6 +64,7 @@ import { isLitMode, markLitModeUnlocked, setLitMode, toggleLitMode } from './lib
 import { isOwnerTier } from './lib/sync';
 import { trackEvent, flushAnalytics } from './lib/analytics';
 import OwnerDash from './OwnerDash';
+import PullToRefresh from './PullToRefresh';
 import MusicTab from './MusicTab';
 import TonightTab from './TonightTab';
 import SettingsTab from './SettingsTab';
@@ -1268,6 +1269,19 @@ export default function App() {
     }
   }
 
+  // Pull-to-refresh: bump this to reload the Group Sesh board (it does not
+  // poll on its own, unlike the secret rooms which refresh every 3s).
+  const [communityRefreshTick, setCommunityRefreshTick] = useState(0);
+  /** Pull-to-refresh: pull the latest synced data from the server, and
+   *  reload the Group Sesh board when it is open. Plain function (not
+   *  memoized) so it always closes over the freshest journal/stash/chats. */
+  async function handleRefresh(): Promise<void> {
+    await syncNow('pull');
+    if (tab === 'tools' && activeTool === 'community') {
+      setCommunityRefreshTick((t) => t + 1);
+    }
+  }
+
   function handleAuthChange(next: AuthUser | null): void {
     const wasSignedOut = user === null;
     setUser(next);
@@ -1523,6 +1537,7 @@ export default function App() {
           </button>
         )}
 
+      <PullToRefresh onRefresh={handleRefresh}>
         <div className={tab === 'chat' ? 'app-content chat-active' : 'app-content'}>
           {timerAlert && (
             <div className="alert-banner" role="status">
@@ -1608,6 +1623,7 @@ export default function App() {
           planView={planView}
           logDetail={logDetail}
           planDetail={planDetail}
+          communityRefreshTick={communityRefreshTick}
         />
       )}
       {tab === 'plan' && planView}
@@ -1707,6 +1723,7 @@ export default function App() {
       {tab === 'go' && <Go onGo={(next) => setTab(next)} />}
       {tab === 'ownerdash' && ownerAccess && <OwnerDash />}
         </div>
+      </PullToRefresh>
 
         {moreOpen && (
           <button
@@ -3035,6 +3052,7 @@ function ToolsTab({
   planView,
   logDetail,
   planDetail,
+  communityRefreshTick,
 }: {
   session: Session;
   user: AuthUser | null;
@@ -3048,6 +3066,7 @@ function ToolsTab({
   planView: React.ReactNode;
   logDetail: string;
   planDetail: string;
+  communityRefreshTick: number;
 }) {
   // Log, Plan and the timer show a live detail, like the timer does.
   function tileDetail(tool: { id: ToolId; detail: string }): string {
@@ -3098,7 +3117,7 @@ function ToolsTab({
       {activeTool === 'munchies' && <MunchiesMaker />}
       {activeTool === 'thoughts' && <HighThoughts />}
       {activeTool === 'trivia' && <TriviaGame />}
-      {activeTool === 'community' && <Community user={user} />}
+      {activeTool === 'community' && <Community user={user} refreshTick={communityRefreshTick} />}
       {activeTool === 'would-you-rather' && <WouldYouRather />}
       {activeTool === 'guess-strain' && <GuessTheStrain />}
       {activeTool === 'memory' && <MemoryMatch />}

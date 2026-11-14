@@ -38,7 +38,7 @@ function timeAgo(iso: string): string {
   return new Date(iso).toLocaleDateString();
 }
 
-export default function Community({ user }: { user: AuthUser | null }) {
+export default function Community({ user, refreshTick = 0 }: { user: AuthUser | null; refreshTick?: number }) {
   const [posts, setPosts] = useState<CommunityPost[]>([]);
   const [isOwner, setIsOwner] = useState(false);
   const [loading, setLoading] = useState(true);
@@ -74,7 +74,7 @@ export default function Community({ user }: { user: AuthUser | null }) {
 
   useEffect(() => {
     void load();
-  }, [load]);
+  }, [load, refreshTick]);
 
   async function post() {
     const text = draft.trim();
